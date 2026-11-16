@@ -50,10 +50,12 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
         if (!_lock.Wait(0)) return; // an operation is running
         try
         {
-            var snapshot = string.Join(",", Devices().Select(d => d.SerialNumber?.ToString() ?? "?").OrderBy(s => s));
+            var all = YubiKeyDevice.FindAll().ToList();
+            var snapshot = Diagnose(all);
             if (snapshot == _lastSnapshot) return;
             _lastSnapshot = snapshot;
-            _logger.LogInformation("YubiKeys present: {Keys}", snapshot.Length == 0 ? "none" : snapshot);
+            _logger.LogInformation("YubiKey-Geräte gefunden: {Count} ({Details}); als Keys erkannt: {Keys}",
+                all.Count, snapshot.Length == 0 ? "keine" : snapshot, Dedupe(all).Count);
         }
         catch (Exception ex)
         {
@@ -64,8 +66,27 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
         KeyChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    private static IReadOnlyList<IYubiKeyDevice> Devices() =>
-        YubiKeyDevice.FindAll().Where(d => d.AvailableUsbCapabilities.HasFlag(YubiKeyCapabilities.Fido2) || d.AvailableTransports.HasFlag(Transport.HidFido)).ToList();
+    /// <summary>
+    /// FIDO-capable keys, one entry per physical key. The SDK can report one key several times (one entry per USB
+    /// interface) when it cannot merge them, e.g. in a Windows service; such duplicates share the serial number.
+    /// </summary>
+    private static IReadOnlyList<IYubiKeyDevice> Devices() => Dedupe(YubiKeyDevice.FindAll());
+
+    private static List<IYubiKeyDevice> Dedupe(IEnumerable<IYubiKeyDevice> all)
+    {
+        var fido = all.Where(d => d.AvailableUsbCapabilities.HasFlag(YubiKeyCapabilities.Fido2) || d.AvailableTransports.HasFlag(Transport.HidFido)).ToList();
+        var withSerial = fido.Where(d => d.SerialNumber is not null)
+            .GroupBy(d => d.SerialNumber)
+            .Select(g => g.OrderByDescending(d => d.AvailableTransports.HasFlag(Transport.HidFido)).First())
+            .ToList();
+        // Keys without a readable serial (e.g. Security Key series) only count if no key with a serial is present.
+        return withSerial.Count > 0 ? withSerial : fido;
+    }
+
+    private static string Diagnose(IEnumerable<IYubiKeyDevice> all) =>
+        string.Join("; ", all.Select(d =>
+            $"SN={d.SerialNumber?.ToString() ?? "-"} FW={d.FirmwareVersion.Major}.{d.FirmwareVersion.Minor}.{d.FirmwareVersion.Patch} " +
+            $"Form={d.FormFactor} Transports={d.AvailableTransports} USB={d.AvailableUsbCapabilities} USB-aktiv={d.EnabledUsbCapabilities}"));
 
     private static (IYubiKeyDevice? Device, OperationResult? Error) Single(int? expectedSerial)
     {
@@ -83,9 +104,11 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
         await _lock.WaitAsync(ct);
         try
         {
-            var devices = Devices();
-            if (devices.Count != 1) return null;
-            return Describe(devices[0]);
+            var all = YubiKeyDevice.FindAll().ToList();
+            var devices = Dedupe(all);
+            if (devices.Count == 1) return Describe(devices[0]);
+            if (devices.Count > 1) _logger.LogWarning("Mehr als ein YubiKey erkannt: {Details}", Diagnose(all));
+            return null;
         }
         finally { _lock.Release(); }
     }
