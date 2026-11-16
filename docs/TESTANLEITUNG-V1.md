@@ -161,11 +161,12 @@ Set-ExecutionPolicy -Scope Process Bypass
 pwsh .\ylm-app-registration.ps1
 ```
 
-Im Anmeldefenster mit dem **Global Admin des Test-Tenants** anmelden und die Berechtigung `Application.ReadWrite.All` für Microsoft Graph PowerShell bestätigen.
+Im Anmeldefenster mit dem **Global Admin des Test-Tenants** anmelden und die Berechtigungen `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All` und `DelegatedPermissionGrant.ReadWrite.All` für Microsoft Graph PowerShell bestätigen.
 
 **Erwartet:**
 
 - Keine roten Fehlermeldungen.
+- Es erscheinen nacheinander „App-Registrierung angelegt“, „Dienstprinzipal angelegt“ und „Admin-Consent erteilt.“
 - Am Ende stehen zwei Zeilen:
   ```
   Client-ID (Anwendungs-ID): xxxxxxxx-…
@@ -177,13 +178,13 @@ Im Anmeldefenster mit dem **Global Admin des Test-Tenants** anmelden und die Ber
   - einem Zertifikat unter „Zertifikate & Geheimnisse“
   - 7 Anwendungsberechtigungen und 4 delegierten Berechtigungen für Microsoft Graph
 
-### 2.3 Admin-Consent im Heim-Tenant erteilen
+### 2.3 Admin-Consent im Heim-Tenant prüfen
 
-> **Bekannte Lücke:** Der Text im Assistenten sagt, das Skript erteile den Admin-Consent. Das tut es derzeit **nicht**; es legt nur App und Dienstprinzipal an. Bitte den Consent von Hand erteilen. Das Skript wird in einem eigenen PR nachgezogen.
-
-Entra Admin Center → App-Registrierungen → „Yubikey Lifecycle Manager Test“ → **API-Berechtigungen** → **„Administratorzustimmung für <Tenant> erteilen“** → Ja.
+Das Skript erteilt den Admin-Consent selbst. Zur Kontrolle: Entra Admin Center → App-Registrierungen → „Yubikey Lifecycle Manager Test“ → **API-Berechtigungen**.
 
 **Erwartet:** Alle Berechtigungen zeigen den grünen Haken „Gewährt für <Tenant>“.
+
+Fehlt der Haken bei einzelnen Berechtigungen, bitte die Skriptausgabe zurückmelden und den Consent dort per **„Administratorzustimmung für <Tenant> erteilen“** von Hand nachholen.
 
 ### 2.4 Werte eintragen und testen
 
@@ -509,7 +510,7 @@ Außerdem hilfreich: Commit (`git log -1 --oneline`), Version der Tray-App (steh
 
 | Nr. | Symptom | Erste Hilfe |
 |---|---|---|
-| F1 | Setup-Test: „Fehlende Berechtigungen …“ | Admin-Consent erteilt (2.3)? 1 bis 2 Minuten warten, erneut testen. |
+| F1 | Setup-Test: „Fehlende Berechtigungen …“ | Haken in den API-Berechtigungen prüfen (2.3). 1 bis 2 Minuten warten, erneut testen. |
 | F2 | Nach der Microsoft-Anmeldung `/login?error=remote_failure` | Browser-Konsole und Server-Log schicken. Bei Variante A zusätzlich in einem anderen Browser (Edge/Chrome) testen. Notfalls auf Variante B (HTTPS) wechseln. |
 | F3 | Microsoft meldet `AADSTS50011` (Reply URL mismatch) | Die öffentliche Adresse in 2.1 weicht von der Adresse im Browser ab (z. B. `127.0.0.1` statt `localhost`, fehlender Port). Genau die Adresse aus der Einrichtung verwenden. |
 | F4 | Tray zeigt „Agent-Dienst nicht erreichbar“ | `Get-Service YubikeyLifecycleManagerAgent`; falls gestoppt, `Start-Service …` und Ereignisanzeige prüfen. |
@@ -534,7 +535,7 @@ YubiKey 2:         Modell ________  FW ______  SN ________
 [ ] 1.3  Container laufen, healthy
 [ ] 1.4  /healthz ok, Setup-Token im Log
 [ ] 2.2  Skript ohne Fehler, App in Entra korrekt
-[ ] 2.3  Admin-Consent erteilt
+[ ] 2.3  Admin-Consent durch das Skript erteilt
 [ ] 2.4  Setup-Test grün, keine fehlenden Berechtigungen
 [ ] 2.5  Anmeldung als Owner
 [ ] 3.2  Tenant angebunden
