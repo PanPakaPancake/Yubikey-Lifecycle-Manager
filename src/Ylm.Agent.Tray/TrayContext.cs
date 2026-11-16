@@ -14,7 +14,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ToolStripMenuItem _openWeb = new("WebGUI öffnen");
     private readonly ToolStripMenuItem _pair = new("Koppeln …");
     private readonly ToolStripMenuItem _unpair = new("Kopplung lösen");
-    private readonly StatusForm _statusForm = new();
+    private StatusForm _statusForm = new();
     private TrayStatus _status = new();
     private bool _pipeConnected;
     private string? _lastPrompt;
@@ -80,11 +80,13 @@ internal sealed class TrayContext : ApplicationContext
                 var previousKey = _status.Key?.SerialNumber;
                 _status = m.Status;
                 Render();
+                // No balloon per instruction (too many during a reset): the status window shows the current step animated.
                 if (m.Status.Operation?.Prompt is { } prompt && prompt != _lastPrompt)
                 {
+                    var first = _lastPrompt is null;
                     _lastPrompt = prompt;
-                    _icon.ShowBalloonTip(5000, m.Status.Operation.Title, prompt, ToolTipIcon.Info);
-                    ShowStatus();
+                    if (first || !_statusForm.Visible) ShowStatus();
+                    else _statusForm.Show(_status, _pipeConnected);
                 }
                 if (m.Status.Operation is null) _lastPrompt = null;
                 if (m.Status.Key is { } key && key.SerialNumber != previousKey && m.Status.Operation is null)
@@ -121,6 +123,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private void ShowStatus()
     {
+        if (_statusForm.IsDisposed) _statusForm = new StatusForm();
         _statusForm.Show(_status, _pipeConnected);
         if (!_statusForm.Visible) _statusForm.Show();
         _statusForm.Activate();

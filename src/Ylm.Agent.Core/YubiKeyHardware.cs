@@ -20,6 +20,8 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
     private readonly SemaphoreSlim _lock = new(1, 1);
     private TaskCompletionSource? _removed;
     private TaskCompletionSource<IYubiKeyDevice>? _arrived;
+    private readonly Timer _poll;
+    private string? _lastSnapshot;
 
     public event EventHandler? KeyChanged;
 
@@ -29,18 +31,74 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
         _listener = YubiKeyDeviceListener.Instance;
         _listener.Arrived += (_, e) =>
         {
+            _logger.LogInformation("YubiKey arrived: {Serial}", e.Device.SerialNumber);
             _arrived?.TrySetResult(e.Device);
             KeyChanged?.Invoke(this, EventArgs.Empty);
         };
-        _listener.Removed += (_, _) =>
+        _listener.Removed += (_, e) =>
         {
+            _logger.LogInformation("YubiKey removed: {Serial}", e.Device.SerialNumber);
             _removed?.TrySetResult();
             KeyChanged?.Invoke(this, EventArgs.Empty);
         };
+        // Fallback in case device notifications do not reach the service (observed: key inserted, nothing reported).
+        _poll = new Timer(_ => Poll(), null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
     }
 
-    private static IReadOnlyList<IYubiKeyDevice> Devices() =>
-        YubiKeyDevice.FindAll().Where(d => d.AvailableUsbCapabilities.HasFlag(YubiKeyCapabilities.Fido2) || d.AvailableTransports.HasFlag(Transport.HidFido)).ToList();
+    private void Poll()
+    {
+        if (!_lock.Wait(0)) return; // an operation is running
+        try
+        {
+            var all = YubiKeyDevice.FindAll().ToList();
+            var snapshot = Diagnose(all);
+            if (snapshot == _lastSnapshot) return;
+            _lastSnapshot = snapshot;
+            _logger.LogInformation("YubiKey-Geräte gefunden: {Count} ({Details}); als Keys erkannt: {Keys}",
+                all.Count, snapshot.Length == 0 ? "keine" : snapshot, Dedupe(all).Count);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Polling for YubiKeys failed");
+            return;
+        }
+        finally { _lock.Release(); }
+        KeyChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// FIDO-capable keys, one entry per physical key. The SDK can report one key several times (one entry per USB
+    /// interface) when it cannot merge them, e.g. in a Windows service; such duplicates share the serial number.
+    /// </summary>
+    private static IReadOnlyList<IYubiKeyDevice> Devices() => Dedupe(YubiKeyDevice.FindAll());
+
+    private static List<IYubiKeyDevice> Dedupe(IEnumerable<IYubiKeyDevice> all)
+    {
+        var fido = all.Where(d => d.AvailableUsbCapabilities.HasFlag(YubiKeyCapabilities.Fido2) || d.AvailableTransports.HasFlag(Transport.HidFido)).ToList();
+        var withSerial = fido.Where(d => d.SerialNumber is not null)
+            .GroupBy(d => d.SerialNumber)
+            .Select(g => g.OrderByDescending(d => d.AvailableTransports.HasFlag(Transport.HidFido)).First())
+            .ToList();
+        // Keys without a readable serial (e.g. Security Key series) only count if no key with a serial is present.
+        return withSerial.Count > 0 ? withSerial : fido;
+    }
+
+    private static string Diagnose(IEnumerable<IYubiKeyDevice> all) =>
+        string.Join("; ", all.Select(d =>
+            $"SN={d.SerialNumber?.ToString() ?? "-"} FW={d.FirmwareVersion.Major}.{d.FirmwareVersion.Minor}.{d.FirmwareVersion.Patch} " +
+            $"Form={d.FormFactor} Transports={d.AvailableTransports} USB={d.AvailableUsbCapabilities} USB-aktiv={d.EnabledUsbCapabilities}"));
+
+    private static List<IYubiKeyDevice> FidoHid() => YubiKeyDevice.FindByTransport(Transport.HidFido).ToList();
+
+    private static IYubiKeyConnection ConnectWithRetry(IYubiKeyDevice device, TimeSpan within)
+    {
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        while (true)
+        {
+            try { return device.Connect(YubiKeyApplication.Fido2); }
+            catch (Exception) when (sw.Elapsed < within) { Thread.Sleep(100); }
+        }
+    }
 
     private static (IYubiKeyDevice? Device, OperationResult? Error) Single(int? expectedSerial)
     {
@@ -58,9 +116,11 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
         await _lock.WaitAsync(ct);
         try
         {
-            var devices = Devices();
-            if (devices.Count != 1) return null;
-            return Describe(devices[0]);
+            var all = YubiKeyDevice.FindAll().ToList();
+            var devices = Dedupe(all);
+            if (devices.Count == 1) return Describe(devices[0]);
+            if (devices.Count > 1) _logger.LogWarning("Mehr als ein YubiKey erkannt: {Details}", Diagnose(all));
+            return null;
         }
         finally { _lock.Release(); }
     }
@@ -113,22 +173,29 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(timeout);
 
-            _removed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-            _arrived = new TaskCompletionSource<IYubiKeyDevice>(TaskCreationOptions.RunContinuationsAsynchronously);
-            prompts.Prompt("Bitte den Key jetzt abziehen.");
-            await _removed.Task.WaitAsync(cts.Token);
-            _arrived = new TaskCompletionSource<IYubiKeyDevice>(TaskCreationOptions.RunContinuationsAsynchronously);
-            prompts.Prompt("Bitte den Key wieder anstecken.");
-            await _arrived.Task.WaitAsync(cts.Token);
-            // The HID interface needs a moment after insertion; the reset must happen within 10 seconds.
-            await Task.Delay(800, cts.Token);
-            var (again, err2) = Single(serial);
-            if (err2 is not null) return err2;
-            prompts.Prompt("Bitte den Key berühren, um den Werksreset zu bestätigen.");
+            // Only the FIDO HID interface is watched: enumerating all interfaces (and the device listener) can take
+            // several seconds on Windows, and the reset must reach the key within 10 seconds of power-up.
+            prompts.Prompt("Key abziehen");
+            while (FidoHid().Count > 0) await Task.Delay(150, cts.Token);
+            prompts.Prompt("Key wieder einstecken");
+            IYubiKeyDevice? again = null;
+            while (again is null)
+            {
+                var found = FidoHid();
+                if (found.Count > 1) return OperationResult.Fail(DeviceErrors.MultipleKeys, "Es sind mehrere YubiKeys eingesteckt. Bitte nur einen Key verwenden.");
+                if (found.Count == 1) again = found[0];
+                else await Task.Delay(100, cts.Token);
+            }
+            var sincePlugged = System.Diagnostics.Stopwatch.StartNew();
+            if (serial is { } expected && again.SerialNumber is { } actual && actual != expected)
+                return OperationResult.Fail(DeviceErrors.WrongKey, $"Eingesteckt ist Key {actual}, erwartet wird {expected}.");
+            _logger.LogInformation("Key wieder eingesteckt, sende Werksreset");
+            prompts.Prompt("Key jetzt berühren");
             return await Task.Run(() =>
             {
-                using var connection = again!.Connect(YubiKeyApplication.Fido2);
+                using var connection = ConnectWithRetry(again!, TimeSpan.FromSeconds(2));
                 var response = connection.SendCommand(new ResetCommand());
+                _logger.LogInformation("Werksreset: {Status} nach {Ms} ms seit dem Einstecken", response.Status, sincePlugged.ElapsedMilliseconds);
                 return response.Status == Yubico.YubiKey.ResponseStatus.Success
                     ? OperationResult.Ok()
                     : OperationResult.Fail(DeviceErrors.Failed, $"Reset abgelehnt ({response.StatusMessage}). Der Reset muss innerhalb von 10 Sekunden nach dem Anstecken bestätigt werden.");
@@ -274,5 +341,9 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
         finally { _lock.Release(); }
     }
 
-    public void Dispose() => _lock.Dispose();
+    public void Dispose()
+    {
+        _poll.Dispose();
+        _lock.Dispose();
+    }
 }

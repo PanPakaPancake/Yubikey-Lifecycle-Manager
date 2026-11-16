@@ -108,10 +108,12 @@ public static class TenantEndpoints
             if (isNew) db.Tenants.Add(tenant);
             try
             {
+                // A token issued before this consent would still carry the old permissions.
+                graphFactory.Invalidate(entraTenantId);
                 // Consent propagation can take a few seconds.
                 await Task.Delay(TimeSpan.FromSeconds(isNew ? 2 : 0));
                 var org = await (await graphFactory.ForTenantAsync(entraTenantId)).GetOrganizationAsync();
-                tenant.DisplayName = org.DisplayName;
+                tenant.DisplayName = string.IsNullOrWhiteSpace(org.DisplayName) ? org.DefaultDomain ?? entraTenantId.ToString() : org.DisplayName;
                 tenant.DefaultDomain = org.DefaultDomain;
             }
             catch (Exception)
@@ -150,7 +152,7 @@ public static class TenantEndpoints
             var user = await cu.RequireTenantAsync(id, Permission.ReadInventory);
             if (!RolePermissions.Has(user.Role, Permission.ManageTenants) && !RolePermissions.Has(user.Role, Permission.SyncTenants)) throw ApiException.Forbidden();
             var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
-            await checks.RunAsync(t, AuditService.User(user));
+            await checks.RunAsync(t, AuditService.User(user), freshToken: true);
             return Results.Ok(ToDto(t));
         });
 

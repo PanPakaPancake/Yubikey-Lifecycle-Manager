@@ -23,10 +23,12 @@ public sealed class OperationJob
     public List<string> Notes { get; } = [];
     public DateTimeOffset CreatedAt { get; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? FinishedAt { get; set; }
+    /// <summary>Agent running the job; its live prompt overrides the step prompt while the job runs.</summary>
+    public Agents.ConnectedAgent? Agent { get; set; }
 
     public object ToDto() => new
     {
-        Id, Kind, State = State.ToString(), Step, Prompt, StepNumber, TotalSteps, Error, ErrorCode, KeyId, PinLetterId, Notes, CreatedAt, FinishedAt,
+        Id, Kind, State = State.ToString(), Step, Prompt = State == JobState.Running ? Agent?.CurrentPrompt ?? Prompt : Prompt, StepNumber, TotalSteps, Error, ErrorCode, KeyId, PinLetterId, Notes, CreatedAt, FinishedAt,
     };
 }
 

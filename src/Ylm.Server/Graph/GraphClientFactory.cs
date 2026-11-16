@@ -39,5 +39,7 @@ public sealed class GraphClientFactory(
         return _credentials.GetOrAdd(tenantId, credential);
     }
 
+    public void Invalidate(Guid entraTenantId) => _credentials.TryRemove(entraTenantId, out _);
+
     public void Reset() => _credentials.Clear();
 }

@@ -95,8 +95,9 @@ export default function WizardPage() {
                 <div className="alert warn">
                   <strong>Der Key passt nicht vollständig zum Profil:</strong>
                   {preview.violations.map((v) => (
-                    <div key={v.code} className="check-row" style={{ marginTop: 8 }}>
-                      <div style={{ flex: 1 }}>{v.message}{v.resolvedByReset && <div className="small muted">Wird durch einen Werksreset behoben.</div>}</div>
+                    <div key={v.code} className={'violation-row' + (!v.canOverride && !v.resolvedByReset ? ' blocking' : '')}>
+                      <span className="violation-icon" aria-hidden>!</span>
+                      <div>{v.message}{v.resolvedByReset && <div className="small muted">Wird durch einen Werksreset behoben.</div>}</div>
                       {v.canOverride && !(v.resolvedByReset && performReset) && (
                         <label className="check">
                           <input type="checkbox" checked={overrides.includes(v.code)} onChange={(e) => setOverrides((o) => e.target.checked ? [...o, v.code] : o.filter((x) => x !== v.code))} />
@@ -108,11 +109,14 @@ export default function WizardPage() {
                   ))}
                 </div>
               )}
-              <label className="check" style={{ margin: '12px 0' }}>
-                <input type="checkbox" checked={performReset} disabled={preview.resetRequired} onChange={(e) => setPerformReset(e.target.checked)} />
-                FIDO-Werksreset vor der Registrierung {preview.resetRequired && '(erforderlich)'}
-              </label>
-              {performReset && <Info tone="warn">Der Reset löscht alle Passkeys auf dem Key. Der Key muss dafür kurz abgezogen und wieder eingesteckt werden.</Info>}
+              {/* A key in factory state needs no reset: only offer it when the key is already in use or the profile asks for it. */}
+              {(preview.resetRequired || preview.resetPlanned || preview.key.pinIsSet) && <>
+                <label className="check" style={{ margin: '12px 0' }}>
+                  <input type="checkbox" checked={performReset} disabled={preview.resetRequired} onChange={(e) => setPerformReset(e.target.checked)} />
+                  FIDO-Werksreset vor der Registrierung {preview.resetRequired && '(erforderlich)'}
+                </label>
+                {performReset && <Info tone="error"><strong>Achtung:</strong> Der Reset löscht alle Passkeys auf dem Key unwiderruflich. Der Key muss dafür kurz abgezogen und wieder eingesteckt werden.</Info>}
+              </>}
               <button className="primary" disabled={!canStart || busy} onClick={start}>Registrierung starten</button>
             </div>
           )}
@@ -180,6 +184,11 @@ function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; set
   const online = agents?.filter((a) => a.online) ?? [];
   const agent = online.find((a) => a.id === agentId) ?? online[0];
   useEffect(() => { if (agent && agent.id !== agentId) setAgentId(agent.id); }, [agent, agentId, setAgentId]);
+  // Ask the tray app once per agent to show "insert key" while no key is present.
+  const waitingFor = agent && !agent.key ? agent.id : undefined;
+  useEffect(() => {
+    if (waitingFor) void api.post(`/api/agents/${waitingFor}/request-key`, {}).catch(() => undefined);
+  }, [waitingFor]);
   return (
     <Card title="YubiKey einstecken">
       <ErrorBox error={error} />
@@ -194,17 +203,26 @@ function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; set
         </Field>
       )}
       {agent && (agent.key ? (
-        <div className="keycard">
+        <div className={'keycard' + (!agent.key.hasFido2 ? ' error' : !agent.key.supportsForcePinChange ? ' warn' : '')}>
           <div className="keyglyph"><span /></div>
           <div>
             <strong>{agent.key.model ?? 'YubiKey'}</strong>
             <div>Seriennummer <span className="mono">{agent.key.serialNumber ?? '–'}</span> · Firmware <span className="mono">{agent.key.firmwareVersion}</span></div>
-            <div className="small muted">{agent.key.pinIsSet ? 'FIDO-PIN ist gesetzt' : 'Keine FIDO-PIN gesetzt'} · {agent.key.supportsForcePinChange ? 'PIN-Wechsel erzwingbar' : 'PIN-Wechsel nicht erzwingbar (Firmware < 5.7)'}</div>
+            <div className="small muted">{agent.key.pinIsSet ? 'FIDO-PIN ist gesetzt' : 'Keine FIDO-PIN gesetzt (Werkszustand)'}</div>
+            {!agent.key.supportsForcePinChange && (
+              <div className="key-warning"><span className="violation-icon" aria-hidden>!</span> Firmware {agent.key.firmwareVersion}: Der PIN-Wechsel kann nicht erzwungen werden (erst ab 5.7).</div>
+            )}
             {!agent.key.hasFido2 && <Badge tone="error">Kein FIDO2</Badge>}
           </div>
         </div>
       ) : (
-        <Info><Spinner /> Warte auf einen YubiKey an <strong>{agent.machineName}</strong> … Bitte nur einen Key einstecken.</Info>
+        <div className="waiting-key">
+          <Spinner />
+          <div>
+            <strong>Bitte jetzt den YubiKey an {agent.machineName} einstecken.</strong>
+            <div className="small muted">Der Agent wartet auf den Key. Bitte nur einen Key einstecken. Die Tray-App zeigt den Hinweis ebenfalls an.</div>
+          </div>
+        </div>
       ))}
       {agent?.busy && <Info tone="warn">Der Agent ist beschäftigt: {agent.busy}</Info>}
       <div className="actions" style={{ marginTop: 12 }}>
