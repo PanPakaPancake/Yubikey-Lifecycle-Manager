@@ -174,32 +174,49 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
             cts.CancelAfter(timeout);
 
             // Only the FIDO HID interface is watched: enumerating all interfaces (and the device listener) can take
-            // several seconds on Windows, and the reset must reach the key within 10 seconds of power-up.
-            prompts.Prompt("Key abziehen");
-            while (FidoHid().Count > 0) await Task.Delay(150, cts.Token);
-            prompts.Prompt("Key wieder einstecken");
-            IYubiKeyDevice? again = null;
-            while (again is null)
+            // several seconds on Windows, and the reset must reach the key shortly after power-up. If the user misses
+            // the window (touch too late), the cycle simply starts again until the overall timeout ends.
+            string? lastError = null;
+            for (var attempt = 1; ; attempt++)
             {
-                var found = FidoHid();
-                if (found.Count > 1) return OperationResult.Fail(DeviceErrors.MultipleKeys, "Es sind mehrere YubiKeys eingesteckt. Bitte nur einen Key verwenden.");
-                if (found.Count == 1) again = found[0];
-                else await Task.Delay(100, cts.Token);
+                prompts.Prompt(attempt == 1
+                    ? "Key abziehen"
+                    : "Nicht rechtzeitig bestätigt. Key nochmal abziehen");
+                while (FidoHid().Count > 0) await Task.Delay(150, cts.Token);
+                prompts.Prompt("Key wieder einstecken und sofort berühren, sobald er blinkt");
+                IYubiKeyDevice? again = null;
+                while (again is null)
+                {
+                    var found = FidoHid();
+                    if (found.Count > 1) return OperationResult.Fail(DeviceErrors.MultipleKeys, "Es sind mehrere YubiKeys eingesteckt. Bitte nur einen Key verwenden.");
+                    if (found.Count == 1) again = found[0];
+                    else await Task.Delay(100, cts.Token);
+                }
+                var sincePlugged = System.Diagnostics.Stopwatch.StartNew();
+                if (serial is { } expected && again.SerialNumber is { } actual && actual != expected)
+                    return OperationResult.Fail(DeviceErrors.WrongKey, $"Eingesteckt ist Key {actual}, erwartet wird {expected}.");
+                _logger.LogInformation("Werksreset Versuch {Attempt}: Key eingesteckt, sende Reset", attempt);
+                prompts.Prompt("Key jetzt berühren");
+                var (ok, status) = await Task.Run(() =>
+                {
+                    try
+                    {
+                        using var connection = ConnectWithRetry(again!, TimeSpan.FromSeconds(2));
+                        _logger.LogInformation("Werksreset Versuch {Attempt}: verbunden nach {Ms} ms", attempt, sincePlugged.ElapsedMilliseconds);
+                        var response = connection.SendCommand(new ResetCommand());
+                        return (response.Status == Yubico.YubiKey.ResponseStatus.Success, $"{response.Status}: {response.StatusMessage}");
+                    }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        return (false, ex.Message);
+                    }
+                }, cts.Token);
+                _logger.LogInformation("Werksreset Versuch {Attempt}: {Status} nach {Ms} ms seit dem Einstecken", attempt, status, sincePlugged.ElapsedMilliseconds);
+                if (ok) return OperationResult.Ok();
+                lastError = status;
+                if (cts.IsCancellationRequested) break;
             }
-            var sincePlugged = System.Diagnostics.Stopwatch.StartNew();
-            if (serial is { } expected && again.SerialNumber is { } actual && actual != expected)
-                return OperationResult.Fail(DeviceErrors.WrongKey, $"Eingesteckt ist Key {actual}, erwartet wird {expected}.");
-            _logger.LogInformation("Key wieder eingesteckt, sende Werksreset");
-            prompts.Prompt("Key jetzt berühren");
-            return await Task.Run(() =>
-            {
-                using var connection = ConnectWithRetry(again!, TimeSpan.FromSeconds(2));
-                var response = connection.SendCommand(new ResetCommand());
-                _logger.LogInformation("Werksreset: {Status} nach {Ms} ms seit dem Einstecken", response.Status, sincePlugged.ElapsedMilliseconds);
-                return response.Status == Yubico.YubiKey.ResponseStatus.Success
-                    ? OperationResult.Ok()
-                    : OperationResult.Fail(DeviceErrors.Failed, $"Reset abgelehnt ({response.StatusMessage}). Der Reset muss innerhalb von 10 Sekunden nach dem Anstecken bestätigt werden.");
-            }, cts.Token);
+            return OperationResult.Fail(DeviceErrors.Timeout, $"Werksreset nicht bestätigt ({lastError}).");
         }
         catch (OperationCanceledException)
         {
@@ -290,7 +307,12 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
                 if (options.CredProtect is { } level && info.IsExtensionSupported("credProtect"))
                     p.AddCredProtectExtension((CredProtectPolicy)level, options.EnforceCredProtect, info);
 
-                fido.VerifyPin(PinUvAuthTokenPermissions.MakeCredential, options.RpId);
+                // Keys before CTAP 2.1 (older firmware) only know the plain PIN token, which takes no permissions and
+                // no RP ID; asking for them there fails with "No permissions were specified ...".
+                if (info.GetOptionValue(AuthenticatorOptions.pinUvAuthToken) == OptionValue.True)
+                    fido.VerifyPin(PinUvAuthTokenPermissions.MakeCredential, options.RpId);
+                else
+                    fido.VerifyPin();
                 prompts.Prompt("Bitte den Key berühren, sobald er blinkt.");
                 var data = fido.MakeCredential(p);
                 var authData = data.AuthenticatorData.EncodedAuthenticatorData;

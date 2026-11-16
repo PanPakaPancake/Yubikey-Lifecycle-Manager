@@ -220,7 +220,7 @@ function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; set
           <Spinner />
           <div>
             <strong>Bitte jetzt den YubiKey an {agent.machineName} einstecken.</strong>
-            <div className="small muted">Der Agent wartet auf den Key. Bitte nur einen Key einstecken. Die Tray-App zeigt den Hinweis ebenfalls an.</div>
+            <div className="small muted">Der Agent wartet auf den Key. Bitte nur einen Key einstecken. Den Fortschritt zeigt auf Wunsch auch das Statusfenster der Tray-App (Doppelklick auf das Symbol).</div>
           </div>
         </div>
       ))}
