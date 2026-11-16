@@ -327,5 +327,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         Assert.Contains("New-MgApplication", script);
         Assert.Contains("https://ylm.test/signin-oidc", script);
         Assert.Contains("UserAuthenticationMethod.ReadWrite.All", script);
+        Assert.Contains("New-MgServicePrincipalAppRoleAssignment", script);
+        Assert.Contains("New-MgOauth2PermissionGrant", script);
     }
 }

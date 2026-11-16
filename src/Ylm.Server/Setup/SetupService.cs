@@ -117,18 +117,24 @@ public sealed class SetupService(
         var scopes = string.Join(", ", DelegatedScopes.Select(p => $"'{p}'"));
         var name = ("Yubikey Lifecycle Manager " + s.OrganizationName).Replace("'", "''").Trim();
         return $$"""
-            # Erstellt die App-Registrierung für den Yubikey Lifecycle Manager im Heim-Tenant.
-            # Ausführen als Global Admin oder Application Administrator. Benötigt: Install-Module Microsoft.Graph -Scope CurrentUser
-            Connect-MgGraph -Scopes 'Application.ReadWrite.All' -NoWelcome
+            # Erstellt die App-Registrierung für den Yubikey Lifecycle Manager im Heim-Tenant und erteilt den Admin-Consent.
+            # Ausführen als Globaler Administrator oder Privileged Role Administrator.
+            # Benötigt: Install-Module Microsoft.Graph -Scope CurrentUser
+            $ErrorActionPreference = 'Stop'
+            Connect-MgGraph -Scopes 'Application.ReadWrite.All', 'AppRoleAssignment.ReadWrite.All', 'DelegatedPermissionGrant.ReadWrite.All' -NoWelcome
             $graphAppId = '00000003-0000-0000-c000-000000000000'
             $graphSp = Get-MgServicePrincipal -Filter "appId eq '$graphAppId'"
-            $access = @()
+            $appRoleIds = @()
             foreach ($p in @({{appRoles}})) {
               $role = $graphSp.AppRoles | Where-Object { $_.Value -eq $p }
-              $access += @{ Id = $role.Id; Type = 'Role' }
+              if (-not $role) { throw "Anwendungsberechtigung $p nicht gefunden." }
+              $appRoleIds += $role.Id
             }
-            foreach ($p in @({{scopes}})) {
+            $scopeNames = @({{scopes}})
+            $access = @($appRoleIds | ForEach-Object { @{ Id = $_; Type = 'Role' } })
+            foreach ($p in $scopeNames) {
               $scope = $graphSp.Oauth2PermissionScopes | Where-Object { $_.Value -eq $p }
+              if (-not $scope) { throw "Delegierte Berechtigung $p nicht gefunden." }
               $access += @{ Id = $scope.Id; Type = 'Scope' }
             }
             $certBytes = [Convert]::FromBase64String('{{certB64}}')
@@ -136,7 +142,30 @@ public sealed class SetupService(
               -Web @{ RedirectUris = @({{redirects}}) } `
               -RequiredResourceAccess @(@{ ResourceAppId = $graphAppId; ResourceAccess = $access }) `
               -KeyCredentials @(@{ Type = 'AsymmetricX509Cert'; Usage = 'Verify'; Key = $certBytes; DisplayName = 'YLM {{cert.Thumbprint[..8]}}' })
-            New-MgServicePrincipal -AppId $app.AppId | Out-Null
+            Write-Host "App-Registrierung angelegt: $($app.AppId)"
+
+            # Dienstprinzipal anlegen. Direkt nach dem Anlegen der App kann Entra noch kurz brauchen.
+            $sp = $null
+            for ($i = 1; $i -le 6 -and -not $sp; $i++) {
+              try { $sp = New-MgServicePrincipal -AppId $app.AppId }
+              catch { if ($i -eq 6) { throw }; Start-Sleep -Seconds 5 }
+            }
+            Write-Host "Dienstprinzipal angelegt: $($sp.Id)"
+
+            # Admin-Consent: Anwendungsberechtigungen zuweisen ...
+            foreach ($roleId in $appRoleIds) {
+              for ($i = 1; $i -le 6; $i++) {
+                try {
+                  New-MgServicePrincipalAppRoleAssignment -ServicePrincipalId $sp.Id -PrincipalId $sp.Id -ResourceId $graphSp.Id -AppRoleId $roleId | Out-Null
+                  break
+                }
+                catch { if ($i -eq 6) { throw }; Start-Sleep -Seconds 5 }
+              }
+            }
+            # ... und delegierte Berechtigungen für alle Benutzer freigeben.
+            New-MgOauth2PermissionGrant -ClientId $sp.Id -ConsentType 'AllPrincipals' -ResourceId $graphSp.Id -Scope ($scopeNames -join ' ') | Out-Null
+            Write-Host 'Admin-Consent erteilt.'
+
             $ctx = Get-MgContext
             Write-Host ''
             Write-Host "Client-ID (Anwendungs-ID): $($app.AppId)"
