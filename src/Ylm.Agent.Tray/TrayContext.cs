@@ -14,7 +14,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ToolStripMenuItem _openWeb = new("WebGUI öffnen");
     private readonly ToolStripMenuItem _pair = new("Koppeln …");
     private readonly ToolStripMenuItem _unpair = new("Kopplung lösen");
-    private readonly StatusForm _statusForm = new();
+    private StatusForm _statusForm = new();
     private TrayStatus _status = new();
     private bool _pipeConnected;
     private string? _lastPrompt;
@@ -121,6 +121,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private void ShowStatus()
     {
+        if (_statusForm.IsDisposed) _statusForm = new StatusForm();
         _statusForm.Show(_status, _pipeConnected);
         if (!_statusForm.Visible) _statusForm.Show();
         _statusForm.Activate();

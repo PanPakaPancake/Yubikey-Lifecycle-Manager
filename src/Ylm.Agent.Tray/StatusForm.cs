@@ -37,6 +37,18 @@ internal sealed class StatusForm : Form
         };
     }
 
+    /// <summary>Closing only hides the window; it is reused for every status update.</summary>
+    protected override void OnFormClosing(FormClosingEventArgs e)
+    {
+        if (e.CloseReason == CloseReason.UserClosing)
+        {
+            e.Cancel = true;
+            Hide();
+            return;
+        }
+        base.OnFormClosing(e);
+    }
+
     public void Show(TrayStatus s, bool pipeConnected)
     {
         _connection.Text = !pipeConnected ? "Agent-Dienst nicht erreichbar" : TrayContext.Describe(s.Connection);
