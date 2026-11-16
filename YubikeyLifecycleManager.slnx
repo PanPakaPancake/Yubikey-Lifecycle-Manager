@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Ylm.Agent.Core/Ylm.Agent.Core.csproj" />
+    <Project Path="src/Ylm.Agent.Tray/Ylm.Agent.Tray.csproj" />
+    <Project Path="src/Ylm.Agent/Ylm.Agent.csproj" />
+    <Project Path="src/Ylm.Contracts/Ylm.Contracts.csproj" />
+    <Project Path="src/Ylm.Core/Ylm.Core.csproj" />
+    <Project Path="src/Ylm.Server/Ylm.Server.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Ylm.Core.Tests/Ylm.Core.Tests.csproj" />
+    <Project Path="tests/Ylm.Server.Tests/Ylm.Server.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,11 @@
+bin/
+obj/
+node_modules/
+src/Ylm.Server/wwwroot/
+data/
+*.user
+.vs/
+.vscode/
+TestResults/
+*.msi
+installer/out/

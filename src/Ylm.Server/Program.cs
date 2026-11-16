@@ -1,0 +1,185 @@
+using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.OpenApi;
+using Scalar.AspNetCore;
+using Ylm.Contracts;
+using Ylm.Server.Agents;
+using Ylm.Server.Audit;
+using Ylm.Server.Data;
+using Ylm.Server.Graph;
+using Ylm.Server.Infrastructure;
+using Ylm.Server.Inventory;
+using Ylm.Server.Profiles;
+using Ylm.Server.PublicApi;
+using Ylm.Server.Registration;
+using Ylm.Server.Reporting;
+using Ylm.Server.Secrets;
+using Ylm.Server.Security;
+using Ylm.Server.Setup;
+using Ylm.Server.Tenants;
+using Ylm.Server.Users;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.Configure<YlmOptions>(builder.Configuration.GetSection(YlmOptions.Section));
+var ylm = builder.Configuration.GetSection(YlmOptions.Section).Get<YlmOptions>() ?? new YlmOptions();
+var dataDir = Path.GetFullPath(ylm.DataDirectory, builder.Environment.ContentRootPath);
+Directory.CreateDirectory(dataDir);
+
+builder.Services.AddDbContext<YlmDbContext>(o =>
+    o.UseNpgsql(builder.Configuration.GetConnectionString("Postgres") ?? "Host=localhost;Database=ylm;Username=ylm;Password=ylm"));
+
+builder.Services.AddDataProtection()
+    .SetApplicationName("YubikeyLifecycleManager")
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataDir, "keys")));
+
+builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddHttpClient("graph", c => c.Timeout = TimeSpan.FromSeconds(60));
+
+builder.Services.AddSingleton<ISecretStore>(sp => new FileSecretStore(Path.Combine(dataDir, "secrets"), sp.GetRequiredService<IDataProtectionProvider>()));
+builder.Services.AddSingleton<AppCertificateService>();
+builder.Services.AddSingleton<IGraphClientFactory, GraphClientFactory>();
+builder.Services.AddSingleton<AgentRegistry>();
+builder.Services.AddSingleton<AgentGateway>();
+builder.Services.AddSingleton<JobStore>();
+builder.Services.AddSingleton<PinLetterStore>();
+builder.Services.AddScoped<CurrentUser>();
+builder.Services.AddScoped<AuditService>();
+builder.Services.AddScoped<PlatformSignIn>();
+builder.Services.AddScoped<SetupService>();
+builder.Services.AddScoped<TenantCheckService>();
+builder.Services.AddScoped<SyncService>();
+builder.Services.AddScoped<KeyService>();
+builder.Services.AddScoped<RegistrationService>();
+builder.Services.AddScoped<DashboardService>();
+builder.Services.AddScoped<ExportService>();
+builder.Services.AddHostedService<BackgroundJobs>();
+
+builder.Services.AddSingleton<IConfigureOptions<OpenIdConnectOptions>, EntraOidcOptionsSetup>();
+builder.Services.AddAuthentication(AuthSchemes.Cookie)
+    .AddCookie(AuthSchemes.Cookie, o =>
+    {
+        o.Cookie.Name = "ylm.auth";
+        o.Cookie.HttpOnly = true;
+        o.Cookie.SameSite = SameSiteMode.Lax;
+        o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        o.ExpireTimeSpan = TimeSpan.FromHours(10);
+        o.SlidingExpiration = true;
+        o.Events.OnRedirectToLogin = ctx =>
+        {
+            if (ctx.Request.Path.StartsWithSegments("/api")) ctx.Response.StatusCode = 401;
+            else ctx.Response.Redirect("/login?returnUrl=" + Uri.EscapeDataString(ctx.Request.Path + ctx.Request.QueryString));
+            return Task.CompletedTask;
+        };
+        o.Events.OnRedirectToAccessDenied = ctx =>
+        {
+            ctx.Response.StatusCode = 403;
+            return Task.CompletedTask;
+        };
+    })
+    .AddOpenIdConnect(AuthSchemes.Entra, _ => { })
+    .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(AuthSchemes.ApiKey, _ => { })
+    .AddScheme<AuthenticationSchemeOptions, AgentTokenAuthenticationHandler>(AuthSchemes.Agent, _ => { });
+
+builder.Services.AddAuthorizationBuilder()
+    .SetDefaultPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder(AuthSchemes.Cookie)
+        .RequireAuthenticatedUser().RequireClaim(YlmClaims.UserId).Build())
+    .AddPolicy("ApiKey", p => p.AddAuthenticationSchemes(AuthSchemes.ApiKey).RequireAuthenticatedUser().RequireClaim(YlmClaims.ApiKeyTenant));
+
+builder.Services.AddRateLimiter(o =>
+{
+    o.RejectionStatusCode = 429;
+    o.AddPolicy(AgentEndpoints.PairingRateLimit, ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+});
+
+builder.Services.AddSignalR(o =>
+{
+    o.MaximumParallelInvocationsPerClient = 2;
+    o.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+    o.KeepAliveInterval = TimeSpan.FromSeconds(15);
+}).AddJsonProtocol(o => o.PayloadSerializerOptions.Converters.Add(new JsonStringEnumConverter()));
+
+builder.Services.AddOpenApi(PublicApiEndpoints.GroupName, o =>
+{
+    o.ShouldInclude = d => d.GroupName == PublicApiEndpoints.GroupName;
+    o.AddDocumentTransformer((doc, _, _) =>
+    {
+        doc.Info = new OpenApiInfo
+        {
+            Title = "Yubikey Lifecycle Manager – Lese-API",
+            Version = "v1",
+            Description = "Nur lesender Zugriff auf das YubiKey-Inventar eines Tenants. Authentifizierung mit API-Schlüssel im Header X-Api-Key.",
+        };
+        doc.Components ??= new OpenApiComponents();
+        doc.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
+        doc.Components.SecuritySchemes["ApiKey"] = new OpenApiSecurityScheme
+        {
+            Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Header, Name = ApiKeyAuthenticationHandler.HeaderName,
+            Description = "API-Schlüssel des Tenants (Tenant → API-Schlüssel).",
+        };
+        doc.Security = [new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("ApiKey", doc)] = [] }];
+        return Task.CompletedTask;
+    });
+});
+
+builder.Services.Configure<ForwardedHeadersOptions>(o =>
+{
+    o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
+    o.KnownIPNetworks.Clear();
+    o.KnownProxies.Clear();
+});
+
+var app = builder.Build();
+
+app.UseForwardedHeaders();
+app.UseMiddleware<ApiExceptionMiddleware>();
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseMiddleware<CsrfHeaderMiddleware>();
+
+app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
+app.MapAuth(app.Environment, ylm);
+app.MapSetup();
+app.MapUsers();
+app.MapTenants();
+app.MapKeys();
+app.MapProfiles();
+app.MapCustomFields();
+app.MapAgents();
+app.MapRegistration();
+app.MapReporting();
+app.MapAudit();
+app.MapPublicApi();
+app.MapApiKeyManagement();
+app.MapHub<AgentHub>(AgentProtocol.HubPath);
+app.MapOpenApi("/openapi/{documentName}.json").AllowAnonymous();
+app.MapScalarApiReference("/api/docs", o => o.WithTitle("YLM Lese-API").WithOpenApiRoutePattern("/openapi/{documentName}.json")).AllowAnonymous();
+app.MapFallback("/api/{**rest}", () => Results.Json(new ApiError("not_found", "Unbekannter Endpunkt."), statusCode: 404));
+app.MapFallbackToFile("index.html");
+
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<YlmDbContext>();
+    await db.Database.MigrateAsync();
+    if (!await db.Profiles.AnyAsync())
+    {
+        db.Profiles.Add(ProfileEndpoints.CreateStandard());
+        await db.SaveChangesAsync();
+    }
+    await scope.ServiceProvider.GetRequiredService<SetupService>().EnsureSetupTokenAsync();
+}
+
+await app.RunAsync();
+
+public partial class Program;
