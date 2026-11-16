@@ -16,7 +16,7 @@
       </Directory>
     </StandardDirectory>
     <StandardDirectory Id="ProgramMenuFolder">
-      <Directory Id="StartMenuFolder" Name="Yubikey Lifecycle Manager" />
+      <Directory Id="AppStartMenuFolder" Name="Yubikey Lifecycle Manager" />
     </StandardDirectory>
 
     <Feature Id="Main" Title="Agent und Tray-App" Level="1">
@@ -52,7 +52,7 @@
                      Type="string" Value="&quot;[AgentFolder]YlmTray.exe&quot;" KeyPath="yes" />
     </Component>
 
-    <Component Id="StartMenuShortcut" Directory="StartMenuFolder" Guid="E1B7C9D3-5A2F-4C8E-B6D0-7F3A9E1C4B28">
+    <Component Id="StartMenuShortcut" Directory="AppStartMenuFolder" Guid="E1B7C9D3-5A2F-4C8E-B6D0-7F3A9E1C4B28">
       <Shortcut Id="TrayShortcut" Name="Yubikey Lifecycle Manager" Target="[AgentFolder]YlmTray.exe" WorkingDirectory="AgentFolder" />
       <RemoveFolder Id="RemoveStartMenuFolder" On="uninstall" />
       <RegistryValue Root="HKLM" Key="SOFTWARE\YubikeyLifecycleManager" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
