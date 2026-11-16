@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { api, ApiError, statusLabels, type KeyStatus, type Tenant } from './api';
+import { api, ApiError, statusLabels, type GroupRef, type KeyStatus, type Tenant } from './api';
 
 export function useApi<T>(url: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | undefined>();
@@ -150,4 +150,53 @@ export function download(url: string) {
   document.body.appendChild(a);
   a.click();
   a.remove();
+}
+
+/** Searches Entra groups of a tenant; calls onPick with the chosen group. */
+export function GroupSearch({ tenantId, onPick, exclude = [], placeholder = 'Gruppe suchen …' }: { tenantId: string; onPick: (g: GroupRef) => void; exclude?: string[]; placeholder?: string }) {
+  const [q, setQ] = useState('');
+  const [groups, setGroups] = useState<{ id: string; displayName: string }[]>();
+  const { busy, error, run } = useAction();
+  const search = () => run(async () => setGroups(await api.get(`/api/tenants/${tenantId}/groups?q=${encodeURIComponent(q)}`)));
+  const visible = groups?.filter((g) => !exclude.includes(g.id));
+  return (
+    <div>
+      <div className="toolbar" style={{ margin: 0 }}>
+        <input type="search" placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (q.trim()) search(); } }} />
+        <button type="button" disabled={!q.trim() || busy} onClick={search}>Suchen</button>
+        {groups && <button type="button" className="link" onClick={() => setGroups(undefined)}>Ergebnisse schließen</button>}
+      </div>
+      <ErrorBox error={error} />
+      {visible && (
+        <div className="pick" style={{ marginTop: 8 }}>
+          {visible.map((g) => <button type="button" key={g.id} onClick={() => { onPick({ id: g.id, name: g.displayName }); setGroups(undefined); setQ(''); }}>{g.displayName}</button>)}
+          {visible.length === 0 && <span className="muted small">Keine (weitere) Gruppe gefunden.</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Removable list of groups as chips. */
+export function GroupChips({ groups, onRemove, empty }: { groups: GroupRef[]; onRemove?: (id: string) => void; empty: ReactNode }) {
+  if (groups.length === 0) return <div className="muted small" style={{ margin: '4px 0 8px' }}>{empty}</div>;
+  return (
+    <div className="chips">
+      {groups.map((g) => (
+        <span key={g.id} className="chip" title={g.id}>
+          {g.name}
+          {onRemove && <button type="button" className="chip-x" aria-label={`${g.name} entfernen`} onClick={() => onRemove(g.id)}>×</button>}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+/** Small badge showing where a setting comes from in the hierarchy Plattform → Tenant. */
+export function OriginBadge({ origin, state }: { origin: 'Global' | 'Tenant'; state?: 'Inherited' | 'Modified' | 'Disabled' | 'Local' }) {
+  if (origin === 'Tenant') return <Badge tone="info">Lokal im Tenant</Badge>;
+  if (state === 'Modified') return <Badge tone="warn">Global · hier verändert</Badge>;
+  if (state === 'Disabled') return <Badge tone="error">Global · hier deaktiviert</Badge>;
+  return <Badge>Global · geerbt</Badge>;
 }

@@ -22,6 +22,7 @@ export default function WizardPage() {
   const [user, setUser] = useState<EntraUser>();
   const [agentId, setAgentId] = useState('');
   const [profileId, setProfileId] = useState('');
+  const [suggestion, setSuggestion] = useState<{ profileId?: string | null; groupName?: string | null }>();
   const [preview, setPreview] = useState<Preview>();
   const [overrides, setOverrides] = useState<string[]>([]);
   const [performReset, setPerformReset] = useState(false);
@@ -37,6 +38,19 @@ export default function WizardPage() {
 
   const restart = () => {
     setStep(0); setUser(undefined); setPreview(undefined); setOverrides([]); setPerformReset(false); setJob(undefined); setError(undefined);
+  };
+
+  // Group level: a profile assigned to one of the person's groups is preselected.
+  const suggestProfile = async (u: EntraUser) => {
+    setSuggestion(undefined);
+    setProfileId('');
+    try {
+      const s = await api.get<{ profileId?: string | null; groupName?: string | null }>(`/api/tenants/${tenantId}/users/${encodeURIComponent(u.id)}/suggested-profile`);
+      setSuggestion(s);
+      if (s.profileId) setProfileId(s.profileId);
+    } catch {
+      /* no suggestion: the default profile applies */
+    }
   };
 
   const loadPreview = () => run(async () => {
@@ -65,12 +79,12 @@ export default function WizardPage() {
       </ol>
       <ErrorBox error={error} />
 
-      {step === 0 && <PersonStep tenantId={tenantId} setTenantId={setTenantId} onPick={(u) => { setUser(u); setStep(1); }} />}
+      {step === 0 && <PersonStep tenantId={tenantId} setTenantId={setTenantId} onPick={(u) => { setUser(u); setStep(1); void suggestProfile(u); }} />}
 
       {step === 1 && <KeyStep agentId={agentId} setAgentId={setAgentId} onNext={() => setStep(2)} onBack={() => setStep(0)} />}
 
       {step === 2 && user && (
-        <ProfileStep tenantId={tenantId} profileId={profileId} setProfileId={(id) => { setProfileId(id); setPreview(undefined); }}>
+        <ProfileStep tenantId={tenantId} profileId={profileId} suggestion={suggestion} setProfileId={(id) => { setProfileId(id); setPreview(undefined); }}>
           <div className="actions">
             <button onClick={() => setStep(1)}>Zurück</button>
             <button disabled={!profileId || busy} onClick={loadPreview}>{preview ? 'Erneut prüfen' : 'Prüfen'}</button>
@@ -215,7 +229,9 @@ function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; set
   );
 }
 
-function ProfileStep({ tenantId, profileId, setProfileId, children }: { tenantId: string; profileId: string; setProfileId: (v: string) => void; children: ReactNode }) {
+function ProfileStep({ tenantId, profileId, setProfileId, suggestion, children }: {
+  tenantId: string; profileId: string; setProfileId: (v: string) => void; suggestion?: { profileId?: string | null; groupName?: string | null }; children: ReactNode;
+}) {
   const { data: profiles, error } = useApi<Profile[]>('/api/profiles?tenantId=' + tenantId, [tenantId]);
   useEffect(() => {
     if (profiles && !profileId) {
@@ -232,6 +248,9 @@ function ProfileStep({ tenantId, profileId, setProfileId, children }: { tenantId
           {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.tenantId ? '' : ' (alle Tenants)'}</option>)}
         </select>
       </Field>
+      {suggestion?.profileId && suggestion.profileId === profileId && (
+        <Info>Vorgeschlagen, weil die Person Mitglied der Gruppe <strong>{suggestion.groupName}</strong> ist (Profile nach Gruppe im Tenant).</Info>
+      )}
       {selected && (
         <p className="small muted">
           {selected.pinStrategy === 'Random' ? `Zufällige PIN mit ${selected.pinLength} Ziffern` : 'Feste Standard-PIN'}

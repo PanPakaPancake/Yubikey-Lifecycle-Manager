@@ -15,6 +15,7 @@ import ProfilesPage from './pages/Profiles';
 import AgentsPage from './pages/Agents';
 import AuditPage from './pages/Audit';
 import UsersPage from './pages/Users';
+import PlatformPage from './pages/Platform';
 
 const roleLabel: Record<string, string> = { Owner: 'Owner', Operator: 'Operator', Helpdesk: 'Helpdesk', Auditor: 'Auditor' };
 
@@ -60,6 +61,7 @@ export default function App() {
             <NavLink to="/keys">Inventar</NavLink>
             {can('RegisterKeys') && <NavLink to="/register">Key registrieren</NavLink>}
             <div className="section">Verwaltung</div>
+            <NavLink to="/platform">Plattform</NavLink>
             <NavLink to="/tenants">Tenants</NavLink>
             <NavLink to="/profiles">Profile</NavLink>
             {(can('RegisterKeys') || can('ManageInventory')) && <NavLink to="/agents">Agent</NavLink>}
@@ -84,6 +86,7 @@ export default function App() {
             <Route path="/agents" element={<AgentsPage />} />
             <Route path="/audit" element={<AuditPage />} />
             <Route path="/users" element={<UsersPage />} />
+            <Route path="/platform" element={<PlatformPage />} />
             <Route path="/login" element={<Navigate to="/" replace />} />
             <Route path="*" element={<p>Seite nicht gefunden.</p>} />
           </Routes>

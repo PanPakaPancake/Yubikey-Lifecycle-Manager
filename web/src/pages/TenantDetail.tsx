@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { api, fmtDate, type CustomField, type Tenant } from '../api';
+import { api, fieldTypes, fmtDate, keyFromLabel, type CustomField, type GroupRef, type Profile, type ResolvedField, type Tenant } from '../api';
 import { useCan } from '../auth';
-import { Badge, Card, download, ErrorBox, Field, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
+import { Badge, Card, download, ErrorBox, Field, GroupChips, GroupSearch, Info, Modal, OriginBadge, PageHeader, Spinner, useAction, useApi } from '../ui';
 
 const statusText = { Ok: 'In Ordnung', Warning: 'Hinweis', Failed: 'Fehlt' } as const;
 
@@ -86,12 +86,17 @@ export default function TenantDetailPage() {
         </div>
       )}
 
+      {active && <GroupProfilesCard tenantId={t.id} editable={can('ManageProfiles')} />}
       {active && <FieldsCard tenantId={t.id} editable={can('ManageProfiles')} />}
-      {active && can('ManageApiKeys') && <ApiKeysCard tenantId={t.id} />}
+      {active && can('ManageApiKeys') && (
+        <Card title="API-Schlüssel" className="mt">
+          <p className="muted small" style={{ margin: 0 }}>API-Schlüssel werden jetzt plattformweit verwaltet und gelten für alle Tenants oder nur für ausgewählte. <Link to="/platform#api">Zur API-Verwaltung</Link></p>
+        </Card>
+      )}
 
       {active && can('ManageTenants') && (
         <Card title="Offboarding" className="mt">
-          <p>Die Plattform nutzt den Tenant danach nicht mehr, API-Schlüssel werden widerrufen und die Daten nach der Aufbewahrungsfrist gelöscht. Registrierte Keys in Entra ID bleiben unverändert.</p>
+          <p>Die Plattform nutzt den Tenant danach nicht mehr, API-Schlüssel verlieren den Zugriff auf ihn und die Daten werden nach der Aufbewahrungsfrist gelöscht. Registrierte Keys in Entra ID bleiben unverändert.</p>
           <button className="danger" onClick={() => setOffboarding(true)}>Tenant offboarden</button>
         </Card>
       )}
@@ -104,135 +109,212 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const can = useCan();
   const [name, setName] = useState(tenant.displayName);
   const [interval, setInterval] = useState(tenant.syncIntervalMinutes);
-  const [groupQ, setGroupQ] = useState('');
-  const [groups, setGroups] = useState<{ id: string; displayName: string }[]>();
-  const [group, setGroup] = useState<{ id: string; name: string } | null>(tenant.targetGroupId ? { id: tenant.targetGroupId, name: tenant.targetGroupName ?? tenant.targetGroupId } : null);
+  const [include, setInclude] = useState<GroupRef[]>(tenant.targetIncludeGroups ?? []);
+  const [exclude, setExclude] = useState<GroupRef[]>(tenant.targetExcludeGroups ?? []);
   const { busy, error, run } = useAction();
   const [saved, setSaved] = useState(false);
   const editable = can('ManageTenants');
+  const changed = () => setSaved(false);
+  const used = [...include, ...exclude].map((g) => g.id);
 
-  const searchGroups = () => run(async () => setGroups(await api.get(`/api/tenants/${tenant.id}/groups?q=${encodeURIComponent(groupQ)}`)));
   const save = () => run(async () => {
-    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetGroupId: group?.id ?? '', targetGroupName: group?.name ?? null }));
+    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude }));
     setSaved(true);
   });
 
   return (
     <Card title="Einstellungen">
-      <Field label="Anzeigename"><input value={name} disabled={!editable} onChange={(e) => { setName(e.target.value); setSaved(false); }} /></Field>
-      <Field label="Zielgruppe" hint="Personen, die einen YubiKey bekommen sollen. Grundlage für Abdeckung und Prüfung der FIDO2-Richtlinie.">
-        <div className="toolbar" style={{ margin: 0 }}>
-          <span>{group ? <strong>{group.name}</strong> : 'Alle Benutzer'}</span>
-          {group && editable && <button className="link" onClick={() => { setGroup(null); setSaved(false); }}>entfernen</button>}
-        </div>
-      </Field>
-      {editable && (
-        <form className="toolbar" onSubmit={(e) => { e.preventDefault(); if (groupQ.trim()) searchGroups(); }}>
-          <input type="search" placeholder="Gruppe suchen …" value={groupQ} onChange={(e) => setGroupQ(e.target.value)} />
-          <button type="submit" disabled={!groupQ.trim()}>Suchen</button>
-        </form>
-      )}
-      {groups && (
-        <div className="pick" style={{ marginBottom: 12 }}>
-          {groups.map((g) => <button key={g.id} className={group?.id === g.id ? 'selected' : ''} onClick={() => { setGroup({ id: g.id, name: g.displayName }); setGroups(undefined); setSaved(false); }}>{g.displayName}</button>)}
-          {groups.length === 0 && <span className="muted">Keine Gruppe gefunden.</span>}
-        </div>
-      )}
-      <Field label="Sync-Intervall (Minuten)"><input type="number" min={5} max={1440} value={interval} disabled={!editable} onChange={(e) => { setInterval(Number(e.target.value)); setSaved(false); }} /></Field>
+      <Field label="Anzeigename"><input value={name} disabled={!editable} onChange={(e) => { setName(e.target.value); changed(); }} /></Field>
+
+      <div className="field-group">
+        <span className="field-label">Zielgruppe</span>
+        <p className="field-hint" style={{ margin: '0 0 6px' }}>Personen, die einen YubiKey bekommen sollen. Grundlage für die Abdeckung im Dashboard und für die Prüfung der FIDO2-Richtlinie.</p>
+        <div className="small"><strong>Einschließen</strong></div>
+        <GroupChips groups={include} empty="Keine Gruppe gewählt: alle aktiven Benutzer des Tenants." onRemove={editable ? (id) => { setInclude(include.filter((g) => g.id !== id)); changed(); } : undefined} />
+        {editable && <GroupSearch tenantId={tenant.id} exclude={used} placeholder="Gruppe suchen …" onPick={(g) => { setInclude([...include, g]); changed(); }} />}
+        <div className="small" style={{ marginTop: 10 }}><strong>Ausschließen</strong></div>
+        <GroupChips groups={exclude} empty="Keine Ausschlussgruppe." onRemove={editable ? (id) => { setExclude(exclude.filter((g) => g.id !== id)); changed(); } : undefined} />
+        {editable && <GroupSearch tenantId={tenant.id} exclude={used} placeholder="z. B. Dienstkonten" onPick={(g) => { setExclude([...exclude, g]); changed(); }} />}
+        <p className="field-hint" style={{ margin: '6px 0 0' }}>Zielgruppe = Mitglieder aller Einschlussgruppen ohne die Mitglieder der Ausschlussgruppen. Ausschlussgruppen werden in der FIDO2-Richtlinie nicht gesperrt, sie zählen nur nicht zur Abdeckung.</p>
+      </div>
+
+      <Field label="Sync-Intervall (Minuten)"><input type="number" min={5} max={1440} value={interval} disabled={!editable} onChange={(e) => { setInterval(Number(e.target.value)); changed(); }} /></Field>
       <ErrorBox error={error} />
       {editable && <button className="primary" disabled={busy} onClick={save}>{saved ? 'Gespeichert' : 'Speichern'}</button>}
     </Card>
   );
 }
 
-const fieldTypes: Record<CustomField['type'], string> = { Text: 'Text', Number: 'Zahl', Date: 'Datum', Select: 'Auswahl', Boolean: 'Ja/Nein' };
+interface GroupProfileRow { groupId: string; groupName: string; profileId: string; profileName?: string }
 
-function FieldsCard({ tenantId, editable }: { tenantId: string; editable: boolean }) {
-  const { data, reload } = useApi<CustomField[]>(`/api/tenants/${tenantId}/fields`, [tenantId]);
-  const [draft, setDraft] = useState<CustomField[] | null>(null);
+/** Group level of the hierarchy: members of an Entra group get a profile suggested in the wizard. */
+function GroupProfilesCard({ tenantId, editable }: { tenantId: string; editable: boolean }) {
+  const { data, reload } = useApi<GroupProfileRow[]>(`/api/tenants/${tenantId}/group-profiles`, [tenantId]);
+  const { data: profiles } = useApi<Profile[]>('/api/profiles?tenantId=' + tenantId, [tenantId]);
+  const [draft, setDraft] = useState<GroupProfileRow[] | null>(null);
   const { busy, error, run } = useAction();
   const list = draft ?? data ?? [];
-  const update = (i: number, patch: Partial<CustomField>) => setDraft(list.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+  const firstProfile = profiles?.find((p) => p.isDefault)?.id ?? profiles?.[0]?.id ?? '';
+  const move = (i: number, d: number) => {
+    const next = [...list];
+    [next[i], next[i + d]] = [next[i + d], next[i]];
+    setDraft(next);
+  };
   const save = () => run(async () => {
-    await api.put(`/api/tenants/${tenantId}/fields`, list.map((f) => ({ key: f.key, label: f.label, type: f.type, required: f.required, options: f.type === 'Select' ? f.options : [] })));
+    await api.put(`/api/tenants/${tenantId}/group-profiles`, list.map((r) => ({ groupId: r.groupId, groupName: r.groupName, profileId: r.profileId })));
     await reload();
     setDraft(null);
   });
 
   return (
-    <Card title="Zusatzfelder für Keys" className="mt" actions={editable && <button onClick={() => setDraft([...list, { key: '', label: '', type: 'Text', required: false, options: [] }])}>Feld hinzufügen</button>}>
-      {list.length === 0 && <p className="muted">Keine Zusatzfelder. Beispiele: Kostenstelle, Standort, Inventarnummer.</p>}
+    <Card title="Profile nach Gruppe" className="mt">
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Gruppenebene: Ist eine Person Mitglied einer dieser Entra-Gruppen, schlägt der Registrierungs-Assistent das zugeordnete Profil vor.
+        Bei mehreren Treffern gewinnt die obere Zeile. Ohne Treffer gilt das Standardprofil.
+      </p>
       {list.length > 0 && (
         <table>
-          <thead><tr><th>Bezeichnung</th><th>Schlüssel</th><th>Typ</th><th>Optionen</th><th>Pflicht</th><th /></tr></thead>
+          <thead><tr><th>Reihenfolge</th><th>Gruppe</th><th>Profil</th><th /></tr></thead>
           <tbody>
-            {list.map((f, i) => (
-              <tr key={i}>
-                <td><input value={f.label} disabled={!editable} onChange={(e) => update(i, { label: e.target.value, key: f.id ? f.key : e.target.value.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') })} /></td>
-                <td><input value={f.key} disabled={!editable || !!f.id} onChange={(e) => update(i, { key: e.target.value })} className="mono" /></td>
+            {list.map((r, i) => (
+              <tr key={r.groupId}>
                 <td>
-                  <select value={f.type} disabled={!editable} onChange={(e) => update(i, { type: e.target.value as CustomField['type'] })}>
-                    {Object.entries(fieldTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  {i + 1}
+                  {editable && <> <button className="link" disabled={i === 0} onClick={() => move(i, -1)} aria-label="nach oben">▲</button> <button className="link" disabled={i === list.length - 1} onClick={() => move(i, 1)} aria-label="nach unten">▼</button></>}
+                </td>
+                <td>{r.groupName}</td>
+                <td>
+                  <select value={r.profileId} disabled={!editable} onChange={(e) => setDraft(list.map((x, j) => (j === i ? { ...x, profileId: e.target.value } : x)))}>
+                    {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.tenantId ? '' : ' (alle Tenants)'}</option>)}
                   </select>
                 </td>
-                <td>{f.type === 'Select' && <input value={f.options.join(', ')} disabled={!editable} placeholder="A, B, C" onChange={(e) => update(i, { options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean) })} />}</td>
-                <td><input type="checkbox" checked={f.required} disabled={!editable} onChange={(e) => update(i, { required: e.target.checked })} /></td>
                 <td>{editable && <button className="link" onClick={() => setDraft(list.filter((_, j) => j !== i))}>Entfernen</button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
+      {list.length === 0 && <p className="muted">Keine Zuordnung. Alle Personen bekommen das Standardprofil vorgeschlagen.</p>}
+      {editable && firstProfile && (
+        <div style={{ marginTop: 10 }}>
+          <GroupSearch tenantId={tenantId} exclude={list.map((r) => r.groupId)} placeholder="Gruppe suchen …"
+            onPick={(g) => setDraft([...list, { groupId: g.id, groupName: g.name, profileId: firstProfile }])} />
+        </div>
+      )}
       <ErrorBox error={error} />
-      {draft && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => setDraft(null)}>Verwerfen</button><button className="primary" disabled={busy} onClick={save}>Felder speichern</button></div>}
+      {draft && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => setDraft(null)}>Verwerfen</button><button className="primary" disabled={busy} onClick={save}>Zuordnungen speichern</button></div>}
     </Card>
   );
 }
 
-interface ApiKeyRow { id: string; name: string; prefix: string; createdAt: string; createdBy: string; lastUsedAt?: string; expiresAt?: string; revokedAt?: string }
-
-function ApiKeysCard({ tenantId }: { tenantId: string }) {
-  const { data, reload } = useApi<ApiKeyRow[]>(`/api/tenants/${tenantId}/api-keys`, [tenantId]);
-  const [name, setName] = useState('');
-  const [days, setDays] = useState(365);
-  const [created, setCreated] = useState<string>();
-  const { busy, error, run } = useAction();
-  const create = () => run(async () => {
-    const r = await api.post<{ apiKey: string }>(`/api/tenants/${tenantId}/api-keys`, { name, expiresInDays: days || null });
-    setCreated(r.apiKey);
-    setName('');
-    reload();
-  });
-  const revoke = (id: string) => run(async () => { await api.del(`/api/tenants/${tenantId}/api-keys/${id}`); reload(); });
+export function FieldExplanation() {
   return (
-    <Card title="API-Schlüssel (Lese-API)" className="mt" actions={<a className="small" href="/api/docs" target="_blank" rel="noreferrer">API-Dokumentation</a>}>
-      <p className="muted small">Externe Tools (z. B. Ticketsystem) lesen Inventar und Kennzahlen dieses Tenants über <code>/api/v1</code> mit dem Header <code>X-Api-Key</code>. Die API kann nichts ändern.</p>
-      {created && <Info tone="ok">Neuer Schlüssel – nur jetzt sichtbar: <code style={{ wordBreak: 'break-all' }}>{created}</code> <button className="link" onClick={() => void navigator.clipboard?.writeText(created)}>Kopieren</button></Info>}
-      <form className="toolbar" onSubmit={(e) => { e.preventDefault(); create(); }}>
-        <input placeholder="Name, z. B. Ticketsystem" value={name} onChange={(e) => setName(e.target.value)} />
-        <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Gültigkeit">
-          <option value={90}>90 Tage</option><option value={365}>1 Jahr</option><option value={730}>2 Jahre</option><option value={0}>unbegrenzt</option>
-        </select>
-        <button type="submit" disabled={!name.trim() || busy}>Erstellen</button>
-      </form>
-      <ErrorBox error={error} />
-      {data && data.length > 0 && (
-        <table>
-          <thead><tr><th>Name</th><th>Präfix</th><th>Erstellt</th><th>Zuletzt genutzt</th><th>Gültig bis</th><th /></tr></thead>
+    <details style={{ margin: '0 0 12px' }}>
+      <summary>Was bedeuten die Spalten?</summary>
+      <dl className="explain" style={{ marginTop: 8 }}>
+        <dt>Bezeichnung</dt><dd>Name des Feldes, wie er im Inventar und in den Formularen angezeigt wird. Kann jederzeit geändert werden.</dd>
+        <dt>Schlüssel</dt><dd>Technischer Name des Feldes. Er ist der Spaltenname im CSV-Export und CSV-Import und der Name unter <code>customFields</code> in der Lese-API. Erlaubt sind Buchstaben, Ziffern, _ und -. Nach dem Speichern nicht mehr änderbar, damit gespeicherte Werte und angebundene Tools weiter passen.</dd>
+        <dt>Typ</dt><dd>Text, Zahl, Datum (JJJJ-MM-TT), Auswahl aus festen Optionen oder Ja/Nein. Die Eingabe wird beim Speichern geprüft.</dd>
+        <dt>Optionen</dt><dd>Nur bei Typ „Auswahl“: die erlaubten Werte, mit Komma getrennt.</dd>
+        <dt>Pflicht</dt><dd>Das Feld muss bei jedem Key ausgefüllt werden, auch beim Lagerzugang und beim CSV-Import.</dd>
+        <dt>Herkunft</dt><dd>„Global“ wird auf Plattformebene angelegt und an alle Tenants vererbt. Ein Tenant kann ein globales Feld für sich verändern (Bezeichnung, Pflicht, Optionen) oder deaktivieren. „Lokal“ gibt es nur in diesem Tenant.</dd>
+      </dl>
+    </details>
+  );
+}
+
+type OverrideDraft = { disabled: boolean; label: string; required: boolean; options: string[] };
+
+function FieldsCard({ tenantId, editable }: { tenantId: string; editable: boolean }) {
+  const { data, reload } = useApi<ResolvedField[]>(`/api/tenants/${tenantId}/fields/config`, [tenantId]);
+  const [local, setLocal] = useState<CustomField[] | null>(null);
+  const [overrides, setOverrides] = useState<Record<string, OverrideDraft> | null>(null);
+  const { busy, error, run } = useAction();
+
+  const globals = (data ?? []).filter((f) => f.origin === 'Global');
+  const localList = local ?? (data ?? []).filter((f) => f.origin === 'Tenant');
+  const ov = (f: ResolvedField): OverrideDraft => overrides?.[f.id] ?? { disabled: f.state === 'Disabled', label: f.label, required: f.required, options: f.options };
+  const setOv = (f: ResolvedField, patch: Partial<OverrideDraft>) => setOverrides({ ...(overrides ?? {}), [f.id]: { ...ov(f), ...patch } });
+  const stateOf = (f: ResolvedField): ResolvedField['state'] => {
+    const o = ov(f);
+    const base = f.inherited!;
+    if (o.disabled) return 'Disabled';
+    return o.label.trim() === base.label && o.required === base.required && o.options.join('|') === base.options.join('|') ? 'Inherited' : 'Modified';
+  };
+  const reset = (f: ResolvedField) => setOv(f, { disabled: false, label: f.inherited!.label, required: f.inherited!.required, options: f.inherited!.options });
+  const dirty = local !== null || overrides !== null;
+  const updateLocal = (i: number, patch: Partial<CustomField>) => setLocal(localList.map((f, j) => (j === i ? { ...f, ...patch } : f)));
+
+  const save = () => run(async () => {
+    await api.put(`/api/tenants/${tenantId}/fields`, {
+      local: localList.map((f) => ({ key: f.key, label: f.label, type: f.type, required: f.required, options: f.type === 'Select' ? f.options : [] })),
+      overrides: globals.map((f) => ({ fieldId: f.id, ...ov(f), options: f.type === 'Select' ? ov(f).options : null })),
+    });
+    await reload();
+    setLocal(null);
+    setOverrides(null);
+  });
+
+  return (
+    <Card title="Zusatzfelder für Keys" className="mt" actions={editable && <button onClick={() => setLocal([...localList, { key: '', label: '', type: 'Text', required: false, options: [] }])}>Lokales Feld hinzufügen</button>}>
+      <div className="hierarchy" aria-label="Vererbung">
+        <span className="level">Plattform (global)</span><span aria-hidden>→</span><span className="level current">Tenant</span>
+        <span className="muted">Globale Felder pflegen Sie unter <Link to="/platform#fields">Plattform</Link>.</span>
+      </div>
+      <p className="muted small" style={{ marginTop: 0 }}>Eigene Merkmale für jeden Key, z. B. Kostenstelle, Standort oder Inventarnummer. Sie erscheinen im Inventar, beim Lagerzugang, im Export und in der Lese-API.</p>
+      <FieldExplanation />
+      {globals.length === 0 && localList.length === 0 && <p className="muted">Keine Zusatzfelder.</p>}
+      {(globals.length > 0 || localList.length > 0) && (
+        <div style={{ overflowX: 'auto' }}><table>
+          <thead><tr><th>Bezeichnung und Herkunft</th><th>Schlüssel</th><th>Typ</th><th>Optionen</th><th>Pflicht</th><th /></tr></thead>
           <tbody>
-            {data.map((k) => (
-              <tr key={k.id} style={{ opacity: k.revokedAt ? 0.55 : 1 }}>
-                <td>{k.name}</td>
-                <td className="mono">ylm_{k.prefix}_…</td>
-                <td className="small">{fmtDate(k.createdAt, false)} · {k.createdBy}</td>
-                <td className="small">{fmtDate(k.lastUsedAt)}</td>
-                <td className="small">{k.expiresAt ? fmtDate(k.expiresAt, false) : 'unbegrenzt'}</td>
-                <td>{k.revokedAt ? <Badge>widerrufen</Badge> : <button className="link" onClick={() => revoke(k.id)}>Widerrufen</button>}</td>
+            {globals.map((f) => {
+              const o = ov(f);
+              const st = stateOf(f);
+              return (
+                <tr key={f.id} className={st === 'Disabled' ? 'disabled-row' : ''}>
+                  <td>
+                    <div style={{ marginBottom: 4 }}><OriginBadge origin="Global" state={st} /></div>
+                    <input value={o.label} disabled={!editable || o.disabled} onChange={(e) => setOv(f, { label: e.target.value })} />
+                    {st === 'Modified' && o.label.trim() !== f.inherited!.label && <div className="small muted">Global: {f.inherited!.label}</div>}
+                  </td>
+                  <td className="mono">{f.key}</td>
+                  <td>{fieldTypes[f.type]}</td>
+                  <td>{f.type === 'Select' && <input value={o.options.join(', ')} disabled={!editable || o.disabled} onChange={(e) => setOv(f, { options: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} />}</td>
+                  <td><input type="checkbox" checked={o.required} disabled={!editable || o.disabled} onChange={(e) => setOv(f, { required: e.target.checked })} /></td>
+                  <td>
+                    {editable && (
+                      <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
+                        <button className="link" onClick={() => setOv(f, { disabled: !o.disabled })}>{o.disabled ? 'Aktivieren' : 'Deaktivieren'}</button>
+                        {st !== 'Inherited' && <button className="link" onClick={() => reset(f)} title="Vererbung wiederherstellen: wieder unverändert von der Plattform übernehmen">Zurücksetzen</button>}
+                      </span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+            {localList.map((f, i) => (
+              <tr key={'l' + i}>
+                <td>
+                  <div style={{ marginBottom: 4 }}><OriginBadge origin="Tenant" /></div>
+                  <input value={f.label} disabled={!editable} placeholder="z. B. Raum" onChange={(e) => updateLocal(i, { label: e.target.value, key: f.id ? f.key : keyFromLabel(e.target.value) })} />
+                </td>
+                <td><input value={f.key} disabled={!editable || !!f.id} onChange={(e) => updateLocal(i, { key: e.target.value })} className="mono" title={f.id ? 'Der Schlüssel kann nach dem Speichern nicht mehr geändert werden.' : 'Wird aus der Bezeichnung vorgeschlagen.'} /></td>
+                <td>
+                  <select value={f.type} disabled={!editable} onChange={(e) => updateLocal(i, { type: e.target.value as CustomField['type'] })}>
+                    {Object.entries(fieldTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                  </select>
+                </td>
+                <td>{f.type === 'Select' && <input value={f.options.join(', ')} disabled={!editable} placeholder="A, B, C" onChange={(e) => updateLocal(i, { options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean) })} />}</td>
+                <td><input type="checkbox" checked={f.required} disabled={!editable} onChange={(e) => updateLocal(i, { required: e.target.checked })} /></td>
+                <td>{editable && <button className="link" onClick={() => setLocal(localList.filter((_, j) => j !== i))}>Entfernen</button>}</td>
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       )}
+      <ErrorBox error={error} />
+      {dirty && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => { setLocal(null); setOverrides(null); }}>Verwerfen</button><button className="primary" disabled={busy} onClick={save}>Felder speichern</button></div>}
     </Card>
   );
 }
