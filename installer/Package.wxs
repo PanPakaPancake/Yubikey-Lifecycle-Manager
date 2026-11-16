@@ -1,0 +1,71 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Yubikey Lifecycle Manager Agent"
+           Manufacturer="Yubikey Lifecycle Manager"
+           Version="$(var.ProductVersion)"
+           UpgradeCode="6B0B4E2C-6F7A-4E0F-9C1C-3D1F4C7A2E51"
+           Scope="perMachine"
+           Language="1031">
+    <SummaryInformation Description="Agent für den Yubikey Lifecycle Manager" />
+    <MajorUpgrade DowngradeErrorMessage="Eine neuere Version des Agents ist bereits installiert." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="Yubikey Lifecycle Manager">
+        <Directory Id="AgentFolder" Name="Agent" />
+      </Directory>
+    </StandardDirectory>
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Directory Id="StartMenuFolder" Name="Yubikey Lifecycle Manager" />
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="Agent und Tray-App" Level="1">
+      <ComponentRef Id="AgentService" />
+      <ComponentRef Id="TrayApp" />
+      <ComponentRef Id="TrayAutostart" />
+      <ComponentRef Id="StartMenuShortcut" />
+    </Feature>
+
+    <!-- Windows-Dienst (LocalSystem): direkter FIDO-Zugriff braucht Adminrechte. -->
+    <Component Id="AgentService" Directory="AgentFolder" Guid="2F7E4B1A-1C55-4A8C-8F1B-6E2D9A3C7B10">
+      <File Id="YlmAgentExe" Source="$(var.PublishDir)agent\YlmAgent.exe" KeyPath="yes" />
+      <File Id="YlmAgentSettings" Source="$(var.PublishDir)agent\appsettings.json" />
+      <ServiceInstall Id="AgentServiceInstall"
+                      Name="YubikeyLifecycleManagerAgent"
+                      DisplayName="Yubikey Lifecycle Manager Agent"
+                      Description="Spricht mit eingesteckten YubiKeys im Auftrag der Lifecycle-Manager-Plattform."
+                      Type="ownProcess" Start="auto" ErrorControl="normal" Account="LocalSystem" Vital="yes">
+        <util:ServiceConfig xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util"
+                            FirstFailureActionType="restart" SecondFailureActionType="restart" ThirdFailureActionType="restart"
+                            RestartServiceDelayInSeconds="10" ResetPeriodInDays="1" />
+      </ServiceInstall>
+      <ServiceControl Id="AgentServiceControl" Name="YubikeyLifecycleManagerAgent" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+    </Component>
+
+    <Component Id="TrayApp" Directory="AgentFolder" Guid="9A1D3C55-7B2E-4F60-A8D4-1E5C2B7F9034">
+      <File Id="YlmTrayExe" Source="$(var.PublishDir)tray\YlmTray.exe" KeyPath="yes" />
+    </Component>
+
+    <!-- Tray-App startet bei jeder Benutzeranmeldung. -->
+    <Component Id="TrayAutostart" Directory="AgentFolder" Guid="C4E8A2F1-3B7D-4D19-9E6A-5F0B1C8D2A77">
+      <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run" Name="YubikeyLifecycleManagerTray"
+                     Type="string" Value="&quot;[AgentFolder]YlmTray.exe&quot;" KeyPath="yes" />
+    </Component>
+
+    <Component Id="StartMenuShortcut" Directory="StartMenuFolder" Guid="E1B7C9D3-5A2F-4C8E-B6D0-7F3A9E1C4B28">
+      <Shortcut Id="TrayShortcut" Name="Yubikey Lifecycle Manager" Target="[AgentFolder]YlmTray.exe" WorkingDirectory="AgentFolder" />
+      <RemoveFolder Id="RemoveStartMenuFolder" On="uninstall" />
+      <RegistryValue Root="HKLM" Key="SOFTWARE\YubikeyLifecycleManager" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Nach der Installation die Tray-App starten (optional, Checkbox im letzten Dialog). -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Tray-App jetzt starten" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <CustomAction Id="LaunchTray" Directory="AgentFolder" ExeCommand="&quot;[AgentFolder]YlmTray.exe&quot;" Return="asyncNoWait" Impersonate="yes" />
+    <UI>
+      <ui:WixUI Id="WixUI_Minimal" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchTray"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+  </Package>
+</Wix>

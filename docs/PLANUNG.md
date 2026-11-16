@@ -200,9 +200,11 @@ Quelle zur Firmware: [YubiKey 5.7 Firmware Specifics](https://docs.yubico.com/ha
 - ToDo-Liste aus dem Ticketsystem
 - Vier-Augen-Freigabe pro Tenant
 
-## 10. Offene Punkte für die Umsetzung
+## 10. Entscheidungen aus der Umsetzung (V1)
 
-- Genauer Ablauf, wie sich der Agent anmeldet und mit dem Backend koppelt (Device-Code-Flow vs. Pairing-Code).
-- Wie Agent und Tray aktualisiert werden (Auto-Update vs. Verteilung).
-- Aufbewahrungsfristen und Löschkonzept beim Tenant-Offboarding (DSGVO).
-- Layout und Inhalt des PIN-PDFs mit grafischer Anleitung.
+Die offenen Punkte der Planung sind in der V1 so gelöst:
+
+- **Kopplung des Agents:** per Kopplungscode. Der Admin erzeugt in der Web-Oberfläche (Seite „Agent“) einen Code, der 10 Minuten gilt und nur einmal verwendbar ist, und gibt ihn mit der Plattform-Adresse in der Tray-App ein. Der Agent erhält dafür ein eigenes Token, das mit DPAPI (LocalMachine) gespeichert wird. Ein Agent gehört immer zu genau einem Admin-Konto und kann in der Web-Oberfläche entkoppelt werden.
+- **Aktualisierung von Agent und Tray:** über das MSI (Major Upgrade). Verteilung per Softwareverteilung/Intune oder manuell; kein Auto-Update in V1.
+- **Aufbewahrung beim Offboarding:** Daten bleiben 30 Tage erhalten (einstellbar über `Ylm__OffboardingRetentionDays`) und werden danach automatisch gelöscht. Vorher ist ein Export (ZIP mit CSVs) möglich. Der Audit-Eintrag zum Löschen bleibt, die Hash-Kette bleibt prüfbar.
+- **PIN-PDF:** eine A4-Seite mit PIN, Key-Daten und vier illustrierten Schritten zur ersten Anmeldung. Ist der PIN-Wechsel nicht erzwingbar (Firmware unter 5.7), enthält das PDF einen deutlichen Hinweis, die PIN selbst zu ändern.

@@ -1,0 +1,7 @@
+**/bin
+**/obj
+**/node_modules
+src/Ylm.Server/wwwroot
+**/data
+.git
+tests

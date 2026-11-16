@@ -9,3 +9,6 @@ data/
 TestResults/
 *.msi
 installer/out/
+*.tsbuildinfo
+.env
+installer/publish/

@@ -12,9 +12,10 @@ const sourceLabels: Record<string, string> = {
 export default function KeyDetailPage() {
   const { id } = useParams();
   const can = useCan();
-  const { data: key, error, reload } = useApi<YubiKey>('/api/keys/' + id, [id]);
+  const { data, error, reload } = useApi<{ key: YubiKey; history: AuditEntry[] }>('/api/keys/' + id, [id]);
+  const key = data?.key;
+  const history = data?.history;
   const { data: fields } = useApi<CustomField[]>(key ? `/api/tenants/${key.tenantId}/fields` : null, [key?.tenantId]);
-  const { data: history } = useApi<AuditEntry[]>(can('ReadAudit') ? `/api/audit?keyId=${id}&take=50` : null, [id, key?.updatedAt]);
   const [modal, setModal] = useState<'lock' | 'retire' | 'reset' | 'edit' | null>(null);
 
   if (error) return <ErrorBox error={error} />;
@@ -85,7 +86,7 @@ export default function KeyDetailPage() {
         )}
         {active.length === 0 && key.status === 'InStock' && can('RegisterKeys') && <p><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link></p>}
       </Card>
-      {history && (
+      {history && history.length > 0 && (
         <Card title="Verlauf" className="mt">
           <table>
             <tbody>

@@ -39,7 +39,8 @@ export default function TenantDetailPage() {
         </>}
       />
       {params.get('onboarded') && <Info tone="ok">Der Tenant ist angebunden. Prüfen Sie unten die FIDO2-Einstellungen.</Info>}
-      {!active && <Info tone="warn">Dieser Tenant wurde am {fmtDate(t.offboardedAt)} offboarded. Die Daten werden am {fmtDate(t.dataDeletionDueAt, false)} gelöscht. Ein erneuter Admin-Consent stellt ihn wieder her.</Info>}
+      {t.status === 'Offboarded' && <Info tone="warn">Dieser Tenant wurde am {fmtDate(t.offboardedAt)} offboarded. Die Daten werden am {fmtDate(t.dataDeletionDueAt, false)} gelöscht. Ein erneuter Admin-Consent stellt ihn wieder her.</Info>}
+      {t.status === 'PendingConsent' && <Info tone="warn">Der Admin-Consent für diesen Tenant fehlt noch. Fügen Sie den Tenant unter „Tenants“ erneut hinzu.</Info>}
       <ErrorBox error={act.error} />
       {syncResult && <Info tone="ok">{syncResult}</Info>}
 

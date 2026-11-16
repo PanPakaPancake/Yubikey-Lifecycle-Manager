@@ -1,0 +1,38 @@
+# Selbst gehosteter Betrieb: PostgreSQL + Plattform.
+# TLS übernimmt ein Reverse Proxy (z. B. Caddy, Traefik, nginx) vor Port 8080; siehe docs/BETRIEB.md.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ylm
+      POSTGRES_USER: ylm
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD in .env setzen}
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ylm -d ylm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  server:
+    build: .
+    image: yubikey-lifecycle-manager:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Postgres: Host=db;Database=ylm;Username=ylm;Password=${POSTGRES_PASSWORD}
+      Ylm__PublicBaseUrl: ${YLM_PUBLIC_URL:-}
+      TZ: Europe/Berlin
+    volumes:
+      # Zertifikat (verschlüsselt), Data-Protection-Schlüssel – unbedingt sichern.
+      - data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+
+volumes:
+  db:
+  data:

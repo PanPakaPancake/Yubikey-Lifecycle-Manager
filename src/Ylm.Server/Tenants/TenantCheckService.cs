@@ -11,7 +11,7 @@ namespace Ylm.Server.Tenants;
 
 public sealed class TenantCheckService(YlmDbContext db, IGraphClientFactory graphFactory, AuditService audit, IOptions<YlmOptions> options)
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() } };
 
     public IReadOnlyCollection<Guid> YubiKeyAaguids =>
         YubicoAaguids.Known.Keys

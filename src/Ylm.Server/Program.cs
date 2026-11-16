@@ -26,6 +26,18 @@ using Ylm.Server.Setup;
 using Ylm.Server.Tenants;
 using Ylm.Server.Users;
 
+// Container health check without curl: `dotnet Ylm.Server.dll --healthcheck`.
+if (args.Contains("--healthcheck"))
+{
+    try
+    {
+        using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+        var res = await http.GetAsync("http://localhost:8080/healthz");
+        return res.IsSuccessStatusCode ? 0 : 1;
+    }
+    catch (Exception) { return 1; }
+}
+
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<YlmOptions>(builder.Configuration.GetSection(YlmOptions.Section));
 var ylm = builder.Configuration.GetSection(YlmOptions.Section).Get<YlmOptions>() ?? new YlmOptions();
@@ -181,5 +193,6 @@ using (var scope = app.Services.CreateScope())
 }
 
 await app.RunAsync();
+return 0;
 
 public partial class Program;

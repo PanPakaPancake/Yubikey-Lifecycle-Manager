@@ -72,7 +72,7 @@ public sealed class SetupService(
     }
 
     public string BaseUrl(InstallationSettings s, HttpRequest? request) =>
-        (options.Value.PublicBaseUrl ?? s.PublicBaseUrl ?? (request is null ? "https://localhost" : $"{request.Scheme}://{request.Host}")).TrimEnd('/');
+        ((string.IsNullOrWhiteSpace(options.Value.PublicBaseUrl) ? null : options.Value.PublicBaseUrl) ?? s.PublicBaseUrl ?? (request is null ? "https://localhost" : $"{request.Scheme}://{request.Host}")).TrimEnd('/');
 
     public async Task<InstallationSettings> SaveBasicsAsync(string organizationName, string publicBaseUrl, string bootstrapOwnerUpn)
     {
