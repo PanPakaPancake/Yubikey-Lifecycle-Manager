@@ -110,6 +110,38 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Recheck_uses_fresh_token_after_consent_became_effective()
+    {
+        // Token issued before the consent was effective: no roles.
+        _graph.SimulateTokenCache = true;
+        _graph.TokenRoles = [];
+        var tenantId = await OnboardTenantAsync();
+        var tenant = await Json(await _owner.GetAsync($"/api/tenants/{tenantId}"));
+        Assert.Contains(tenant.GetProperty("checks").EnumerateArray(), c => c.GetProperty("id").GetString() == "graph-permissions" && c.GetProperty("status").GetString() == "Ok");
+
+        // Permissions not yet effective at onboarding: tenant gets the id as name, the check fails.
+        _graph.TokenRoles = [];
+        _graph.GrantedPermissions = [];
+        await _app.WithDbAsync(async db =>
+        {
+            var t = await db.Tenants.FindAsync(tenantId);
+            t!.DisplayName = t.EntraTenantId.ToString();
+            t.DefaultDomain = null;
+            await db.SaveChangesAsync();
+        });
+        var failed = await Json(await _owner.PostAsync($"/api/tenants/{tenantId}/checks", null));
+        Assert.Contains(failed.GetProperty("checks").EnumerateArray(), c => c.GetProperty("id").GetString() == "graph-permissions" && c.GetProperty("status").GetString() == "Failed");
+
+        // Consent becomes effective; the cached token still has no roles. "Erneut prüfen" must fetch a new one.
+        _graph.GrantedPermissions = [.. Ylm.Server.Setup.SetupService.RequiredApplicationPermissions];
+        var ok = await Json(await _owner.PostAsync($"/api/tenants/{tenantId}/checks", null));
+        Assert.All(ok.GetProperty("checks").EnumerateArray().Where(c => c.GetProperty("id").GetString() == "graph-permissions"),
+            c => Assert.Equal("Ok", c.GetProperty("status").GetString()));
+        Assert.Equal("Contoso GmbH", ok.GetProperty("displayName").GetString());
+        Assert.Equal("contoso.com", ok.GetProperty("defaultDomain").GetString());
+    }
+
+    [Fact]
     public async Task Single_wizard_registers_key_with_pin_letter_and_lifecycle()
     {
         var tenantId = await OnboardTenantAsync();

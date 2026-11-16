@@ -29,6 +29,12 @@ public interface IGraphClient
 public interface IGraphClientFactory
 {
     Task<IGraphClient> ForTenantAsync(Guid entraTenantId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Discards the cached credential (and with it the cached app-only token) for a tenant. Needed after a
+    /// consent change: the token's "roles" claim only reflects permissions granted when it was issued.
+    /// </summary>
+    void Invalidate(Guid entraTenantId);
 }
 
 public delegate Task<string> GraphTokenProvider(CancellationToken ct);
@@ -66,15 +72,19 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
             var text = await res.Content.ReadAsStringAsync(ct);
             if (!res.IsSuccessStatusCode)
             {
-                string? code = null, message = null;
+                string? code = null, message = null, requestId = null;
                 try
                 {
                     using var err = JsonDocument.Parse(text);
-                    code = err.RootElement.GetProperty("error").GetProperty("code").GetString();
-                    message = err.RootElement.GetProperty("error").GetProperty("message").GetString();
+                    var e = err.RootElement.GetProperty("error");
+                    code = e.GetProperty("code").GetString();
+                    message = e.GetProperty("message").GetString();
+                    if (e.TryGetProperty("innerError", out var inner)) requestId = Str(inner, "request-id");
                 }
                 catch (Exception) { /* not a Graph error body */ }
-                throw new GraphException($"Microsoft Graph meldet {(int)res.StatusCode}: {message ?? res.ReasonPhrase}", (int)res.StatusCode, code);
+                requestId ??= res.Headers.TryGetValues("request-id", out var ids) ? ids.FirstOrDefault() : null;
+                throw new GraphException($"Microsoft Graph meldet {(int)res.StatusCode}: {message ?? res.ReasonPhrase}" +
+                    (requestId is null ? "" : $" (request-id {requestId})"), (int)res.StatusCode, code);
             }
             return string.IsNullOrWhiteSpace(text) ? null : JsonDocument.Parse(text);
         }
@@ -152,29 +162,61 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
         };
     }
 
-    public static JsonObject PolicyPatchBody(Fido2Policy policy) => new()
+    /// <summary>
+    /// Builds a PATCH body that only contains the properties that actually change, based on the raw policy as Graph
+    /// returned it. Unchanged properties are left out and existing targets keep all their fields (including ones this
+    /// platform does not know, e.g. passkey profiles). Sending the complete object made Graph fail with
+    /// "500 Internal error: Nullable object must have a value." Returns null when nothing changes.
+    /// </summary>
+    public static JsonObject? PolicyPatch(JsonElement raw, Fido2Policy after)
     {
-        ["@odata.type"] = "#microsoft.graph.fido2AuthenticationMethodConfiguration",
-        ["state"] = policy.Enabled ? "enabled" : "disabled",
-        ["keyRestrictions"] = new JsonObject
+        var before = ParsePolicy(raw);
+        var patch = new JsonObject { ["@odata.type"] = "#microsoft.graph.fido2AuthenticationMethodConfiguration" };
+
+        if (before.Enabled != after.Enabled) patch["state"] = after.Enabled ? "enabled" : "disabled";
+
+        if (before.KeyRestrictionsEnforced != after.KeyRestrictionsEnforced || before.EnforcementType != after.EnforcementType
+            || !before.AaGuids.SequenceEqual(after.AaGuids))
         {
-            ["isEnforced"] = policy.KeyRestrictionsEnforced,
-            ["enforcementType"] = policy.EnforcementType,
-            ["aaGuids"] = new JsonArray(policy.AaGuids.Select(g => (JsonNode)g.ToString()).ToArray()),
-        },
-        ["includeTargets"] = new JsonArray(policy.IncludeTargets.Select(t => (JsonNode)new JsonObject
+            var kr = raw.TryGetProperty("keyRestrictions", out var k) && k.ValueKind == JsonValueKind.Object
+                ? JsonNode.Parse(k.GetRawText())!.AsObject()
+                : new JsonObject();
+            kr["isEnforced"] = after.KeyRestrictionsEnforced;
+            kr["enforcementType"] = after.EnforcementType;
+            kr["aaGuids"] = new JsonArray(after.AaGuids.Select(g => (JsonNode)g.ToString()).ToArray());
+            patch["keyRestrictions"] = kr;
+        }
+
+        static bool SameTargets(IReadOnlyList<PolicyTarget> a, IReadOnlyList<PolicyTarget> b) =>
+            a.Select(t => t.Id).OrderBy(x => x).SequenceEqual(b.Select(t => t.Id).OrderBy(x => x));
+
+        JsonArray Targets(string name, IReadOnlyList<PolicyTarget> targets, bool include)
         {
-            ["targetType"] = t.TargetType, ["id"] = t.Id, ["isRegistrationRequired"] = t.IsRegistrationRequired,
-        }).ToArray()),
-        ["excludeTargets"] = new JsonArray(policy.ExcludeTargets.Select(t => (JsonNode)new JsonObject
-        {
-            ["targetType"] = t.TargetType, ["id"] = t.Id,
-        }).ToArray()),
-    };
+            var existing = new Dictionary<string, JsonElement>();
+            if (raw.TryGetProperty(name, out var arr) && arr.ValueKind == JsonValueKind.Array)
+                foreach (var t in arr.EnumerateArray())
+                    if (Str(t, "id") is { } id) existing[id] = t;
+            return new JsonArray(targets.Select(t =>
+            {
+                if (existing.TryGetValue(t.Id, out var e)) return JsonNode.Parse(e.GetRawText());
+                var o = new JsonObject { ["targetType"] = t.TargetType, ["id"] = t.Id };
+                if (include) o["isRegistrationRequired"] = t.IsRegistrationRequired;
+                return (JsonNode)o;
+            }).ToArray());
+        }
+
+        if (!SameTargets(before.IncludeTargets, after.IncludeTargets)) patch["includeTargets"] = Targets("includeTargets", after.IncludeTargets, true);
+        if (!SameTargets(before.ExcludeTargets, after.ExcludeTargets)) patch["excludeTargets"] = Targets("excludeTargets", after.ExcludeTargets, false);
+
+        return patch.Count > 1 ? patch : null;
+    }
 
     public async Task UpdateFido2PolicyAsync(Fido2Policy policy, CancellationToken ct = default)
     {
-        using var _ = await SendAsync(HttpMethod.Patch, V1 + Fido2PolicyPath, ct, PolicyPatchBody(policy));
+        using var current = await SendAsync(HttpMethod.Get, V1 + Fido2PolicyPath, ct);
+        var patch = PolicyPatch(current!.RootElement, policy);
+        if (patch is null) return;
+        using var _ = await SendAsync(HttpMethod.Patch, V1 + Fido2PolicyPath, ct, patch);
     }
 
     public async Task<IReadOnlyList<GraphUser>> SearchUsersAsync(string query, int top = 20, CancellationToken ct = default)
