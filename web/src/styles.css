@@ -213,3 +213,5 @@ pre.script { background: var(--surface-2); border: 1px solid var(--line); border
 @keyframes key-down { 0%, 100% { transform: translateY(-4px); } 50% { transform: translateY(8px); } }
 @keyframes key-blink { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--warn); } 50% { opacity: .3; box-shadow: 0 0 0 6px transparent; } }
 @media (prefers-reduced-motion: reduce) { .key-anim, .key-dot { animation: none !important; } }
+
+.badges { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { api, fmtDate, type CustomField, type Tenant } from '../api';
 import { useCan } from '../auth';
-import { Badge, Card, download, ErrorBox, Field, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
+import { Badge, Card, download, ErrorBox, Field, Info, Modal, PageHeader, Spinner, useAction, useApi, useLiveSearch } from '../ui';
 
 const statusText = { Ok: 'In Ordnung', Warning: 'Hinweis', Failed: 'Fehlt' } as const;
 
@@ -105,13 +105,13 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const [name, setName] = useState(tenant.displayName);
   const [interval, setInterval] = useState(tenant.syncIntervalMinutes);
   const [groupQ, setGroupQ] = useState('');
-  const [groups, setGroups] = useState<{ id: string; displayName: string }[]>();
   const [group, setGroup] = useState<{ id: string; name: string } | null>(tenant.targetGroupId ? { id: tenant.targetGroupId, name: tenant.targetGroupName ?? tenant.targetGroupId } : null);
   const { busy, error, run } = useAction();
   const [saved, setSaved] = useState(false);
   const editable = can('ManageTenants');
 
-  const searchGroups = () => run(async () => setGroups(await api.get(`/api/tenants/${tenant.id}/groups?q=${encodeURIComponent(groupQ)}`)));
+  const groupSearch = useLiveSearch<{ id: string; displayName: string }>(editable ? (term) => `/api/tenants/${tenant.id}/groups?q=${encodeURIComponent(term)}` : null, groupQ);
+  const groups = groupSearch.results;
   const save = () => run(async () => {
     onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetGroupId: group?.id ?? '', targetGroupName: group?.name ?? null }));
     setSaved(true);
@@ -127,14 +127,15 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
         </div>
       </Field>
       {editable && (
-        <form className="toolbar" onSubmit={(e) => { e.preventDefault(); if (groupQ.trim()) searchGroups(); }}>
-          <input type="search" placeholder="Gruppe suchen …" value={groupQ} onChange={(e) => setGroupQ(e.target.value)} />
-          <button type="submit" disabled={!groupQ.trim()}>Suchen</button>
-        </form>
+        <div className="toolbar">
+          <input type="search" placeholder="Gruppe suchen (ab 2 Zeichen) …" value={groupQ} onChange={(e) => setGroupQ(e.target.value)} />
+          {groupSearch.busy && <Spinner label="Suche …" />}
+        </div>
       )}
+      <ErrorBox error={groupSearch.error} />
       {groups && (
         <div className="pick" style={{ marginBottom: 12 }}>
-          {groups.map((g) => <button key={g.id} className={group?.id === g.id ? 'selected' : ''} onClick={() => { setGroup({ id: g.id, name: g.displayName }); setGroups(undefined); setSaved(false); }}>{g.displayName}</button>)}
+          {groups.map((g) => <button key={g.id} className={group?.id === g.id ? 'selected' : ''} onClick={() => { setGroup({ id: g.id, name: g.displayName }); setGroupQ(''); setSaved(false); }}>{g.displayName}</button>)}
           {groups.length === 0 && <span className="muted">Keine Gruppe gefunden.</span>}
         </div>
       )}

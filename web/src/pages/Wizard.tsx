@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api, type AgentInfo, type Job, type KeyInfo, type Profile } from '../api';
-import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, TenantSelect, useAction, useApi, usePolling } from '../ui';
+import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, TenantSelect, useAction, useApi, useLiveSearch, usePolling } from '../ui';
 import { JobProgress } from './KeyDetail';
 
-interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number }
+interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number; entraPasskeys?: { displayName?: string; model?: string; isYubiKey: boolean }[] | null }
 interface Violation { code: string; message: string; canOverride: boolean; resolvedByReset: boolean }
 interface Preview {
   key: KeyInfo; violations: Violation[]; resetRequired: boolean; resetPlanned: boolean; willForcePinChange: boolean; displayName: string;
@@ -148,34 +148,44 @@ export default function WizardPage() {
 
 function PersonStep({ tenantId, setTenantId, onPick }: { tenantId: string; setTenantId: (v: string) => void; onPick: (u: EntraUser) => void }) {
   const [q, setQ] = useState('');
-  const [users, setUsers] = useState<EntraUser[]>();
-  const { busy, error, run } = useAction();
-  useEffect(() => { setUsers(undefined); }, [tenantId]);
-  const search = () => run(async () => setUsers(await api.get<EntraUser[]>(`/api/tenants/${tenantId}/users?q=${encodeURIComponent(q)}`)));
+  const { results: users, busy, error } = useLiveSearch<EntraUser>(tenantId ? (term) => `/api/tenants/${tenantId}/users?q=${encodeURIComponent(term)}` : null, q);
   return (
     <Card title="Für wen wird der Key registriert?">
       <div className="toolbar">
         <TenantSelect value={tenantId} onChange={setTenantId} allowAll={false} />
-        <form onSubmit={(e) => { e.preventDefault(); if (tenantId && q.trim().length >= 2) search(); }} style={{ display: 'flex', gap: 8, flex: 1 }}>
-          <input type="search" placeholder="Name oder UPN (mind. 2 Zeichen)" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus />
-          <button type="submit" disabled={!tenantId || q.trim().length < 2 || busy}>Suchen</button>
-        </form>
+        <input type="search" placeholder="Name, UPN oder Mail eintippen (ab 2 Zeichen)" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus />
       </div>
       <ErrorBox error={error} />
       {busy && <Spinner label="Suche in Entra ID …" />}
-      {users && users.length === 0 && <Empty>Keine Person gefunden.</Empty>}
+      {!busy && users && users.length === 0 && <Empty>Keine Person gefunden.</Empty>}
       {users && users.length > 0 && (
         <div className="pick">
           {users.map((u) => (
             <button key={u.id} disabled={!u.accountEnabled} onClick={() => onPick(u)}>
               <span><strong>{u.displayName ?? u.userPrincipalName}</strong><br /><span className="small muted">{u.userPrincipalName}{u.department ? ' · ' + u.department : ''}</span></span>
-              <span>{!u.accountEnabled ? <Badge tone="error">deaktiviert</Badge> : u.activeKeys > 0 ? <Badge tone="info">{u.activeKeys} Key(s)</Badge> : <Badge>kein Key</Badge>}</span>
+              <span className="badges"><PersonKeys u={u} /></span>
             </button>
           ))}
         </div>
       )}
     </Card>
   );
+}
+
+/** Keys in the inventory plus passkeys Entra knows about (also ones registered elsewhere or not yet synced). */
+function PersonKeys({ u }: { u: EntraUser }) {
+  if (!u.accountEnabled) return <Badge tone="error">deaktiviert</Badge>;
+  const entra = u.entraPasskeys ?? [];
+  const yubi = entra.filter((p) => p.isYubiKey).length;
+  const other = entra.length - yubi;
+  const title = entra.map((p) => [p.displayName, p.model].filter(Boolean).join(' · ')).join('\n');
+  const parts: ReactNode[] = [];
+  if (u.activeKeys > 0) parts.push(<Badge key="inv" tone="info">{u.activeKeys} Key(s) im Inventar</Badge>);
+  if (yubi > u.activeKeys) parts.push(<span key="y" title={title}><Badge tone="warn">{yubi} YubiKey(s) in Entra</Badge></span>);
+  if (other > 0) parts.push(<span key="o" title={title}><Badge>{other} anderer Passkey{other > 1 ? 's' : ''}</Badge></span>);
+  if (u.entraPasskeys === null || u.entraPasskeys === undefined) parts.push(<Badge key="u">Entra-Status unbekannt</Badge>);
+  if (parts.length === 0) parts.push(<Badge key="n">kein Key</Badge>);
+  return <>{parts}</>;
 }
 
 function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; setAgentId: (v: string) => void; onNext: () => void; onBack: () => void }) {
