@@ -19,6 +19,10 @@ public interface IGraphClient
     Task<IReadOnlyList<GraphGroup>> SearchGroupsAsync(string query, int top = 20, CancellationToken ct = default);
     Task<GraphGroup?> GetGroupAsync(string id, CancellationToken ct = default);
     Task<int?> CountUsersAsync(string? groupId, CancellationToken ct = default);
+    /// <summary>Ids of the enabled users in a group (transitive) or, for null/all_users, in the whole tenant.</summary>
+    Task<IReadOnlySet<string>> ListUserIdsAsync(string? groupId, CancellationToken ct = default);
+    /// <summary>Which of the given groups the user is a member of (transitive).</summary>
+    Task<IReadOnlyList<string>> CheckMemberGroupsAsync(string userId, IReadOnlyCollection<string> groupIds, CancellationToken ct = default);
     IAsyncEnumerable<string> ListUserIdsWithPasskeysAsync(CancellationToken ct = default);
     Task<IReadOnlyList<GraphFido2Method>> ListFido2MethodsAsync(string userId, CancellationToken ct = default);
     Task DeleteFido2MethodAsync(string userId, string methodId, CancellationToken ct = default);
@@ -219,6 +223,40 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
         if (!res.IsSuccessStatusCode) return null;
         var text = await res.Content.ReadAsStringAsync(ct);
         return int.TryParse(text.Trim().TrimStart('﻿'), out var n) ? n : null;
+    }
+
+    public async Task<IReadOnlySet<string>> ListUserIdsAsync(string? groupId, CancellationToken ct = default)
+    {
+        var all = string.IsNullOrEmpty(groupId) || groupId == PolicyTarget.AllUsers;
+        string? url = all
+            ? $"{V1}/users?$select=id,accountEnabled&$top=999"
+            : $"{V1}/groups/{Uri.EscapeDataString(groupId!)}/transitiveMembers/microsoft.graph.user?$select=id,accountEnabled&$top=999";
+        var ids = new HashSet<string>();
+        while (url is not null)
+        {
+            using var doc = await SendAsync(HttpMethod.Get, url, ct, allowNotFound: !all);
+            if (doc is null) break; // group deleted in Entra
+            foreach (var u in doc.RootElement.GetProperty("value").EnumerateArray())
+            {
+                if (u.TryGetProperty("accountEnabled", out var en) && en.ValueKind == JsonValueKind.False) continue;
+                if (Str(u, "id") is { } id) ids.Add(id);
+            }
+            url = Str(doc.RootElement, "@odata.nextLink");
+        }
+        return ids;
+    }
+
+    public async Task<IReadOnlyList<string>> CheckMemberGroupsAsync(string userId, IReadOnlyCollection<string> groupIds, CancellationToken ct = default)
+    {
+        if (groupIds.Count == 0) return [];
+        var result = new List<string>();
+        // Graph accepts at most 20 group ids per call.
+        foreach (var chunk in groupIds.Chunk(20))
+        {
+            using var doc = await SendAsync(HttpMethod.Post, $"{V1}/users/{Uri.EscapeDataString(userId)}/checkMemberGroups", ct, new { groupIds = chunk });
+            result.AddRange(doc!.RootElement.GetProperty("value").EnumerateArray().Select(v => v.GetString()!).Where(v => v is not null));
+        }
+        return result;
     }
 
     public async IAsyncEnumerable<string> ListUserIdsWithPasskeysAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)

@@ -9,6 +9,8 @@ namespace Ylm.Server.Security;
 public static class YlmClaims
 {
     public const string UserId = "ylm_uid";
+    public const string ApiKeyId = "ylm_api_key";
+    /// <summary>One claim per tenant the API key may read.</summary>
     public const string ApiKeyTenant = "ylm_api_tenant";
     public const string AgentId = "ylm_agent";
 }
