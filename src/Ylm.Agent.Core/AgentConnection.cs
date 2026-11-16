@@ -53,7 +53,12 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         StatusChanged?.Invoke(_status);
     }
 
-    public void Prompt(string text) => Update(s => s with { Operation = (s.Operation ?? new AgentProgress("Vorgang")) with { Prompt = text } });
+    public void Prompt(string text)
+    {
+        _logger.LogInformation("Hinweis: {Prompt}", text);
+        Update(s => s with { Operation = (s.Operation ?? new AgentProgress("Vorgang")) with { Prompt = text } });
+        if (_hub?.State == HubConnectionState.Connected) _ = _hub.InvokeAsync(AgentProtocol.ReportPromptMethod, text);
+    }
 
     private async Task OnKeyChangedAsync()
     {

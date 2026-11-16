@@ -10,6 +10,15 @@ internal sealed class StatusForm : Form
     private readonly Label _key = new() { AutoSize = false, Width = 380, Height = 70 };
     private readonly Label _operation = new() { AutoSize = false, Width = 380, Height = 60, ForeColor = Color.FromArgb(31, 95, 191) };
     private readonly ProgressBar _progress = new() { Width = 380, Height = 10, Visible = false };
+    private readonly Label _instruction = new()
+    {
+        AutoSize = false, Width = 380, Height = 64, Visible = false, TextAlign = ContentAlignment.MiddleCenter,
+        Font = new Font(SystemFonts.MessageBoxFont!.FontFamily, 15, FontStyle.Bold), ForeColor = Color.White,
+        BackColor = Color.FromArgb(31, 95, 191), Margin = new Padding(0, 10, 0, 4),
+    };
+    private readonly System.Windows.Forms.Timer _pulse = new() { Interval = 450 };
+    private bool _pulseOn;
+    private string? _instructionText;
 
     public StatusForm()
     {
@@ -27,9 +36,17 @@ internal sealed class StatusForm : Form
         layout.Controls.Add(_instance);
         layout.Controls.Add(new Label { Text = "Erkannter Key", AutoSize = true, Margin = new Padding(0, 12, 0, 2), Font = new Font(SystemFonts.MessageBoxFont!.FontFamily, 9, FontStyle.Bold) });
         layout.Controls.Add(_key);
+        layout.Controls.Add(_instruction);
         layout.Controls.Add(_progress);
         layout.Controls.Add(_operation);
         Controls.Add(layout);
+        // Simple animation: the instruction box pulses and an arrow/dot moves, so it is obvious something is expected.
+        _pulse.Tick += (_, _) =>
+        {
+            _pulseOn = !_pulseOn;
+            _instruction.BackColor = _pulseOn ? Color.FromArgb(31, 95, 191) : Color.FromArgb(70, 130, 220);
+            _instruction.Text = Decorate(_instructionText ?? "", _pulseOn);
+        };
         Load += (_, _) =>
         {
             var wa = Screen.PrimaryScreen!.WorkingArea;
@@ -49,8 +66,29 @@ internal sealed class StatusForm : Form
         base.OnFormClosing(e);
     }
 
+    private static string Decorate(string prompt, bool phase)
+    {
+        var p = prompt.ToLowerInvariant();
+        var symbol = p.Contains("abziehen") ? (phase ? "⇧" : "↑")
+            : p.Contains("einstecken") || p.Contains("anstecken") ? (phase ? "⇩" : "↓")
+            : p.Contains("berühren") ? (phase ? "◉" : "○")
+            : (phase ? "▶" : "▷");
+        return $"{symbol}  {prompt}";
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing) _pulse.Dispose();
+        base.Dispose(disposing);
+    }
+
     public void Show(TrayStatus s, bool pipeConnected)
     {
+        _instructionText = s.Operation?.Prompt;
+        _instruction.Visible = _instructionText is not null;
+        _instruction.Text = Decorate(_instructionText ?? "", _pulseOn);
+        if (_instruction.Visible && !_pulse.Enabled) _pulse.Start();
+        if (!_instruction.Visible && _pulse.Enabled) _pulse.Stop();
         _connection.Text = !pipeConnected ? "Agent-Dienst nicht erreichbar" : TrayContext.Describe(s.Connection);
         _connection.ForeColor = TrayContext.ColorFor(s.Connection, pipeConnected);
         _instance.Text = s.ServerUrl is null ? "Nicht gekoppelt" : $"{s.InstanceName} · {s.ServerUrl}{(s.PairedUser is null ? "" : $" · {s.PairedUser}")}";
@@ -61,7 +99,7 @@ internal sealed class StatusForm : Form
               (s.Key.PinIsSet ? " · PIN gesetzt" : "");
         if (s.Operation is { } op)
         {
-            _operation.Text = op.Title + (op.Step is { } n && op.Total is { } t ? $" ({n}/{t})" : "") + (op.Prompt is null ? "" : "\n" + op.Prompt);
+            _operation.Text = op.Title + (op.Step is { } n && op.Total is { } t ? $" ({n}/{t})" : "");
             _progress.Visible = op.Step is not null && op.Total is > 0;
             if (_progress.Visible) { _progress.Maximum = op.Total!.Value; _progress.Value = Math.Min(op.Step!.Value, op.Total.Value); }
         }

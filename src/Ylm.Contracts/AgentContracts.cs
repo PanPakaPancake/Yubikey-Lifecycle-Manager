@@ -89,6 +89,8 @@ public static class AgentProtocol
     public const string HubPath = "/hubs/agent";
     public const string ProtocolVersion = "1";
     public const string ReportKeyStateMethod = "ReportKeyState";
+    /// <summary>Agent → server: what the admin has to do at the key right now (unplug, plug in, touch).</summary>
+    public const string ReportPromptMethod = "ReportPrompt";
     public const string ReportHelloMethod = "Hello";
 }
 

@@ -80,11 +80,13 @@ internal sealed class TrayContext : ApplicationContext
                 var previousKey = _status.Key?.SerialNumber;
                 _status = m.Status;
                 Render();
+                // No balloon per instruction (too many during a reset): the status window shows the current step animated.
                 if (m.Status.Operation?.Prompt is { } prompt && prompt != _lastPrompt)
                 {
+                    var first = _lastPrompt is null;
                     _lastPrompt = prompt;
-                    _icon.ShowBalloonTip(5000, m.Status.Operation.Title, prompt, ToolTipIcon.Info);
-                    ShowStatus();
+                    if (first || !_statusForm.Visible) ShowStatus();
+                    else _statusForm.Show(_status, _pipeConnected);
                 }
                 if (m.Status.Operation is null) _lastPrompt = null;
                 if (m.Status.Key is { } key && key.SerialNumber != previousKey && m.Status.Operation is null)
