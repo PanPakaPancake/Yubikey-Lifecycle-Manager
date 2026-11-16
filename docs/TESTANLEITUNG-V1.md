@@ -3,7 +3,7 @@
 Diese Anleitung führt Schritt für Schritt durch den ersten echten Test von V1. Bisher ist V1 nur gegen einen simulierten YubiKey und ein simuliertes Microsoft Graph getestet. Jetzt prüfen wir:
 
 1. Server per Docker Compose starten
-2. Einrichtung inkl. PowerShell-Skript für die App-Registrierung
+2. Einrichtung im Web-Assistenten: Anmeldung bei Microsoft, die Plattform legt ihre App-Registrierung selbst an
 3. Test-Tenant per Assistent anbinden, inkl. „Jetzt beheben“
 4. Agent per MSI auf dem Windows-Admin-PC installieren, Dienst und Tray-App prüfen
 5. Echter YubiKey: Einzel-Wizard, PIN, erzwungener PIN-Wechsel, Seriennummer/Firmware, PIN-Brief
@@ -21,11 +21,11 @@ Jeder Schritt hat eine Liste **Erwartet**. Weicht etwas ab, bitte am Abschnitt [
 | Was | Hinweis |
 |---|---|
 | **Test-Tenant** (Entra ID) | Kein Produktiv-Tenant. Ein M365-Developer- oder Trial-Tenant reicht. Der Tenant ist im Test gleichzeitig **Heim-Tenant** (App-Registrierung) und **Kunden-Tenant** (wird angebunden). |
-| Konto **Globaler Administrator** im Test-Tenant | Für Skript, Admin-Consent und „Jetzt beheben“. Dieses Konto wird auch der erste Owner der Plattform. |
+| Konto **Globaler Administrator** im Test-Tenant | Für die Einrichtung, Admin-Consent und „Jetzt beheben“. Dieses Konto wird auch der erste Owner der Plattform. |
 | **Testperson** im Test-Tenant, z. B. `ylm-test1@<tenant>.onmicrosoft.com` | Normales Konto, aktiviert, **ohne** bisherigen Passkey. Für diese Person wird der YubiKey registriert. |
 | **Windows-Admin-PC** (Windows 10/11, x64) mit lokalen Adminrechten | Hier laufen Agent und Tray-App. |
 | **Docker Desktop** auf dem Admin-PC (Variante A) oder ein Linux-Server mit Docker (Variante B) | siehe 1. |
-| **PowerShell 7** (`pwsh`) und das Modul **Microsoft.Graph** | `Install-Module Microsoft.Graph -Scope CurrentUser` |
+| Nur für den Ausweichweg: **PowerShell 7** (`pwsh`) und das Modul **Microsoft.Graph** | `Install-Module Microsoft.Graph -Scope CurrentUser` |
 | **Git** | zum Klonen des Repos |
 | **Mindestens ein YubiKey 5** (ideal: einer mit Firmware **≥ 5.7** und einer mit **< 5.7**) | Achtung: Der Test kann den Key **zurücksetzen**. Keinen Key verwenden, auf dem wichtige Passkeys liegen. |
 | Optional: **Yubico Authenticator** oder `ykman` | Zum Gegenprüfen von Seriennummer und Firmware. Während des Wizards bitte **schließen**, damit er den Key nicht blockiert. |
@@ -138,21 +138,51 @@ Linux: `curl http://localhost:8080/healthz` und `docker compose logs server | gr
 
 ---
 
-## 2. Einrichtung und App-Registrierung (PowerShell-Skript)
+## 2. Einrichtung und App-Registrierung (Web-Assistent)
+
+Die Plattform legt ihre App-Registrierung selbst an. Du meldest dich dazu im Assistenten einmal mit dem Global Admin bei Microsoft an. Das PowerShell-Skript gibt es nur noch als Ausweichweg (2.4).
 
 ### 2.1 Setup-Assistent öffnen
 
 Browser (Edge oder Chrome): `http://localhost:8080/setup` (Variante B: `https://ylm.example.com/setup`).
 
 1. **Setup-Token** einfügen → Weiter.
-2. **Grunddaten:** Organisation (z. B. „Test“), öffentliche Adresse (`http://localhost:8080` bzw. deine HTTPS-Adresse), erster Owner = UPN deines Global-Admin-Kontos → Speichern und weiter.
-3. **Zertifikat erzeugen** → Weiter.
+2. **Grunddaten:** Organisation (z. B. „Test“) und öffentliche Adresse (`http://localhost:8080` bzw. deine HTTPS-Adresse) → Speichern und weiter.
 
-**Erwartet:** Nach „Zertifikat erzeugen“ erscheint der grüne Hinweis mit Fingerabdruck (Thumbprint) und „gültig bis“.
+### 2.2 Bei Microsoft anmelden
 
-### 2.2 Skript herunterladen und ausführen
+1. **Bei Microsoft anmelden** klicken. Der Assistent zeigt einen Code (z. B. `ABCD-EFGH`).
+2. **Code kopieren und Anmeldeseite öffnen** klicken. Es öffnet sich `microsoft.com/devicelogin` in einem kleinen Fenster.
+3. Code einfügen, mit dem **Global Admin des Test-Tenants** anmelden. Microsoft fragt, ob du dich bei „Microsoft Graph Command Line Tools“ anmelden willst, und zeigt die Berechtigungen `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All`, `DelegatedPermissionGrant.ReadWrite.All` und `User.Read`. Bestätigen. Das Fenster kann danach geschlossen werden.
 
-Im Schritt „App-Registrierung im Heim-Tenant“ auf **Skript herunterladen** klicken. Die Datei heißt `ylm-app-registration.ps1`.
+**Erwartet:**
+
+- Nach wenigen Sekunden zeigt der Assistent „Angemeldet als … im Tenant …“ mit deinem Konto und dem Namen des Test-Tenants.
+- Ohne weiteren Klick erscheinen nacheinander: „App-Registrierung angelegt“, „Zertifikat hochgeladen“, „Dienstprinzipal angelegt“, „Admin-Consent für 7 Anwendungsberechtigungen erteilt“, „Admin-Consent für die Anmeldung erteilt“.
+- Danach prüft der Assistent die Anmeldung mit dem Zertifikat. Das kann **bis zu zwei Minuten** dauern, weil Entra neue Zertifikate und Berechtigungen verzögert übernimmt. Am Ende steht der grüne Hinweis „Fertig: Die Plattform meldet sich mit ihrem Zertifikat an, alle Berechtigungen sind erteilt.“
+- Im Entra Admin Center unter App-Registrierungen gibt es eine App **„Yubikey Lifecycle Manager Test“** mit:
+  - Kontotyp „Konten in einem beliebigen Organisationsverzeichnis“
+  - Umleitungs-URIs (Web): `<adresse>/signin-oidc` und `<adresse>/api/tenants/consent-callback`
+  - einem Zertifikat unter „Zertifikate & Geheimnisse“
+  - 7 Anwendungsberechtigungen und 4 delegierten Berechtigungen für Microsoft Graph, alle mit grünem Haken „Gewährt für <Tenant>“
+
+Mögliche Fehler:
+
+- Meldung mit `AADSTS53003` oder „blockiert durch Conditional Access“: Die Code-Anmeldung ist im Tenant gesperrt. Dann bitte 2.4 (Skript) nutzen und die Meldung zurückmelden.
+- Meldung „Microsoft Graph meldet 403 … braucht die Rolle Globaler Administrator“: Das Konto hat nicht genug Rechte.
+- Bleibt die Prüfung bei „Es fehlen noch Berechtigungen“ hängen: **Nur erneut prüfen** klicken. Hilft das nach ein paar Minuten nicht, die Liste zurückmelden.
+- **Erneut versuchen** ist gefahrlos: Eine zweite Anmeldung im selben Tenant aktualisiert die schon angelegte App, statt eine zweite anzulegen.
+
+### 2.3 Abschluss vorbereiten
+
+**Weiter** → im Schritt „Abschluss“:
+
+- **Erster Owner** ist mit dem eben angemeldeten Konto vorausgefüllt.
+- Der Haken **„Heim-Tenant … gleich als ersten Tenant anbinden“** ist gesetzt. Für diesen Test so lassen.
+
+### 2.4 Ausweichweg: PowerShell-Skript (nur falls 2.2 nicht klappt)
+
+Im Schritt „Microsoft-Anmeldung“ unten **Alternativ: per PowerShell-Skript oder manuell anlegen** aufklappen → **Skript herunterladen** (`ylm-app-registration.ps1`). Benötigt PowerShell 7 und das Modul Microsoft.Graph (`Install-Module Microsoft.Graph -Scope CurrentUser`).
 
 ```powershell
 cd $HOME\Downloads
@@ -161,51 +191,18 @@ Set-ExecutionPolicy -Scope Process Bypass
 pwsh .\ylm-app-registration.ps1
 ```
 
-Im Anmeldefenster mit dem **Global Admin des Test-Tenants** anmelden und die Berechtigungen `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All` und `DelegatedPermissionGrant.ReadWrite.All` für Microsoft Graph PowerShell bestätigen.
-
-**Erwartet:**
-
-- Keine roten Fehlermeldungen.
-- Es erscheinen nacheinander „App-Registrierung angelegt“, „Dienstprinzipal angelegt“ und „Admin-Consent erteilt.“
-- Am Ende stehen zwei Zeilen:
-  ```
-  Client-ID (Anwendungs-ID): xxxxxxxx-…
-  Heim-Tenant-ID:           yyyyyyyy-…
-  ```
-- Im Entra Admin Center unter App-Registrierungen gibt es eine App **„Yubikey Lifecycle Manager Test“** mit:
-  - Kontotyp „Konten in einem beliebigen Organisationsverzeichnis“
-  - Umleitungs-URIs (Web): `<adresse>/signin-oidc` und `<adresse>/api/tenants/consent-callback`
-  - einem Zertifikat unter „Zertifikate & Geheimnisse“
-  - 7 Anwendungsberechtigungen und 4 delegierten Berechtigungen für Microsoft Graph
-
-### 2.3 Admin-Consent im Heim-Tenant prüfen
-
-Das Skript erteilt den Admin-Consent selbst. Zur Kontrolle: Entra Admin Center → App-Registrierungen → „Yubikey Lifecycle Manager Test“ → **API-Berechtigungen**.
-
-**Erwartet:** Alle Berechtigungen zeigen den grünen Haken „Gewährt für <Tenant>“.
-
-Fehlt der Haken bei einzelnen Berechtigungen, bitte die Skriptausgabe zurückmelden und den Consent dort per **„Administratorzustimmung für <Tenant> erteilen“** von Hand nachholen.
-
-### 2.4 Werte eintragen und testen
-
-Zurück im Setup-Assistenten: Client-ID und Heim-Tenant-ID eintragen → **Speichern und testen**.
-
-**Erwartet:**
-
-- Grüner Hinweis „Anmeldung mit dem App-Zertifikat erfolgreich.“
-- **Keine** Zeile „Fehlende Berechtigungen“.
-
-Falls dort fehlende Berechtigungen stehen, obwohl der Consent erteilt ist: 1 bis 2 Minuten warten und erneut testen (Entra braucht manchmal etwas). Bleibt es dabei, die Liste zurückmelden.
+Am Ende gibt das Skript Client-ID und Heim-Tenant-ID aus. Beide im aufgeklappten Bereich eintragen → **Speichern und testen** → bei grünem Hinweis ohne „Fehlende Berechtigungen“ → **Weiter**. Den ersten Owner (UPN deines Global-Admin-Kontos) trägst du dann im Abschluss selbst ein.
 
 ### 2.5 Einrichtung abschließen und anmelden
 
-**Weiter** → **Einrichtung abschließen** → **Zur Anmeldung** → mit dem Owner-Konto bei Microsoft anmelden.
+**Einrichtung abschließen** → **Zur Anmeldung** → mit dem Owner-Konto bei Microsoft anmelden.
 
 **Erwartet:**
 
 - Die Anmeldung landet auf dem Dashboard der Plattform.
 - Oben/links bist du als **Owner** angemeldet (Menüpunkte Tenants, Profile, Benutzer, Audit sichtbar).
-- Im **Audit-Log** gibt es einen Eintrag zum Abschluss der Einrichtung (Aktion `setup.completed`).
+- Im **Audit-Log** gibt es Einträge `setup.app_provisioned`, `tenant.onboarded` (Heim-Tenant) und `setup.completed`.
+- Unter **Tenants** ist der Test-Tenant schon vorhanden, mit Namen, Standard-Domain und ersten Prüfergebnissen.
 - Das Setup-Token aus dem Log funktioniert nicht mehr.
 
 Wenn du stattdessen auf `/login?error=remote_failure` landest, bitte zurückmelden (siehe Fehlerbild F2 unten).
@@ -222,15 +219,17 @@ Damit „Jetzt beheben“ etwas zu tun hat, im Entra Admin Center → Schutz →
 
 Bitte vorher einen **Screenshot der ursprünglichen Einstellungen** machen (Aktivieren, Ziele, Ausschließen, Registerkarte „Konfigurieren“ inkl. Schlüsseleinschränkungen), damit wir das Ergebnis vergleichen können.
 
-### 3.2 Tenant hinzufügen
+### 3.2 Tenant öffnen (schon angebunden) und Consent-Ablauf testen
 
-Plattform → **Tenants** → **Tenant hinzufügen** → **Weiter zu Microsoft** → bei Microsoft mit dem Global Admin anmelden → Berechtigungsdialog „Im Namen Ihrer Organisation zustimmen“ → **Akzeptieren**.
+Der Test-Tenant ist seit 2.3 als erster Tenant angebunden. Plattform → **Tenants** → Test-Tenant öffnen → bei den Prüfungen **Erneut prüfen**, damit die in 3.1 ausgeschaltete FIDO2-Richtlinie erkannt wird.
+
+Den Consent-Ablauf für weitere Kunden-Tenants trotzdem einmal testen: **Tenants** → **Tenant hinzufügen** → **Weiter zu Microsoft** → mit dem Global Admin anmelden → „Im Namen Ihrer Organisation zustimmen“ → **Akzeptieren**.
 
 **Erwartet:**
 
 - Rückkehr auf die Tenant-Seite mit dem grünen Hinweis „Der Tenant ist angebunden. Prüfen Sie unten die FIDO2-Einstellungen.“
+- Es gibt weiterhin nur **einen** Eintrag für den Test-Tenant (kein Duplikat).
 - Name und Standard-Domain des Test-Tenants sind korrekt.
-- Im Audit-Log steht das Onboarding.
 
 ### 3.3 Zielgruppe setzen
 
@@ -498,7 +497,7 @@ Bitte bei jeder Abweichung zurückmelden:
 | Agent-Dienst | Ordner `C:\ProgramData\YubikeyLifecycleManager\Agent\logs` (Tray → „Logs öffnen“), die neueste Datei |
 | Windows-Ereignisanzeige | Windows-Protokolle → Anwendung, Quelle „Yubikey Lifecycle Manager Agent“ (bei Dienst-Abstürzen auch „.NET Runtime“ und „Application Error“) |
 | MSI-Installation | `msiexec /i … /l*v "%TEMP%\ylm-msi.log"` und die Datei mitschicken |
-| PowerShell-Skript | die komplette Konsolenausgabe (roter Text inkl. Zeile darüber) |
+| Setup-Assistent | die rote Meldung im Assistenten (Screenshot), bei `AADSTS…` den Code; beim Ausweichweg die komplette Skriptausgabe |
 | Entra | Entra Admin Center → Anmeldeprotokolle (Anmeldefehler, Fehlercode `AADSTS…`) bzw. Überwachung → Überwachungsprotokolle (Richtlinienänderungen) |
 | Plattform | Audit-Log der Plattform (Screenshot der betreffenden Einträge) |
 
@@ -534,11 +533,11 @@ YubiKey 2:         Modell ________  FW ______  SN ________
 
 [ ] 1.3  Container laufen, healthy
 [ ] 1.4  /healthz ok, Setup-Token im Log
-[ ] 2.2  Skript ohne Fehler, App in Entra korrekt
-[ ] 2.3  Admin-Consent durch das Skript erteilt
-[ ] 2.4  Setup-Test grün, keine fehlenden Berechtigungen
-[ ] 2.5  Anmeldung als Owner
-[ ] 3.2  Tenant angebunden
+[ ] 2.2  Anmeldung per Code, App automatisch angelegt, Prüfung grün
+[ ] 2.3  Owner vorausgefüllt, Heim-Tenant-Haken gesetzt
+[ ] 2.4  (nur falls nötig) Skript als Ausweichweg
+[ ] 2.5  Anmeldung als Owner, Heim-Tenant unter Tenants vorhanden
+[ ] 3.2  Consent-Ablauf ohne Duplikat
 [ ] 3.3  Zielgruppe gefunden und gesetzt
 [ ] 3.4  Prüfungen zeigen die erwarteten Fehler
 [ ] 3.5  "Jetzt beheben" korrigiert die Richtlinie, sonst nichts verändert

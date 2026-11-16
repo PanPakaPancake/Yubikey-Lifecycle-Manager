@@ -66,6 +66,8 @@ builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<PlatformSignIn>();
 builder.Services.AddScoped<SetupService>();
+builder.Services.AddSingleton<IEntraBootstrap, EntraBootstrap>();
+builder.Services.AddSingleton<SetupSignInStore>();
 builder.Services.AddScoped<TenantCheckService>();
 builder.Services.AddScoped<SyncService>();
 builder.Services.AddScoped<KeyService>();

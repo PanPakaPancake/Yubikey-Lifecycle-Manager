@@ -7,7 +7,8 @@ public static class SetupEndpoints
 {
     public const string TokenHeader = "X-Setup-Token";
 
-    public sealed record BasicsRequest(string OrganizationName, string PublicBaseUrl, string BootstrapOwnerUpn);
+    public sealed record BasicsRequest(string OrganizationName, string PublicBaseUrl, string? BootstrapOwnerUpn);
+    public sealed record CompleteRequest(string? BootstrapOwnerUpn, bool? AddHomeTenant);
     public sealed record AppRegistrationRequest(Guid ClientId, Guid HomeTenantId);
 
     public static void MapSetup(this IEndpointRouteBuilder app)
@@ -40,7 +41,32 @@ public static class SetupEndpoints
                 s.CertificateExpiresAt,
                 redirectUris = setup.RedirectUris(s, req),
                 requiredPermissions = SetupService.RequiredApplicationPermissions,
+                signedInAdmin = setup.LastSignedInAdmin,
             });
+        });
+
+        // Sign-in with Microsoft (device code), then the platform creates the app registration itself.
+        group.MapPost("/signin/start", async (SetupService setup, CancellationToken ct) =>
+        {
+            var p = await setup.StartSignInAsync(ct);
+            return Results.Ok(new { p.UserCode, p.VerificationUri, p.ExpiresAt, p.IntervalSeconds });
+        });
+
+        group.MapPost("/signin/poll", async (SetupService setup, CancellationToken ct) => Results.Ok(await setup.PollSignInAsync(ct)));
+
+        group.MapPost("/provision", async (SetupService setup, CancellationToken ct) =>
+        {
+            var result = await setup.ProvisionAppAsync(ct);
+            var s = await setup.GetSettingsAsync();
+            return Results.Ok(new { result.ClientId, s.HomeTenantId, result.Steps, s.BootstrapOwnerUpn });
+        });
+
+        // Tests the app-only sign-in with the certificate. New credentials and consent can take a minute in Entra.
+        group.MapPost("/verify", async (SetupService setup) =>
+        {
+            var (ok, message, granted) = await setup.TestAppRegistrationAsync();
+            var missing = SetupService.RequiredApplicationPermissions.Except(granted).ToList();
+            return Results.Ok(new { ok, message, granted, missing });
         });
 
         group.MapPost("/basics", async (BasicsRequest body, SetupService setup) =>
@@ -78,9 +104,9 @@ public static class SetupEndpoints
             return Results.Ok(new { ok, message, granted, missing });
         });
 
-        group.MapPost("/complete", async (SetupService setup) =>
+        group.MapPost("/complete", async (CompleteRequest? body, SetupService setup, CancellationToken ct) =>
         {
-            await setup.CompleteAsync();
+            await setup.CompleteAsync(new SetupService.CompleteOptions(body?.BootstrapOwnerUpn, body?.AddHomeTenant ?? true), ct);
             return Results.NoContent();
         });
     }
