@@ -24,6 +24,7 @@ Ein reiner Browser kann die Registrierung on Behalf nicht durchführen. Die Begr
 
 - [Projektplanung](docs/PLANUNG.md)
 - [Betrieb und Installation](docs/BETRIEB.md)
+- [Testanleitung V1 (Praxistest mit Tenant und YubiKey)](docs/TESTANLEITUNG-V1.md)
 
 ## Projektstruktur
 
