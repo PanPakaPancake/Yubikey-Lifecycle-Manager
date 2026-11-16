@@ -9,6 +9,8 @@
     <PublishDir Condition="'$(PublishDir)' == ''">$(MSBuildThisFileDirectory)publish\</PublishDir>
     <DefineConstants>ProductVersion=$(ProductVersion);PublishDir=$(PublishDir)</DefineConstants>
     <SuppressValidation>false</SuppressValidation>
+    <!-- Bekannte Fehlmeldungen bei perMachine-Paketen mit Startmenü-Verknüpfung (ProgramMenuFolder gilt bei der Validierung als Benutzerprofil). -->
+    <SuppressIces>ICE38;ICE43;ICE57</SuppressIces>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="WixToolset.Util.wixext" />
