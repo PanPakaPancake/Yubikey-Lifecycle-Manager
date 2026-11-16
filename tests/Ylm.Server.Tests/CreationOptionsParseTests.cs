@@ -18,7 +18,7 @@ public sealed class CreationOptionsParseTests
     public void Non_base64_challenge_is_used_as_text()
     {
         const string challenge = "eyJhbGciOiJSUzI1NiJ9.eyJ4IjoxfQ.c2ln";
-        var json = $$"""{"challenge":"{{challenge}}","rp":{"id":"login.microsoft.com"},"user":{"id":"BAUG","name":"a","displayName":"A"}}""";
+        var json = "{\"challenge\":\"" + challenge + """","rp":{"id":"login.microsoft.com"},"user":{"id":"BAUG","name":"a","displayName":"A"}}""";
         Base64Url.TextFallbacks = [];
         var o = WebAuthnCreationOptions.Parse(json);
         Assert.Equal(Encoding.UTF8.GetBytes(challenge), o.Challenge);
