@@ -20,6 +20,8 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
     private readonly SemaphoreSlim _lock = new(1, 1);
     private TaskCompletionSource? _removed;
     private TaskCompletionSource<IYubiKeyDevice>? _arrived;
+    private readonly Timer _poll;
+    private string? _lastSnapshot;
 
     public event EventHandler? KeyChanged;
 
@@ -29,14 +31,37 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
         _listener = YubiKeyDeviceListener.Instance;
         _listener.Arrived += (_, e) =>
         {
+            _logger.LogInformation("YubiKey arrived: {Serial}", e.Device.SerialNumber);
             _arrived?.TrySetResult(e.Device);
             KeyChanged?.Invoke(this, EventArgs.Empty);
         };
-        _listener.Removed += (_, _) =>
+        _listener.Removed += (_, e) =>
         {
+            _logger.LogInformation("YubiKey removed: {Serial}", e.Device.SerialNumber);
             _removed?.TrySetResult();
             KeyChanged?.Invoke(this, EventArgs.Empty);
         };
+        // Fallback in case device notifications do not reach the service (observed: key inserted, nothing reported).
+        _poll = new Timer(_ => Poll(), null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
+    }
+
+    private void Poll()
+    {
+        if (!_lock.Wait(0)) return; // an operation is running
+        try
+        {
+            var snapshot = string.Join(",", Devices().Select(d => d.SerialNumber?.ToString() ?? "?").OrderBy(s => s));
+            if (snapshot == _lastSnapshot) return;
+            _lastSnapshot = snapshot;
+            _logger.LogInformation("YubiKeys present: {Keys}", snapshot.Length == 0 ? "none" : snapshot);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Polling for YubiKeys failed");
+            return;
+        }
+        finally { _lock.Release(); }
+        KeyChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private static IReadOnlyList<IYubiKeyDevice> Devices() =>
@@ -274,5 +299,9 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
         finally { _lock.Release(); }
     }
 
-    public void Dispose() => _lock.Dispose();
+    public void Dispose()
+    {
+        _poll.Dispose();
+        _lock.Dispose();
+    }
 }

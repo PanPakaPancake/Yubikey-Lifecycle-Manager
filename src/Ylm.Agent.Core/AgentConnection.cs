@@ -66,7 +66,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Key state report failed");
+            _logger.LogWarning(ex, "Key state report failed");
         }
     }
 

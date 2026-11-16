@@ -113,7 +113,7 @@ public static class TenantEndpoints
                 // Consent propagation can take a few seconds.
                 await Task.Delay(TimeSpan.FromSeconds(isNew ? 2 : 0));
                 var org = await (await graphFactory.ForTenantAsync(entraTenantId)).GetOrganizationAsync();
-                tenant.DisplayName = org.DisplayName;
+                tenant.DisplayName = string.IsNullOrWhiteSpace(org.DisplayName) ? org.DefaultDomain ?? entraTenantId.ToString() : org.DisplayName;
                 tenant.DefaultDomain = org.DefaultDomain;
             }
             catch (Exception)

@@ -84,7 +84,8 @@ public sealed class TenantCheckService(YlmDbContext db, IGraphClientFactory grap
         try
         {
             var org = await graph.GetOrganizationAsync(ct);
-            if (placeholder && !string.IsNullOrWhiteSpace(org.DisplayName)) tenant.DisplayName = org.DisplayName;
+            if (placeholder && (!string.IsNullOrWhiteSpace(org.DisplayName) || !string.IsNullOrWhiteSpace(org.DefaultDomain)))
+                tenant.DisplayName = string.IsNullOrWhiteSpace(org.DisplayName) ? org.DefaultDomain! : org.DisplayName;
             if (string.IsNullOrEmpty(tenant.DefaultDomain)) tenant.DefaultDomain = org.DefaultDomain;
         }
         catch (GraphException) { /* not essential for the checks */ }

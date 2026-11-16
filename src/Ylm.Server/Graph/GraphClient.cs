@@ -266,16 +266,61 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
     public async IAsyncEnumerable<string> ListUserIdsWithPasskeysAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {
         string? url = $"{V1}/reports/authenticationMethods/userRegistrationDetails?$select=id,methodsRegistered&$top=999";
+        JsonDocument? first;
+        try
+        {
+            first = await SendAsync(HttpMethod.Get, url, ct);
+        }
+        catch (GraphException ex) when (ex.StatusCode == 403 && IsMissingPremiumLicense(ex))
+        {
+            first = null;
+        }
+
+        if (first is null)
+        {
+            // The registration report needs Entra ID P1/P2. Without it, check every user's FIDO2 methods directly.
+            await foreach (var id in ListUserIdsWithFido2MethodsSlowAsync(ct)) yield return id;
+            yield break;
+        }
+
+        var doc = first;
+        while (true)
+        {
+            using (doc)
+            {
+                foreach (var u in doc.RootElement.GetProperty("value").EnumerateArray())
+                {
+                    if (!u.TryGetProperty("methodsRegistered", out var methods)) continue;
+                    if (methods.EnumerateArray().Any(m => m.GetString() is "passKeyDeviceBound" or "fido2" or "passKeyDeviceBoundAuthenticator"))
+                        yield return Str(u, "id")!;
+                }
+                url = Str(doc.RootElement, "@odata.nextLink");
+            }
+            if (url is null) yield break;
+            doc = (await SendAsync(HttpMethod.Get, url, ct))!;
+        }
+    }
+
+    /// <summary>Graph answers 403 "Tenant is not a B2C tenant and doesn't have premium license" for reports without P1.</summary>
+    public static bool IsMissingPremiumLicense(GraphException ex) =>
+        ex.Message.Contains("premium license", StringComparison.OrdinalIgnoreCase) || ex.GraphCode == "Authentication_RequestFromNonPremiumTenantOrB2CTenant";
+
+    private async IAsyncEnumerable<string> ListUserIdsWithFido2MethodsSlowAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        string? url = $"{V1}/users?$select=id&$top=999";
         while (url is not null)
         {
-            using var doc = await SendAsync(HttpMethod.Get, url, ct);
-            foreach (var u in doc!.RootElement.GetProperty("value").EnumerateArray())
+            var ids = new List<string>();
+            using (var doc = await SendAsync(HttpMethod.Get, url, ct))
             {
-                if (!u.TryGetProperty("methodsRegistered", out var methods)) continue;
-                if (methods.EnumerateArray().Any(m => m.GetString() is "passKeyDeviceBound" or "fido2" or "passKeyDeviceBoundAuthenticator"))
-                    yield return Str(u, "id")!;
+                ids.AddRange(doc!.RootElement.GetProperty("value").EnumerateArray().Select(u => Str(u, "id")!));
+                url = Str(doc.RootElement, "@odata.nextLink");
             }
-            url = Str(doc.RootElement, "@odata.nextLink");
+            foreach (var id in ids)
+            {
+                using var methods = await SendAsync(HttpMethod.Get, $"{V1}/users/{Uri.EscapeDataString(id)}/authentication/fido2Methods", ct);
+                if (methods!.RootElement.GetProperty("value").GetArrayLength() > 0) yield return id;
+            }
         }
     }
 
