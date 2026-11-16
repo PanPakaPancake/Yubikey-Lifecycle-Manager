@@ -48,8 +48,7 @@ Automatisch getestet sind die Fachlogik und der komplette Ablauf im Backend mit 
 - echte YubiKeys mit dem Yubico SDK (Auslesen, Reset, PIN setzen, Registrierung, PIN-Wechsel erzwingen)
 - ein echter Entra-Tenant: Anmeldung, Admin-Consent, Graph-Aufrufe, insbesondere die Registrierung on Behalf über die Beta-Schnittstelle (`fido2Methods/creationOptions`)
 - das App-Registrierungs-Skript in PowerShell
-- MSI-Installation, Windows-Dienst und Tray-App auf Windows
-- der vollständige Docker-Build (die Laufzeitstufe wurde lokal geprüft)
+- MSI-Installation, Windows-Dienst und Tray-App auf Windows (das MSI wird in der CI gebaut, aber nicht installiert)
 
 Die Liste der YubiKey-AAGUIDs (`src/Ylm.Core/YubicoAaguids.cs`) sollte vor dem produktiven Einsatz mit der von Yubico veröffentlichten Liste abgeglichen werden.
 
