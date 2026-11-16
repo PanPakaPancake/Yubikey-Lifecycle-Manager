@@ -1,0 +1,356 @@
+using System.Text.Json;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.EntityFrameworkCore;
+using Ylm.Contracts;
+using Ylm.Core;
+using Ylm.Server.Agents;
+using Ylm.Server.Audit;
+using Ylm.Server.Data;
+using Ylm.Server.Graph;
+using Ylm.Server.Infrastructure;
+using Ylm.Server.Inventory;
+using Ylm.Server.Pdf;
+using Ylm.Server.Tenants;
+
+namespace Ylm.Server.Registration;
+
+public sealed record RegistrationPreviewRequest(string EntraUserId, Guid ProfileId, Guid AgentId);
+
+public sealed record RegistrationRequest(string EntraUserId, Guid ProfileId, Guid AgentId, List<ViolationCode>? Overrides, bool PerformReset, int? ExpectedSerialNumber);
+
+public sealed record RegistrationPreview(
+    KeyInfo Key,
+    IReadOnlyList<ProfileViolation> Violations,
+    bool ResetRequired,
+    bool ResetPlanned,
+    bool WillForcePinChange,
+    string DisplayName,
+    object? InventoryKey,
+    object User,
+    int UserActiveKeys);
+
+/// <summary>Einzel-Wizard (planning 6.3.1): person → key → profile → registration → PIN PDF.</summary>
+public sealed class RegistrationService(
+    YlmDbContext db,
+    IGraphClientFactory graphFactory,
+    AgentGateway agents,
+    KeyService keys,
+    AuditService audit,
+    IDataProtectionProvider dataProtection,
+    PinLetterStore letters,
+    ILogger<RegistrationService> logger)
+{
+    public const string FixedPinPurpose = "Ylm.Profile.FixedPin";
+
+    public static async Task<RegistrationProfile> LoadProfileAsync(YlmDbContext db, Guid tenantId, Guid profileId, CancellationToken ct = default) =>
+        await db.Profiles.FirstOrDefaultAsync(p => p.Id == profileId && (p.TenantId == tenantId || p.TenantId == null), ct)
+        ?? throw ApiException.NotFound("Profil");
+
+    private static ProfileViolation? TenantAaguidViolation(Tenant tenant, KeyInfo key)
+    {
+        var policy = TenantCheckService.ReadPolicy(tenant);
+        if (policy is null || !policy.KeyRestrictionsEnforced || key.AaGuid is not { } aaguid) return null;
+        var allowed = policy.EnforcementType == "block" ? !policy.AaGuids.Contains(aaguid) : policy.AaGuids.Contains(aaguid);
+        return allowed ? null : new ProfileViolation(ViolationCode.AaguidNotAllowedByTenant,
+            $"Die FIDO2-Richtlinie des Tenants lässt diesen Key-Typ (AAGUID {aaguid}) nicht zu. Bitte zuerst die Tenant-Checks beheben.", false, false);
+    }
+
+    public EvaluationResult Evaluate(Tenant tenant, RegistrationProfile profile, KeyInfo key)
+    {
+        var result = ProfileEvaluator.Evaluate(profile.ToSettings(), key);
+        var aaguid = TenantAaguidViolation(tenant, key);
+        return aaguid is null ? result : new EvaluationResult([.. result.Violations, aaguid]);
+    }
+
+    public async Task<RegistrationPreview> PreviewAsync(Guid tenantId, PlatformUser actor, RegistrationPreviewRequest req, CancellationToken ct = default)
+    {
+        var tenant = await db.Tenants.FirstAsync(t => t.Id == tenantId, ct);
+        var profile = await LoadProfileAsync(db, tenantId, req.ProfileId, ct);
+        var agent = agents.Require(req.AgentId, actor.Id);
+        var key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
+        var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
+        var user = await graph.GetUserAsync(req.EntraUserId, ct) ?? throw ApiException.NotFound("Person");
+        var eval = Evaluate(tenant, profile, key);
+        var resetRequired = eval.Violations.Any(v => v.ResolvedByReset);
+        var existing = key.SerialNumber is { } serial ? await keys.FindBySerialAsync(serial, ct) : null;
+        var userKeys = await db.Registrations.CountAsync(r => r.TenantId == tenantId && r.EntraUserId == user.Id && r.RemovedAt == null, ct);
+        return new RegistrationPreview(
+            key,
+            eval.Violations,
+            resetRequired,
+            resetRequired || profile.FactoryResetBeforeRegistration,
+            profile.ForcePinChange && key.SupportsForcePinChange,
+            DisplayNameTemplate.Render(profile.DisplayNameTemplate, key, user.UserPrincipalName, DateOnly.FromDateTime(DateTime.Today)),
+            existing is null ? null : new
+            {
+                existing.Id, existing.TenantId, TenantName = existing.Tenant?.DisplayName, Status = existing.Status.ToString(),
+                ActiveRegistrations = existing.Registrations.Where(r => r.RemovedAt == null).Select(r => r.UserPrincipalName).ToList(),
+            },
+            new { user.Id, user.UserPrincipalName, user.DisplayName, user.Department, user.AccountEnabled },
+            userKeys);
+    }
+
+    /// <summary>Starts the registration as a background job and returns it for progress polling.</summary>
+    public OperationJob Start(Guid tenantId, PlatformUser actor, RegistrationRequest req, JobStore jobs, IServiceScopeFactory scopes)
+    {
+        var job = jobs.Add(new OperationJob { UserId = actor.Id, TenantId = tenantId, Kind = "registration", TotalSteps = 7 });
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopes.CreateScope();
+            var svc = scope.ServiceProvider.GetRequiredService<RegistrationService>();
+            await svc.RunAsync(job, tenantId, actor.Id, req);
+        });
+        return job;
+    }
+
+    private void Step(OperationJob job, ConnectedAgent agent, int n, string text, string? prompt = null)
+    {
+        job.StepNumber = n;
+        job.Step = text;
+        job.Prompt = prompt;
+        agents.Progress(agent, new AgentProgress(text, prompt, n, job.TotalSteps));
+    }
+
+    internal async Task RunAsync(OperationJob job, Guid tenantId, Guid actorId, RegistrationRequest req)
+    {
+        var ct = CancellationToken.None;
+        ConnectedAgent? agent = null;
+        PlatformUser? actorUser = null;
+        var stage = "start";
+        try
+        {
+            actorUser = await db.PlatformUsers.FirstAsync(u => u.Id == actorId, ct);
+            var actor = AuditService.User(actorUser);
+            var tenant = await db.Tenants.FirstAsync(t => t.Id == tenantId, ct);
+            var profile = await LoadProfileAsync(db, tenantId, req.ProfileId, ct);
+            agent = agents.Require(req.AgentId, actorId);
+            if (agent.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
+            agent.BusyWith = "Registrierung";
+            var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
+
+            // 1. Key auslesen und gegen das Profil prüfen
+            Step(job, agent, 1, "Key wird geprüft");
+            var key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
+            if (req.ExpectedSerialNumber is { } expected && key.SerialNumber != expected)
+                throw ApiException.Conflict("key_changed", "Es steckt ein anderer Key als in der Vorschau. Bitte den Wizard neu starten.");
+            var user = await graph.GetUserAsync(req.EntraUserId, ct) ?? throw ApiException.NotFound("Person");
+            var eval = Evaluate(tenant, profile, key);
+            var overrides = req.Overrides ?? [];
+            var reset = req.PerformReset || profile.FactoryResetBeforeRegistration;
+            var blocking = eval.Blocking(overrides, reset);
+            if (blocking.Count > 0) throw ApiException.Conflict("profile_violation", string.Join(" ", blocking.Select(b => b.Message)));
+            var overridden = eval.Violations.Where(v => v.CanOverride && overrides.Contains(v.Code)).ToList();
+
+            // 2. Inventar prüfen
+            var existing = key.SerialNumber is { } serial ? await keys.FindBySerialAsync(serial, ct) : null;
+            if (existing is not null && existing.TenantId != tenantId)
+                throw ApiException.Conflict("other_tenant", $"Dieser Key ist im Inventar des Tenants „{existing.Tenant?.DisplayName}“ erfasst.");
+            var activeRegs = existing?.Registrations.Where(r => r.RemovedAt is null).ToList() ?? [];
+            if (activeRegs.Count > 0 && !reset)
+                throw ApiException.Conflict("already_registered",
+                    $"Der Key ist bereits für {string.Join(", ", activeRegs.Select(r => r.UserPrincipalName))} registriert. Geteilte Keys folgen in V1.1; für eine Neuvergabe bitte mit Werksreset registrieren.");
+
+            // 3. Werksreset (optional)
+            if (reset)
+            {
+                stage = "reset";
+                if (existing is not null && activeRegs.Count > 0)
+                    await keys.RemoveEntraRegistrationsAsync(existing, "Neuvergabe mit Werksreset", actor, ct);
+                Step(job, agent, 2, "Werksreset der FIDO2-Funktion", "Bitte den Key ab- und wieder anstecken und danach berühren.");
+                var resetResult = await agents.CallAsync(agent, (c, t) => c.ResetFido(new ResetRequest { ExpectedSerialNumber = key.SerialNumber }, t), TimeSpan.FromSeconds(150), ct);
+                if (!resetResult.Success) throw ApiException.Conflict(resetResult.ErrorCode ?? "reset_failed", "Werksreset fehlgeschlagen: " + resetResult.Error);
+                audit.Add(actor, AuditActions.KeyReset, tenantId, existing?.Id, key.SerialNumber?.ToString(), new { context = "registration" });
+                await db.SaveChangesAsync(ct);
+                key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", "Nach dem Reset wurde kein Key gefunden.");
+            }
+
+            // 4. PIN setzen
+            stage = "pin";
+            Step(job, agent, 3, "PIN wird gesetzt");
+            var pin = profile.PinStrategy == PinStrategy.Fixed
+                ? dataProtection.CreateProtector(FixedPinPurpose).Unprotect(profile.FixedPinProtected ?? throw ApiException.Conflict("profile_invalid", "Im Profil ist keine feste PIN hinterlegt."))
+                : PinGenerator.Generate(Math.Max(profile.PinLength, key.MinimumPinLength ?? PinGenerator.MinLength));
+            var setPin = await agents.CallAsync(agent, (c, t) => c.SetPin(new SetPinRequest { ExpectedSerialNumber = key.SerialNumber, NewPin = pin }, t), TimeSpan.FromSeconds(30), ct);
+            if (!setPin.Success) throw ApiException.Conflict(setPin.ErrorCode ?? "set_pin_failed", "PIN konnte nicht gesetzt werden: " + setPin.Error);
+
+            // 5. Passkey erzeugen (creationOptions von Graph, makeCredential am Key)
+            stage = "credential";
+            Step(job, agent, 4, "Passkey wird auf dem Key erzeugt", "Bitte den Key berühren, sobald er blinkt.");
+            var options = await graph.GetCreationOptionsAsync(user.Id, 5, ct);
+            var cred = await agents.CallAsync(agent, (c, t) => c.MakeCredential(new MakeCredentialRequest
+            {
+                ExpectedSerialNumber = key.SerialNumber,
+                Pin = pin,
+                PublicKeyOptionsJson = options.PublicKey.GetRawText(),
+            }, t), TimeSpan.FromSeconds(90), ct);
+            if (!cred.Success) throw ApiException.Conflict(cred.ErrorCode ?? "make_credential_failed", "Passkey konnte nicht erzeugt werden: " + cred.Error);
+
+            // 6. In Entra registrieren
+            stage = "graph";
+            Step(job, agent, 5, "Passkey wird in Entra registriert");
+            var displayName = DisplayNameTemplate.Render(profile.DisplayNameTemplate, key, user.UserPrincipalName, DateOnly.FromDateTime(DateTime.Today));
+            var method = await graph.RegisterFido2MethodAsync(user.Id, displayName, new NewFido2Credential(cred.CredentialId!, cred.ClientDataJson!, cred.AttestationObject!), ct);
+
+            // 7. PIN-Wechsel erzwingen
+            stage = "force_pin_change";
+            var forced = false;
+            if (profile.ForcePinChange && key.SupportsForcePinChange)
+            {
+                Step(job, agent, 6, "PIN-Wechsel wird erzwungen");
+                var force = await agents.CallAsync(agent, (c, t) => c.ForcePinChange(new ForcePinChangeRequest { ExpectedSerialNumber = key.SerialNumber, Pin = pin }, t), TimeSpan.FromSeconds(30), ct);
+                forced = force.Success;
+                if (!force.Success) job.Notes.Add("PIN-Wechsel konnte nicht erzwungen werden: " + force.Error + ". Im PIN-Brief steht deshalb „Bitte PIN selbst ändern“.");
+            }
+
+            // Inventar und Audit
+            stage = "save";
+            Step(job, agent, 7, "Inventar wird aktualisiert");
+            var now = DateTimeOffset.UtcNow;
+            var inv = existing;
+            if (inv is null)
+            {
+                inv = new YubiKey { TenantId = tenantId, Source = KeySource.Platform, Status = KeyStatus.InStock };
+                db.Keys.Add(inv);
+            }
+            else
+            {
+                if (inv.Status is KeyStatus.Active or KeyStatus.Locked) KeyService.SetStatus(inv, KeyStatus.InStock, "Werksreset");
+            }
+            inv.SerialNumber = key.SerialNumber;
+            inv.FirmwareVersion = key.FirmwareVersion;
+            inv.Model = key.Model;
+            inv.FormFactor = key.FormFactor;
+            inv.AaGuid = cred.AaGuid ?? key.AaGuid;
+            inv.IsFips = key.IsFips;
+            inv.ProfileId = profile.Id;
+            inv.PinChangeForced = forced;
+            KeyService.SetStatus(inv, KeyStatus.Active);
+            db.Registrations.Add(new KeyRegistration
+            {
+                TenantId = tenantId,
+                KeyId = inv.Id,
+                EntraUserId = user.Id,
+                UserPrincipalName = user.UserPrincipalName,
+                UserDisplayName = user.DisplayName,
+                EntraMethodId = method.Id,
+                DisplayName = method.DisplayName ?? displayName,
+                AaGuid = method.AaGuid ?? inv.AaGuid,
+                RegisteredAt = now,
+                RegisteredById = actorUser.Id,
+                RegisteredByName = actorUser.DisplayName,
+                ProfileId = profile.Id,
+                Source = KeySource.Platform,
+                LastSeenInSyncAt = now,
+            });
+            foreach (var o in overridden)
+                audit.Add(actor, AuditActions.KeyProfileOverride, tenantId, inv.Id, user.UserPrincipalName, new { code = o.Code.ToString(), o.Message, profile = profile.Name });
+            audit.Add(actor, AuditActions.KeyRegistered, tenantId, inv.Id, user.UserPrincipalName, new
+            {
+                serial = key.SerialNumber, firmware = key.FirmwareVersion, model = key.Model, profile = profile.Name,
+                pinStrategy = profile.PinStrategy.ToString(), pinChangeForced = forced, reset, overrides = overridden.Select(o => o.Code.ToString()),
+                entraMethodId = method.Id, agent = agent.MachineName,
+            });
+            await db.SaveChangesAsync(ct);
+            job.KeyId = inv.Id;
+
+            var settings = await db.Installation.AsNoTracking().FirstAsync(ct);
+            var pdf = PinLetterPdf.Create(new PinLetterData(
+                settings.OrganizationName, tenant.DisplayName, user.DisplayName ?? user.UserPrincipalName, user.UserPrincipalName, pin,
+                key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now));
+            job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief {user.UserPrincipalName} {key.SerialNumber}.pdf");
+            job.Step = "Registrierung abgeschlossen";
+            job.Prompt = "Key abziehen und zusammen mit dem PIN-Brief übergeben.";
+            job.State = JobState.Succeeded;
+            agents.Progress(agent, new AgentProgress("Registrierung abgeschlossen", $"{user.DisplayName}: Key kann abgezogen werden.", 7, 7, Done: true));
+        }
+        catch (Exception ex)
+        {
+            var (code, message) = ex switch
+            {
+                ApiException a => (a.Code, a.Message),
+                DomainException d => (d.Code, d.Message),
+                GraphException g => ("graph_error", g.Message),
+                _ => ("unexpected", "Unerwarteter Fehler: " + ex.Message),
+            };
+            if (ex is not ApiException) logger.LogError(ex, "Registration failed at {Stage}", stage);
+            if (stage is "credential" or "graph" or "force_pin_change" or "save")
+                message += " Auf dem Key ist bereits eine PIN gesetzt; für einen neuen Versuch den Wizard mit Werksreset starten.";
+            job.State = JobState.Failed;
+            job.Error = message;
+            job.ErrorCode = code;
+            try
+            {
+                db.ChangeTracker.Clear();
+                if (actorUser is not null)
+                    await audit.WriteAsync(AuditService.User(actorUser), AuditActions.KeyRegistrationFailed, tenantId, null, req.EntraUserId, new { stage, code, message });
+            }
+            catch (Exception auditEx) { logger.LogError(auditEx, "Could not audit failed registration"); }
+            if (agent is not null) agents.Progress(agent, new AgentProgress("Registrierung fehlgeschlagen", message, Failed: true));
+        }
+        finally
+        {
+            job.FinishedAt = DateTimeOffset.UtcNow;
+            if (agent is not null) agent.BusyWith = null;
+        }
+    }
+
+    /// <summary>Zurücksetzen: removes passkeys in Entra, resets FIDO2 on the key, back to stock.</summary>
+    public OperationJob StartReset(YubiKey key, PlatformUser actor, Guid agentId, JobStore jobs, IServiceScopeFactory scopes)
+    {
+        var job = jobs.Add(new OperationJob { UserId = actor.Id, TenantId = key.TenantId, Kind = "reset", TotalSteps = 3, KeyId = key.Id });
+        var keyId = key.Id;
+        _ = Task.Run(async () =>
+        {
+            using var scope = scopes.CreateScope();
+            var svc = scope.ServiceProvider.GetRequiredService<RegistrationService>();
+            await svc.RunResetAsync(job, keyId, actor.Id, agentId);
+        });
+        return job;
+    }
+
+    internal async Task RunResetAsync(OperationJob job, Guid keyId, Guid actorId, Guid agentId)
+    {
+        ConnectedAgent? agent = null;
+        try
+        {
+            var actorUser = await db.PlatformUsers.FirstAsync(u => u.Id == actorId);
+            var actor = AuditService.User(actorUser);
+            var key = await db.Keys.Include(k => k.Registrations).FirstAsync(k => k.Id == keyId);
+            KeyLifecycle.EnsureTransition(key.Status, KeyStatus.InStock);
+            agent = agents.Require(agentId, actorId);
+            if (agent.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
+            agent.BusyWith = "Zurücksetzen";
+            Step(job, agent, 1, "Key wird geprüft");
+            var info = await agents.ReadKeyAsync(agent) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
+            if (key.SerialNumber is null || info.SerialNumber != key.SerialNumber)
+                throw ApiException.Conflict("wrong_key", $"Es steckt Key {info.SerialNumber}, erwartet wird {key.SerialNumber}.");
+            Step(job, agent, 2, "Passkeys in Entra werden entfernt");
+            await keys.RemoveEntraRegistrationsAsync(key, "Zurückgesetzt", actor);
+            Step(job, agent, 3, "Werksreset der FIDO2-Funktion", "Bitte den Key ab- und wieder anstecken und danach berühren.");
+            var result = await agents.CallAsync(agent, (c, t) => c.ResetFido(new ResetRequest { ExpectedSerialNumber = key.SerialNumber }, t), TimeSpan.FromSeconds(150));
+            if (!result.Success) throw ApiException.Conflict(result.ErrorCode ?? "reset_failed", "Werksreset fehlgeschlagen: " + result.Error);
+            KeyService.SetStatus(key, KeyStatus.InStock, "Zurückgesetzt");
+            key.PinChangeForced = null;
+            key.ProfileId = null;
+            audit.Add(actor, AuditActions.KeyReset, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { agent = agent.MachineName });
+            await db.SaveChangesAsync();
+            job.Step = "Key zurückgesetzt und wieder im Lager";
+            job.Prompt = null;
+            job.State = JobState.Succeeded;
+            agents.Progress(agent, new AgentProgress("Key zurückgesetzt", "Der Key ist wieder im Lager.", 3, 3, Done: true));
+        }
+        catch (Exception ex)
+        {
+            job.State = JobState.Failed;
+            job.Error = ex is ApiException or DomainException or GraphException ? ex.Message : "Unerwarteter Fehler: " + ex.Message;
+            job.ErrorCode = (ex as ApiException)?.Code ?? (ex as DomainException)?.Code;
+            if (ex is not ApiException) logger.LogError(ex, "Reset failed");
+            if (agent is not null) agents.Progress(agent, new AgentProgress("Zurücksetzen fehlgeschlagen", job.Error, Failed: true));
+        }
+        finally
+        {
+            job.FinishedAt = DateTimeOffset.UtcNow;
+            if (agent is not null) agent.BusyWith = null;
+        }
+    }
+}

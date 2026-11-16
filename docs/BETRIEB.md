@@ -1,0 +1,87 @@
+# Betrieb und Installation
+
+## 1. Server (Docker)
+
+Voraussetzungen: Linux-Host mit Docker und Docker Compose, ein DNS-Name und ein Reverse Proxy mit TLS (z. B. Caddy, Traefik oder nginx).
+
+```bash
+git clone https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager.git
+cd Yubikey-Lifecycle-Manager
+cp .env.example .env        # Passwort und öffentliche Adresse eintragen
+docker compose up -d --build
+docker compose logs server | grep Setup-Token
+```
+
+Die Plattform lauscht nur auf `127.0.0.1:8080`. Der Reverse Proxy leitet HTTPS dorthin weiter und setzt `X-Forwarded-Proto` und `X-Forwarded-Host`. Beispiel für Caddy:
+
+```
+ylm.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+> Der Server vertraut den Forwarded-Headern jedes vorgeschalteten Proxys. Port 8080 darf deshalb nicht direkt aus dem Netz erreichbar sein.
+
+Beim ersten Start einer leeren Datenbank meldet Entity Framework einmal einen Fehler beim Lesen der Migrationstabelle. Das ist normal; danach werden die Tabellen angelegt.
+
+### Datensicherung
+
+| Was | Wo | Hinweis |
+|---|---|---|
+| Datenbank | Volume `db` | z. B. täglich `docker compose exec db pg_dump -U ylm ylm` |
+| App-Zertifikat und Data-Protection-Schlüssel | Volume `data` (`/data`) | **Unbedingt sichern.** Ohne diese Schlüssel sind Zertifikat, feste Profil-PINs und Anmelde-Cookies nicht mehr lesbar. |
+
+### Einstellungen (Umgebungsvariablen)
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
+| `Ylm__PublicBaseUrl` | aus der Einrichtung | Öffentliche HTTPS-Adresse |
+| `Ylm__DefaultSyncIntervalMinutes` | 60 | Sync-Intervall für neue Tenants |
+| `Ylm__OffboardingRetentionDays` | 30 | Aufbewahrung nach dem Offboarding |
+| `Ylm__RequirePhishingResistantSignIn` | true | Anmeldung nur mit Passkey/YubiKey (Claim `amr` = `fido`) |
+
+## 2. Einrichtung (einmalig)
+
+1. `https://<adresse>/setup` öffnen und das Setup-Token aus dem Log eingeben.
+2. Organisation, öffentliche Adresse und den ersten Owner (UPN) eintragen.
+3. App-Zertifikat erzeugen.
+4. Das angebotene PowerShell-Skript als Globaler Administrator im **Heim-Tenant** ausführen. Es legt die mandantenfähige App-Registrierung an, lädt das Zertifikat hoch und erteilt den Admin-Consent. Alternativ steht die manuelle Anleitung in der Oberfläche.
+5. Client-ID und Tenant-ID eintragen, testen, abschließen.
+6. Mit dem Konto des ersten Owners anmelden (mit YubiKey).
+
+Benötigte Anwendungsberechtigungen (Microsoft Graph): `UserAuthenticationMethod.ReadWrite.All`, `User.Read.All`, `GroupMember.Read.All`, `Policy.Read.All`, `Policy.ReadWrite.AuthenticationMethod`, `AuditLog.Read.All`, `Organization.Read.All`.
+
+## 3. Tenant anbinden
+
+„Tenants“ → „Tenant hinzufügen“ → Anmeldung als Globaler Administrator des Kunden-Tenants → Admin-Consent. Danach prüft die Plattform die Passkey-(FIDO2-)Richtlinie und bietet „Jetzt beheben“ an. Zielgruppe und Sync-Intervall stellen Sie auf der Tenant-Seite ein.
+
+Beim Offboarding entfernt die Plattform ihre Daten nach der Aufbewahrungsfrist. Die Unternehmensanwendung im Kunden-Tenant muss ein Admin dort selbst löschen (Link in der Oberfläche).
+
+## 4. Agent auf dem Admin-PC (Windows)
+
+1. `YubikeyLifecycleManager-Agent.msi` installieren (Adminrechte). Das MSI entsteht in der CI (Artefakt `agent-msi`) oder lokal mit `pwsh installer/build.ps1`.
+   - Dienst `YubikeyLifecycleManagerAgent` (LocalSystem, Autostart). Adminrechte sind nötig, weil Windows den direkten FIDO-Zugriff (PIN setzen, Reset) sonst sperrt.
+   - Tray-App `YlmTray.exe` startet bei jeder Anmeldung.
+2. In der Web-Oberfläche unter „Agent“ einen Kopplungscode erzeugen.
+3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben.
+
+Protokolle: `C:\ProgramData\YubikeyLifecycleManager\Agent\logs`. Update: neueres MSI installieren.
+
+Für Tests ohne Key: `YlmAgent.exe --simulate` startet den Agent mit einem simulierten YubiKey.
+
+## 5. Lese-API
+
+API-Schlüssel legen Owner auf der Tenant-Seite an. Aufruf mit Header `X-Api-Key: ylm_…`. Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`, die interaktive Dokumentation unter `/api/docs`.
+
+## 6. Entwicklung
+
+```bash
+# Backend (PostgreSQL lokal, Benutzer/Passwort ylm/ylm)
+ASPNETCORE_ENVIRONMENT=Development dotnet run --project src/Ylm.Server
+# Web-Oberfläche mit Hot Reload (Proxy auf :5080)
+cd web && npm ci && npm run dev
+# Tests (legt je Test eine Datenbank ylm_test_* an)
+dotnet test
+```
+
+Im Development-Modus gibt es auf der Login-Seite eine Entwicklungs-Anmeldung ohne Entra (`AuthMode=Development`).
