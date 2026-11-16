@@ -23,7 +23,6 @@
       <ComponentRef Id="AgentService" />
       <ComponentRef Id="TrayApp" />
       <ComponentRef Id="TrayAutostart" />
-      <ComponentRef Id="StartMenuShortcut" />
     </Feature>
 
     <!-- Windows-Dienst (LocalSystem): direkter FIDO-Zugriff braucht Adminrechte. -->
@@ -43,7 +42,10 @@
     </Component>
 
     <Component Id="TrayApp" Directory="AgentFolder" Guid="9A1D3C55-7B2E-4F60-A8D4-1E5C2B7F9034">
-      <File Id="YlmTrayExe" Source="$(var.PublishDir)tray\YlmTray.exe" KeyPath="yes" />
+      <File Id="YlmTrayExe" Source="$(var.PublishDir)tray\YlmTray.exe" KeyPath="yes">
+        <Shortcut Id="TrayShortcut" Directory="AppStartMenuFolder" Name="Yubikey Lifecycle Manager" WorkingDirectory="AgentFolder" Advertise="no" />
+      </File>
+      <RemoveFolder Id="RemoveStartMenuFolder" Directory="AppStartMenuFolder" On="uninstall" />
     </Component>
 
     <!-- Tray-App startet bei jeder Benutzeranmeldung. -->
@@ -52,11 +54,6 @@
                      Type="string" Value="&quot;[AgentFolder]YlmTray.exe&quot;" KeyPath="yes" />
     </Component>
 
-    <Component Id="StartMenuShortcut" Directory="AppStartMenuFolder" Guid="E1B7C9D3-5A2F-4C8E-B6D0-7F3A9E1C4B28">
-      <Shortcut Id="TrayShortcut" Name="Yubikey Lifecycle Manager" Target="[AgentFolder]YlmTray.exe" WorkingDirectory="AgentFolder" />
-      <RemoveFolder Id="RemoveStartMenuFolder" On="uninstall" />
-      <RegistryValue Root="HKLM" Key="SOFTWARE\YubikeyLifecycleManager" Name="StartMenuShortcut" Type="integer" Value="1" KeyPath="yes" />
-    </Component>
 
     <!-- Nach der Installation die Tray-App starten (optional, Checkbox im letzten Dialog). -->
     <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Tray-App jetzt starten" />
