@@ -245,6 +245,13 @@ public sealed class EndToEndTests : IAsyncLifetime
         _graph.Methods["u-carla"] = [new GraphFido2Method("m-self", "Mein YubiKey", DateTimeOffset.UtcNow.AddDays(-3), aaguid, "YubiKey 5 Series")];
         _graph.Methods["u-ben"] = [new GraphFido2Method("m-other", "Fremder Key", DateTimeOffset.UtcNow, Guid.NewGuid(), "Feitian ePass")];
 
+        // The person search shows passkeys straight from Entra, even before a sync.
+        var found = await Json(await _owner.GetAsync($"/api/tenants/{tenantId}/users?q=carla"));
+        var carla = found.EnumerateArray().First(u => u.GetProperty("id").GetString() == "u-carla");
+        Assert.Equal(0, carla.GetProperty("activeKeys").GetInt32());
+        var passkey = Assert.Single(carla.GetProperty("entraPasskeys").EnumerateArray());
+        Assert.True(passkey.GetProperty("isYubiKey").GetBoolean());
+
         var result = await Json(await _owner.PostAsync($"/api/tenants/{tenantId}/sync", null));
         Assert.Equal(1, result.GetProperty("imported").GetInt32());
 

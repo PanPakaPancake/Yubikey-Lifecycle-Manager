@@ -41,6 +41,38 @@ export function useAction() {
   return { busy, error, run, setError };
 }
 
+/**
+ * Search-as-you-type: queries `url(q)` 300 ms after the last keystroke once `q` has `minLength` characters.
+ * Answers to older queries are dropped, so fast typing never shows stale results.
+ */
+export function useLiveSearch<T>(url: ((q: string) => string) | null, q: string, minLength = 2, delay = 300) {
+  const [results, setResults] = useState<T[] | undefined>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const seq = useRef(0);
+  const urlRef = useRef(url);
+  urlRef.current = url;
+  const enabled = url !== null;
+  useEffect(() => {
+    const term = q.trim();
+    const mine = ++seq.current;
+    if (!enabled || term.length < minLength) { setResults(undefined); setBusy(false); setError(undefined); return; }
+    setBusy(true);
+    const id = window.setTimeout(async () => {
+      try {
+        const data = await api.get<T[]>(urlRef.current!(term));
+        if (mine === seq.current) { setResults(data); setError(undefined); }
+      } catch (e) {
+        if (mine === seq.current) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (mine === seq.current) setBusy(false);
+      }
+    }, delay);
+    return () => window.clearTimeout(id);
+  }, [q, enabled, minLength, delay]);
+  return { results, busy, error, clear: () => setResults(undefined) };
+}
+
 export function usePolling(fn: () => void, ms: number, active = true) {
   const ref = useRef(fn);
   ref.current = fn;
