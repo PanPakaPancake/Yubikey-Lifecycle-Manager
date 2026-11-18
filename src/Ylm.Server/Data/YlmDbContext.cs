@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Ylm.Core;
 
 namespace Ylm.Server.Data;
@@ -18,6 +19,8 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
     public DbSet<KeyRegistration> Registrations => Set<KeyRegistration>();
     public DbSet<RegistrationProfile> Profiles => Set<RegistrationProfile>();
     public DbSet<CustomFieldDefinition> CustomFields => Set<CustomFieldDefinition>();
+    public DbSet<CustomFieldOverride> CustomFieldOverrides => Set<CustomFieldOverride>();
+    public DbSet<GroupProfileAssignment> GroupProfiles => Set<GroupProfileAssignment>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<PairingCode> PairingCodes => Set<PairingCode>();
@@ -53,6 +56,8 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.HasIndex(x => x.EntraTenantId).IsUnique();
             e.Property(x => x.LastChecksJson).HasColumnType("jsonb");
             e.Property(x => x.PolicySnapshotJson).HasColumnType("jsonb");
+            e.Property(x => x.TargetIncludeGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
+            e.Property(x => x.TargetExcludeGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
         });
 
         b.Entity<YubiKey>(e =>
@@ -87,8 +92,25 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
         b.Entity<CustomFieldDefinition>(e =>
         {
             e.ToTable("custom_field_definitions");
-            e.HasIndex(x => new { x.TenantId, x.Key }).IsUnique();
+            // NULLS NOT DISTINCT: global keys (TenantId null) must be unique as well.
+            e.HasIndex(x => new { x.TenantId, x.Key }).IsUnique().AreNullsDistinct(false);
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<CustomFieldOverride>(e =>
+        {
+            e.ToTable("custom_field_overrides");
+            e.HasKey(x => new { x.TenantId, x.FieldId });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<CustomFieldDefinition>().WithMany().HasForeignKey(x => x.FieldId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<GroupProfileAssignment>(e =>
+        {
+            e.ToTable("group_profile_assignments");
+            e.HasIndex(x => new { x.TenantId, x.GroupId }).IsUnique();
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<RegistrationProfile>().WithMany().HasForeignKey(x => x.ProfileId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<AuditEntry>(e =>
@@ -117,9 +139,17 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
         {
             e.ToTable("api_keys");
             e.HasIndex(x => x.Prefix).IsUnique();
-            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
     }
+
+    private static ValueConverter<T, string> JsonConverter<T>() where T : new() => new(
+        v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
+        v => JsonSerializer.Deserialize<T>(v, (JsonSerializerOptions?)null) ?? new T());
+
+    private static ValueComparer<T> JsonComparer<T>() where T : class => new(
+        (a, b) => JsonSerializer.Serialize(a, (JsonSerializerOptions?)null) == JsonSerializer.Serialize(b, (JsonSerializerOptions?)null),
+        v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null).GetHashCode(),
+        v => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(v, (JsonSerializerOptions?)null), (JsonSerializerOptions?)null)!);
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess) =>
         throw new NotSupportedException("Use SaveChangesAsync.");

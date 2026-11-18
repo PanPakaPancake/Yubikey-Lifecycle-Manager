@@ -65,6 +65,9 @@ namespace Ylm.Server.Data.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("AllTenants")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -92,15 +95,14 @@ namespace Ylm.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<Guid>("TenantId")
-                        .HasColumnType("uuid");
+                    b.PrimitiveCollection<List<Guid>>("TenantIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
 
                     b.HasKey("Id");
 
                     b.HasIndex("Prefix")
                         .IsUnique();
-
-                    b.HasIndex("TenantId");
 
                     b.ToTable("api_keys", (string)null);
                 });
@@ -191,7 +193,7 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
 
                     b.Property<int>("Type")
@@ -202,7 +204,69 @@ namespace Ylm.Server.Data.Migrations
                     b.HasIndex("TenantId", "Key")
                         .IsUnique();
 
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId", "Key"), false);
+
                     b.ToTable("custom_field_definitions", (string)null);
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.CustomFieldOverride", b =>
+                {
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("FieldId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("Disabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Label")
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("Options")
+                        .HasColumnType("text[]");
+
+                    b.Property<bool?>("Required")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("TenantId", "FieldId");
+
+                    b.HasIndex("FieldId");
+
+                    b.ToTable("custom_field_overrides", (string)null);
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.GroupProfileAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("GroupId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("GroupName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ProfileId");
+
+                    b.HasIndex("TenantId", "GroupId")
+                        .IsUnique();
+
+                    b.ToTable("group_profile_assignments", (string)null);
                 });
 
             modelBuilder.Entity("Ylm.Server.Data.InstallationSettings", b =>
@@ -507,11 +571,13 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<int>("SyncIntervalMinutes")
                         .HasColumnType("integer");
 
-                    b.Property<string>("TargetGroupId")
-                        .HasColumnType("text");
+                    b.Property<string>("TargetExcludeGroups")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
-                    b.Property<string>("TargetGroupName")
-                        .HasColumnType("text");
+                    b.Property<string>("TargetIncludeGroups")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
 
                     b.Property<int?>("TargetUserCount")
                         .HasColumnType("integer");
@@ -536,7 +602,7 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<Dictionary<string, string>>("CustomFields")
+                    b.Property<string>("CustomFields")
                         .IsRequired()
                         .HasColumnType("jsonb");
 
@@ -611,8 +677,22 @@ namespace Ylm.Server.Data.Migrations
                     b.Navigation("PlatformUser");
                 });
 
-            modelBuilder.Entity("Ylm.Server.Data.ApiKey", b =>
+            modelBuilder.Entity("Ylm.Server.Data.CustomFieldDefinition", b =>
                 {
+                    b.HasOne("Ylm.Server.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade);
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.CustomFieldOverride", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.CustomFieldDefinition", null)
+                        .WithMany()
+                        .HasForeignKey("FieldId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Ylm.Server.Data.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")
@@ -620,8 +700,14 @@ namespace Ylm.Server.Data.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Ylm.Server.Data.CustomFieldDefinition", b =>
+            modelBuilder.Entity("Ylm.Server.Data.GroupProfileAssignment", b =>
                 {
+                    b.HasOne("Ylm.Server.Data.RegistrationProfile", null)
+                        .WithMany()
+                        .HasForeignKey("ProfileId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.HasOne("Ylm.Server.Data.Tenant", null)
                         .WithMany()
                         .HasForeignKey("TenantId")

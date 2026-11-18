@@ -105,7 +105,7 @@ builder.Services.AddAuthentication(AuthSchemes.Cookie)
 builder.Services.AddAuthorizationBuilder()
     .SetDefaultPolicy(new Microsoft.AspNetCore.Authorization.AuthorizationPolicyBuilder(AuthSchemes.Cookie)
         .RequireAuthenticatedUser().RequireClaim(YlmClaims.UserId).Build())
-    .AddPolicy("ApiKey", p => p.AddAuthenticationSchemes(AuthSchemes.ApiKey).RequireAuthenticatedUser().RequireClaim(YlmClaims.ApiKeyTenant));
+    .AddPolicy("ApiKey", p => p.AddAuthenticationSchemes(AuthSchemes.ApiKey).RequireAuthenticatedUser().RequireClaim(YlmClaims.ApiKeyId));
 
 builder.Services.AddRateLimiter(o =>
 {
@@ -170,6 +170,7 @@ app.MapTenants();
 app.MapKeys();
 app.MapProfiles();
 app.MapCustomFields();
+app.MapGroupProfiles();
 app.MapAgents();
 app.MapRegistration();
 app.MapReporting();

@@ -17,7 +17,7 @@ public static class TenantEndpoints
 {
     public sealed record ConsentRequest(string? TenantHint);
     public sealed record FixRequest(List<string> CheckIds);
-    public sealed record UpdateTenantRequest(string? DisplayName, string? TargetGroupId, string? TargetGroupName, int? SyncIntervalMinutes);
+    public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes);
     public sealed record OffboardRequest(bool Confirm);
 
     private sealed record ConsentState(Guid UserId, DateTimeOffset ExpiresAt, string Nonce);
@@ -32,8 +32,8 @@ public static class TenantEndpoints
         t.CreatedAt,
         t.ConsentedAt,
         t.ConsentedBy,
-        t.TargetGroupId,
-        t.TargetGroupName,
+        t.TargetIncludeGroups,
+        t.TargetExcludeGroups,
         t.SyncIntervalMinutes,
         t.LastSyncAt,
         t.LastSyncSucceeded,
@@ -44,6 +44,14 @@ public static class TenantEndpoints
         t.OffboardedAt,
         t.DataDeletionDueAt,
     };
+
+    private static List<GroupRef> NormalizeGroups(IEnumerable<GroupRef> groups)
+    {
+        var list = groups.Where(g => !string.IsNullOrWhiteSpace(g.Id)).DistinctBy(g => g.Id)
+            .Select(g => new GroupRef(g.Id.Trim(), string.IsNullOrWhiteSpace(g.Name) ? g.Id.Trim() : g.Name.Trim())).ToList();
+        if (list.Count > 50) throw ApiException.BadRequest("invalid", "Höchstens 50 Gruppen.");
+        return list;
+    }
 
     public static void MapTenants(this IEndpointRouteBuilder app)
     {
@@ -132,11 +140,10 @@ public static class TenantEndpoints
             var user = await cu.RequireTenantAsync(id, Permission.ManageTenants);
             var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
             if (body.DisplayName is { Length: > 0 } name) t.DisplayName = name.Trim();
-            if (body.TargetGroupId is not null)
-            {
-                t.TargetGroupId = body.TargetGroupId.Length == 0 ? null : body.TargetGroupId;
-                t.TargetGroupName = t.TargetGroupId is null ? null : body.TargetGroupName;
-            }
+            if (body.TargetIncludeGroups is not null) t.TargetIncludeGroups = NormalizeGroups(body.TargetIncludeGroups);
+            if (body.TargetExcludeGroups is not null) t.TargetExcludeGroups = NormalizeGroups(body.TargetExcludeGroups);
+            if (t.TargetIncludeGroups.Any(i => t.TargetExcludeGroups.Any(e => e.Id == i.Id)))
+                throw ApiException.BadRequest("invalid", "Eine Gruppe kann nicht gleichzeitig ein- und ausgeschlossen sein.");
             if (body.SyncIntervalMinutes is { } interval)
             {
                 if (interval is < 5 or > 1440) throw ApiException.BadRequest("invalid", "Das Sync-Intervall muss zwischen 5 und 1440 Minuten liegen.");
@@ -232,7 +239,12 @@ public static class TenantEndpoints
             t.Status = TenantStatus.Offboarded;
             t.OffboardedAt = DateTimeOffset.UtcNow;
             t.DataDeletionDueAt = DateTimeOffset.UtcNow.AddDays(opt.Value.OffboardingRetentionDays);
-            foreach (var k in await db.ApiKeys.Where(k => k.TenantId == id && k.RevokedAt == null).ToListAsync()) k.RevokedAt = DateTimeOffset.UtcNow;
+            // API keys restricted to tenants lose this tenant; a key that then has no tenant left is revoked.
+            foreach (var k in await db.ApiKeys.Where(k => !k.AllTenants && k.RevokedAt == null && k.TenantIds.Contains(id)).ToListAsync())
+            {
+                k.TenantIds = k.TenantIds.Where(x => x != id).ToList();
+                if (k.TenantIds.Count == 0) k.RevokedAt = DateTimeOffset.UtcNow;
+            }
             audit.Add(AuditService.User(user), AuditActions.TenantOffboarded, t.Id, target: t.DisplayName, details: new { t.DataDeletionDueAt });
             await db.SaveChangesAsync();
             var s = await setup.GetSettingsAsync();

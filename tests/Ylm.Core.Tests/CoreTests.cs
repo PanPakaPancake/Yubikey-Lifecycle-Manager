@@ -203,11 +203,35 @@ public class TenantCheckTests
     public void Target_group_is_added_and_removed_from_excludes()
     {
         var policy = new Fido2Policy { Enabled = true, IncludeTargets = [new("g1")], ExcludeTargets = [new("g2")] };
-        var results = Fido2PolicyAnalyzer.Analyze(policy, All, "g2");
+        var results = Fido2PolicyAnalyzer.Analyze(policy, All, [new GroupRef("g2", "G2")]);
         Assert.Equal(CheckStatus.Failed, results.Single(r => r.Id == TenantCheckIds.TargetGroup).Status);
-        var fixedPolicy = Fido2PolicyAnalyzer.Fix(policy, All, "g2", [TenantCheckIds.TargetGroup]);
+        var fixedPolicy = Fido2PolicyAnalyzer.Fix(policy, All, [new GroupRef("g2", "G2")], [TenantCheckIds.TargetGroup]);
         Assert.Contains(fixedPolicy.IncludeTargets, t => t.Id == "g2");
         Assert.Empty(fixedPolicy.ExcludeTargets);
+    }
+
+    [Fact]
+    public void Multiple_target_groups_are_all_checked_and_fixed()
+    {
+        GroupRef[] groups = [new("g1", "Vertrieb"), new("g2", "Produktion"), new("g3", "IT")];
+        var policy = new Fido2Policy { Enabled = true, IncludeTargets = [new("g1")], ExcludeTargets = [new("g3"), new("other")] };
+        var check = Fido2PolicyAnalyzer.Analyze(policy, All, groups).Single(r => r.Id == TenantCheckIds.TargetGroup);
+        Assert.Equal(CheckStatus.Failed, check.Status);
+        Assert.Contains("IT", check.Message);
+
+        var fixedPolicy = Fido2PolicyAnalyzer.Fix(policy, All, groups, [TenantCheckIds.TargetGroup]);
+        Assert.Equal(["g1", "g2", "g3"], fixedPolicy.IncludeTargets.Select(t => t.Id).Order());
+        Assert.Equal(["other"], fixedPolicy.ExcludeTargets.Select(t => t.Id));
+        Assert.Equal(CheckStatus.Ok, Fido2PolicyAnalyzer.Analyze(fixedPolicy, All, groups).Single(r => r.Id == TenantCheckIds.TargetGroup).Status);
+    }
+
+    [Fact]
+    public void All_users_in_policy_covers_every_target_group()
+    {
+        var policy = new Fido2Policy { Enabled = true, IncludeTargets = [new(PolicyTarget.AllUsers)] };
+        var check = Fido2PolicyAnalyzer.Analyze(policy, All, [new GroupRef("g1", "A"), new GroupRef("g2", "B")]).Single(r => r.Id == TenantCheckIds.TargetGroup);
+        Assert.Equal(CheckStatus.Ok, check.Status);
+        Assert.Single(Fido2PolicyAnalyzer.Fix(policy, All, [new GroupRef("g1", "A")], [TenantCheckIds.TargetGroup]).IncludeTargets);
     }
 
     [Fact]
@@ -343,4 +367,51 @@ public class WebAuthnTests
     }
 
     private sealed class NoPrompts : IOperationPrompts { public void Prompt(string text) { } }
+}
+
+public class CustomFieldInheritanceTests
+{
+    private static readonly Guid G1 = Guid.NewGuid(), G2 = Guid.NewGuid(), G3 = Guid.NewGuid(), L1 = Guid.NewGuid();
+
+    private static CustomFieldDef Def(Guid id, string key, CustomFieldType type = CustomFieldType.Text, bool required = false, params string[] options) =>
+        new(id, new CustomFieldSpec(key, key.ToUpperInvariant(), type, required, options), 0);
+
+    [Fact]
+    public void Global_fields_are_inherited_modified_or_disabled_and_local_fields_follow()
+    {
+        var global = new[] { Def(G1, "kostenstelle"), Def(G2, "standort", CustomFieldType.Select, false, "Berlin", "Köln"), Def(G3, "inventar") };
+        var overrides = new Dictionary<Guid, CustomFieldOverrideSpec>
+        {
+            [G2] = new(false, "Werk", true, ["Hamburg"]),
+            [G3] = new(true, null, null, null),
+        };
+        var resolved = CustomFieldInheritance.Resolve(global, overrides, [Def(L1, "raum")]);
+
+        Assert.Equal(["kostenstelle", "standort", "inventar", "raum"], resolved.Select(r => r.Spec.Key));
+        Assert.Equal([CustomFieldState.Inherited, CustomFieldState.Modified, CustomFieldState.Disabled, CustomFieldState.Local], resolved.Select(r => r.State));
+        Assert.Equal([CustomFieldOrigin.Global, CustomFieldOrigin.Global, CustomFieldOrigin.Global, CustomFieldOrigin.Tenant], resolved.Select(r => r.Origin));
+
+        var standort = resolved[1];
+        Assert.Equal("Werk", standort.Spec.Label);
+        Assert.True(standort.Spec.Required);
+        Assert.Equal(["Hamburg"], standort.Spec.Options);
+        Assert.Equal("STANDORT", standort.Inherited!.Label);
+        Assert.False(resolved[2].IsActive);
+    }
+
+    [Fact]
+    public void Override_without_changes_counts_as_inherited()
+    {
+        var g = Def(G1, "kostenstelle");
+        var noOp = new CustomFieldOverrideSpec(false, "KOSTENSTELLE", false, null);
+        Assert.True(CustomFieldInheritance.IsNoOp(g.Spec, noOp));
+        Assert.Equal(CustomFieldState.Inherited, CustomFieldInheritance.Resolve([g], new Dictionary<Guid, CustomFieldOverrideSpec> { [G1] = noOp }, []).Single().State);
+    }
+
+    [Fact]
+    public void Options_override_is_ignored_for_non_select_fields()
+    {
+        var g = Def(G1, "nummer", CustomFieldType.Number);
+        Assert.Empty(CustomFieldInheritance.Apply(g.Spec, new(false, null, null, ["x"])).Options);
+    }
 }

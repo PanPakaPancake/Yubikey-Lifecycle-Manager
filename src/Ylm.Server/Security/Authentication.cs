@@ -192,15 +192,19 @@ public sealed class ApiKeyAuthenticationHandler(
         if (key is null || key.RevokedAt is not null || (key.ExpiresAt is { } exp && exp < DateTimeOffset.UtcNow)
             || !TokenHashing.FixedTimeEquals(key.SecretHash, TokenHashing.Hash(parts[2])))
             return AuthenticateResult.Fail("Invalid API key");
-        var tenant = await db.Tenants.AsNoTracking().FirstOrDefaultAsync(t => t.Id == key.TenantId);
-        if (tenant is null || tenant.Status == TenantStatus.Offboarded) return AuthenticateResult.Fail("Tenant inactive");
+        var tenantQuery = db.Tenants.AsNoTracking().Where(t => t.Status != TenantStatus.Offboarded);
+        if (!key.AllTenants) tenantQuery = tenantQuery.Where(t => key.TenantIds.Contains(t.Id));
+        var tenantIds = await tenantQuery.Select(t => t.Id).ToListAsync();
+        if (!key.AllTenants && tenantIds.Count == 0) return AuthenticateResult.Fail("No active tenant for this API key");
 
         if (key.LastUsedAt is null || key.LastUsedAt < DateTimeOffset.UtcNow.AddMinutes(-5))
         {
             key.LastUsedAt = DateTimeOffset.UtcNow;
             await db.SaveChangesAsync();
         }
-        var identity = new ClaimsIdentity([new Claim(YlmClaims.ApiKeyTenant, key.TenantId.ToString()), new Claim(ClaimTypes.Name, "api:" + key.Name)], Scheme.Name);
+        var identity = new ClaimsIdentity(
+            [new Claim(YlmClaims.ApiKeyId, key.Id.ToString()), new Claim(ClaimTypes.Name, "api:" + key.Name), .. tenantIds.Select(id => new Claim(YlmClaims.ApiKeyTenant, id.ToString()))],
+            Scheme.Name);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name));
     }
 }

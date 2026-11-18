@@ -59,11 +59,13 @@ export interface Me {
   authenticated: boolean; setupComplete: boolean; organizationName?: string; user?: PlatformUser; permissions?: string[];
 }
 
+export interface GroupRef { id: string; name: string }
+
 export interface TenantCheck { id: string; title: string; status: 'Ok' | 'Warning' | 'Failed'; message: string; canFix: boolean; manualInstructions: string }
 
 export interface Tenant {
   id: string; entraTenantId: string; displayName: string; defaultDomain?: string; status: string; createdAt: string;
-  consentedAt?: string; consentedBy?: string; targetGroupId?: string; targetGroupName?: string; syncIntervalMinutes: number;
+  consentedAt?: string; consentedBy?: string; targetIncludeGroups: GroupRef[]; targetExcludeGroups: GroupRef[]; syncIntervalMinutes: number;
   lastSyncAt?: string; lastSyncSucceeded?: boolean; lastSyncMessage?: string; targetUserCount?: number; lastCheckAt?: string;
   checks: TenantCheck[]; offboardedAt?: string; dataDeletionDueAt?: string;
 }
@@ -108,7 +110,24 @@ export interface AuditEntry {
   target?: string; details?: string; ipAddress?: string; hash: string;
 }
 
-export interface CustomField { id?: string; key: string; label: string; type: 'Text' | 'Number' | 'Date' | 'Select' | 'Boolean'; required: boolean; options: string[] }
+export type CustomFieldType = 'Text' | 'Number' | 'Date' | 'Select' | 'Boolean';
+
+export interface CustomField { id?: string; key: string; label: string; type: CustomFieldType; required: boolean; options: string[] }
+
+/** A field as seen in one tenant after inheritance from the platform level. */
+export interface ResolvedField extends CustomField {
+  id: string; origin: 'Global' | 'Tenant'; state: 'Inherited' | 'Modified' | 'Disabled' | 'Local'; isActive: boolean;
+  inherited?: { label: string; required: boolean; options: string[] } | null;
+}
+
+export interface GlobalField extends CustomField { id: string; tenantsModified: number; tenantsDisabled: number }
+
+export const fieldTypes: Record<CustomFieldType, string> = { Text: 'Text', Number: 'Zahl', Date: 'Datum', Select: 'Auswahl', Boolean: 'Ja/Nein' };
+
+/** Converts a label into a suggestion for the technical key. */
+export const keyFromLabel = (label: string) =>
+  label.toLowerCase().replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss')
+    .replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
 
 export const statusLabels: Record<KeyStatus, string> = {
   InStock: 'Im Lager', Active: 'Zugewiesen/Aktiv', Locked: 'Gesperrt', Retired: 'Ausgemustert',

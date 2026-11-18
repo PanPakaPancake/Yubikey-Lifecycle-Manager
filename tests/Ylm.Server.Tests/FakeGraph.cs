@@ -55,7 +55,19 @@ public sealed class FakeGraph : IGraphClient
 
     public Task<GraphGroup?> GetGroupAsync(string id, CancellationToken ct = default) => Task.FromResult<GraphGroup?>(new GraphGroup(id, "Gruppe"));
 
-    public Task<int?> CountUsersAsync(string? groupId, CancellationToken ct = default) => Task.FromResult<int?>(Users.Count);
+    /// <summary>Group id → member user ids (already transitive).</summary>
+    public Dictionary<string, List<string>> GroupMembers { get; } = [];
+
+    public Task<int?> CountUsersAsync(string? groupId, CancellationToken ct = default) =>
+        Task.FromResult<int?>(groupId is null || groupId == PolicyTarget.AllUsers ? Users.Count(u => u.AccountEnabled) : GroupMembers.GetValueOrDefault(groupId)?.Count ?? 0);
+
+    public Task<IReadOnlySet<string>> ListUserIdsAsync(string? groupId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlySet<string>>(groupId is null || groupId == PolicyTarget.AllUsers
+            ? Users.Where(u => u.AccountEnabled).Select(u => u.Id).ToHashSet()
+            : (GroupMembers.GetValueOrDefault(groupId) ?? []).ToHashSet());
+
+    public Task<IReadOnlyList<string>> CheckMemberGroupsAsync(string userId, IReadOnlyCollection<string> groupIds, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<string>>(groupIds.Where(g => GroupMembers.GetValueOrDefault(g)?.Contains(userId) == true).ToList());
 
     public async IAsyncEnumerable<string> ListUserIdsWithPasskeysAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
     {

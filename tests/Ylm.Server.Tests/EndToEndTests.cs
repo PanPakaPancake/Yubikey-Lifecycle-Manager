@@ -282,29 +282,200 @@ public sealed class EndToEndTests : IAsyncLifetime
         Assert.Equal(1, second.GetProperty("removed").GetInt32());
     }
 
+    private async Task<Guid> AddSecondTenantAsync(string name = "Fabrikam")
+    {
+        var other = new FakeGraph();
+        _app.Graph.Tenants[other.TenantId] = other;
+        var id = Guid.Empty;
+        await _app.WithDbAsync(async db =>
+        {
+            var t = new Tenant { EntraTenantId = other.TenantId, DisplayName = name, DefaultDomain = name.ToLower() + ".com" };
+            db.Tenants.Add(t);
+            await db.SaveChangesAsync();
+            id = t.Id;
+        });
+        return id;
+    }
+
     [Fact]
-    public async Task Read_api_requires_tenant_api_key_and_is_scoped()
+    public async Task Read_api_keys_are_global_and_optionally_restricted_to_tenants()
     {
         var tenantId = await OnboardTenantAsync();
+        var otherId = await AddSecondTenantAsync();
         await Json(await _owner.PostAsync($"/api/tenants/{tenantId}/keys/import",
             new StringContent("Seriennummer\n40000001\n", System.Text.Encoding.UTF8, "text/csv")));
-        var created = await Json(await _owner.PostAsJsonAsync($"/api/tenants/{tenantId}/api-keys", new { name = "Ticketsystem" }));
-        var apiKey = created.GetProperty("apiKey").GetString()!;
+        await Json(await _owner.PostAsync($"/api/tenants/{otherId}/keys/import",
+            new StringContent("Seriennummer\n50000001\n50000002\n", System.Text.Encoding.UTF8, "text/csv")));
 
+        // Restricted to one tenant.
+        var restricted = await Json(await _owner.PostAsJsonAsync("/api/api-keys", new { name = "Ticketsystem", allTenants = false, tenantIds = new[] { tenantId } }));
         var anon = _app.Client();
         Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/v1/keys")).StatusCode);
-        anon.DefaultRequestHeaders.Add("X-Api-Key", apiKey);
+        anon.DefaultRequestHeaders.Add("X-Api-Key", restricted.GetProperty("apiKey").GetString()!);
         var page = await Json(await anon.GetAsync("/api/v1/keys?status=InStock"));
         Assert.Equal(1, page.GetProperty("total").GetInt32());
         Assert.Equal("40000001", page.GetProperty("items")[0].GetProperty("serialNumber").GetString());
+        Assert.Equal(tenantId.ToString(), page.GetProperty("items")[0].GetProperty("tenantId").GetString());
+        Assert.Single((await Json(await anon.GetAsync("/api/v1/tenants"))).EnumerateArray());
+        Assert.Equal(HttpStatusCode.NotFound, (await anon.GetAsync($"/api/v1/keys?tenant={otherId}")).StatusCode);
         Assert.Equal(HttpStatusCode.MethodNotAllowed, (await anon.PostAsync("/api/v1/keys", null)).StatusCode is HttpStatusCode.MethodNotAllowed or HttpStatusCode.NotFound ? HttpStatusCode.MethodNotAllowed : HttpStatusCode.OK);
+
+        // Valid for all tenants, filter by domain.
+        var all = await Json(await _owner.PostAsJsonAsync("/api/api-keys", new { name = "Reporting", allTenants = true }));
+        var allClient = _app.Client();
+        allClient.DefaultRequestHeaders.Add("X-Api-Key", all.GetProperty("apiKey").GetString()!);
+        Assert.Equal(3, (await Json(await allClient.GetAsync("/api/v1/keys"))).GetProperty("total").GetInt32());
+        Assert.Equal(2, (await Json(await allClient.GetAsync("/api/v1/keys?tenant=fabrikam.com"))).GetProperty("total").GetInt32());
+        var summary = await Json(await allClient.GetAsync("/api/v1/summary"));
+        Assert.Equal(3, summary.GetProperty("total").GetInt32());
+        Assert.Equal("Alle (2 Tenants)", summary.GetProperty("tenant").GetString());
+
+        // Scope can be changed later.
+        var restrictedId = restricted.GetProperty("id").GetGuid();
+        (await _owner.PutAsJsonAsync($"/api/api-keys/{restrictedId}/scope", new { allTenants = false, tenantIds = new[] { tenantId, otherId } })).EnsureSuccessStatusCode();
+        Assert.Equal(3, (await Json(await anon.GetAsync("/api/v1/keys"))).GetProperty("total").GetInt32());
+        var listed = await Json(await _owner.GetAsync("/api/api-keys"));
+        Assert.Equal(2, listed.EnumerateArray().First(k => k.GetProperty("id").GetGuid() == restrictedId).GetProperty("tenants").GetArrayLength());
 
         var openapi = await Json(await _app.Client().GetAsync("/openapi/v1.json"));
         Assert.True(openapi.GetProperty("paths").TryGetProperty("/api/v1/keys", out _));
         Assert.False(openapi.GetProperty("paths").TryGetProperty("/api/tenants", out _));
 
-        await _owner.DeleteAsync($"/api/tenants/{tenantId}/api-keys/{created.GetProperty("id").GetGuid()}");
+        // Operators cannot manage API keys.
+        await Json(await _owner.PostAsJsonAsync("/api/users", new { upn = "op@home.example", role = "Operator", allTenants = true, tenantIds = Array.Empty<Guid>() }));
+        var op = await _app.LoginAsync("op@home.example");
+        Assert.Equal(HttpStatusCode.Forbidden, (await op.GetAsync("/api/api-keys")).StatusCode);
+
+        await _owner.DeleteAsync($"/api/api-keys/{restrictedId}");
         Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/v1/keys")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Global_custom_fields_are_inherited_and_can_be_changed_or_disabled_per_tenant()
+    {
+        var tenantId = await OnboardTenantAsync();
+        var otherId = await AddSecondTenantAsync();
+        (await _owner.PutAsJsonAsync("/api/fields", new object[]
+        {
+            new { key = "kostenstelle", label = "Kostenstelle", type = "Text", required = false, options = Array.Empty<string>() },
+            new { key = "standort", label = "Standort", type = "Select", required = false, options = new[] { "Berlin", "Köln" } },
+        })).EnsureSuccessStatusCode();
+
+        var config = await Json(await _owner.GetAsync($"/api/tenants/{tenantId}/fields/config"));
+        Assert.All(config.EnumerateArray(), f => Assert.Equal("Inherited", f.GetProperty("state").GetString()));
+        var standortId = config.EnumerateArray().First(f => f.GetProperty("key").GetString() == "standort").GetProperty("id").GetGuid();
+        var kostenstelleId = config.EnumerateArray().First(f => f.GetProperty("key").GetString() == "kostenstelle").GetProperty("id").GetGuid();
+
+        // Local key may not shadow a global one.
+        var clash = await _owner.PutAsJsonAsync($"/api/tenants/{tenantId}/fields", new
+        {
+            local = new[] { new { key = "standort", label = "X", type = "Text", required = false, options = Array.Empty<string>() } },
+            overrides = Array.Empty<object>(),
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, clash.StatusCode);
+
+        (await _owner.PutAsJsonAsync($"/api/tenants/{tenantId}/fields", new
+        {
+            local = new[] { new { key = "raum", label = "Raum", type = "Text", required = false, options = Array.Empty<string>() } },
+            overrides = new object[]
+            {
+                new { fieldId = standortId, disabled = false, label = "Werk", required = true, options = new[] { "Hamburg" } },
+                new { fieldId = kostenstelleId, disabled = true },
+            },
+        })).EnsureSuccessStatusCode();
+
+        config = await Json(await _owner.GetAsync($"/api/tenants/{tenantId}/fields/config"));
+        var states = config.EnumerateArray().ToDictionary(f => f.GetProperty("key").GetString()!, f => (f.GetProperty("state").GetString(), f.GetProperty("origin").GetString()));
+        Assert.Equal(("Disabled", "Global"), states["kostenstelle"]);
+        Assert.Equal(("Modified", "Global"), states["standort"]);
+        Assert.Equal(("Local", "Tenant"), states["raum"]);
+        var active = await Json(await _owner.GetAsync($"/api/tenants/{tenantId}/fields"));
+        Assert.Equal(["standort", "raum"], active.EnumerateArray().Select(f => f.GetProperty("key").GetString()));
+
+        // The other tenant still inherits everything unchanged.
+        var otherActive = await Json(await _owner.GetAsync($"/api/tenants/{otherId}/fields"));
+        Assert.Equal(["kostenstelle", "standort"], otherActive.EnumerateArray().Select(f => f.GetProperty("key").GetString()));
+
+        // Validation follows the tenant's version of the field.
+        var bad = await _owner.PostAsync($"/api/tenants/{tenantId}/keys/import", new StringContent("Seriennummer;standort\n60000001;Berlin\n", System.Text.Encoding.UTF8, "text/csv"));
+        Assert.Contains("Hamburg", await bad.Content.ReadAsStringAsync());
+
+        // A global key that already exists locally in a tenant is rejected.
+        var conflict = await _owner.PutAsJsonAsync("/api/fields", new object[] { new { key = "raum", label = "Raum", type = "Text", required = false, options = Array.Empty<string>() } });
+        Assert.Equal(HttpStatusCode.Conflict, conflict.StatusCode);
+        Assert.Contains("Contoso", await conflict.Content.ReadAsStringAsync());
+
+        var global = await Json(await _owner.GetAsync("/api/fields"));
+        var st = global.EnumerateArray().First(f => f.GetProperty("key").GetString() == "standort");
+        Assert.Equal(1, st.GetProperty("tenantsModified").GetInt32());
+    }
+
+    [Fact]
+    public async Task Target_audience_supports_several_groups_and_exclusions()
+    {
+        var tenantId = await OnboardTenantAsync();
+        _graph.GroupMembers["g-vertrieb"] = ["u-anna", "u-ben"];
+        _graph.GroupMembers["g-it"] = ["u-ben", "u-carla"];
+        _graph.GroupMembers["g-service"] = ["u-carla"];
+        _graph.Policy = new Fido2Policy { Enabled = true, IncludeTargets = [new PolicyTarget("g-vertrieb")], ExcludeTargets = [new PolicyTarget("g-it")] };
+
+        var t = await Json(await _owner.PatchAsJsonAsync($"/api/tenants/{tenantId}", new
+        {
+            targetIncludeGroups = new[] { new { id = "g-vertrieb", name = "Vertrieb" }, new { id = "g-it", name = "IT" } },
+            targetExcludeGroups = new[] { new { id = "g-service", name = "Dienstkonten" } },
+        }));
+        Assert.Equal(2, t.GetProperty("targetIncludeGroups").GetArrayLength());
+
+        var both = await _owner.PatchAsJsonAsync($"/api/tenants/{tenantId}", new
+        {
+            targetIncludeGroups = new[] { new { id = "g-it", name = "IT" } },
+            targetExcludeGroups = new[] { new { id = "g-it", name = "IT" } },
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, both.StatusCode);
+
+        var checks = await Json(await _owner.PostAsync($"/api/tenants/{tenantId}/checks", null));
+        var target = checks.GetProperty("checks").EnumerateArray().First(c => c.GetProperty("id").GetString() == TenantCheckIds.TargetGroup);
+        Assert.Equal("Failed", target.GetProperty("status").GetString());
+        Assert.Contains("IT", target.GetProperty("message").GetString());
+
+        var fixedTenant = await Json(await _owner.PostAsJsonAsync($"/api/tenants/{tenantId}/fix", new { checkIds = new[] { TenantCheckIds.TargetGroup } }));
+        Assert.Equal("Ok", fixedTenant.GetProperty("checks").EnumerateArray().First(c => c.GetProperty("id").GetString() == TenantCheckIds.TargetGroup).GetProperty("status").GetString());
+        Assert.Contains(_graph.Policy.IncludeTargets, x => x.Id == "g-it");
+        Assert.DoesNotContain(_graph.Policy.ExcludeTargets, x => x.Id == "g-it");
+
+        // (Vertrieb ∪ IT) \ Dienstkonten = Anna, Ben
+        var sync = await Json(await _owner.PostAsync($"/api/tenants/{tenantId}/sync", null));
+        Assert.Equal(2, sync.GetProperty("targetUsers").GetInt32());
+    }
+
+    [Fact]
+    public async Task Group_profiles_suggest_the_profile_for_a_person()
+    {
+        var tenantId = await OnboardTenantAsync();
+        _graph.GroupMembers["g-prod"] = ["u-ben"];
+        var profile = await Json(await _owner.PostAsJsonAsync("/api/profiles", new
+        {
+            tenantId, name = "Produktion", pinStrategy = "Random", pinLength = 8, forcePinChange = false, factoryResetBeforeRegistration = false, isDefault = false,
+        }));
+        var profileId = profile.GetProperty("id").GetGuid();
+        (await _owner.PutAsJsonAsync($"/api/tenants/{tenantId}/group-profiles", new[] { new { groupId = "g-prod", groupName = "Produktion", profileId } })).EnsureSuccessStatusCode();
+
+        var list = await Json(await _owner.GetAsync($"/api/tenants/{tenantId}/group-profiles"));
+        Assert.Equal("Produktion", Assert.Single(list.EnumerateArray()).GetProperty("profileName").GetString());
+
+        var ben = await Json(await _owner.GetAsync($"/api/tenants/{tenantId}/users/u-ben/suggested-profile"));
+        Assert.Equal(profileId, ben.GetProperty("profileId").GetGuid());
+        var anna = await Json(await _owner.GetAsync($"/api/tenants/{tenantId}/users/u-anna/suggested-profile"));
+        Assert.Equal(JsonValueKind.Null, anna.GetProperty("profileId").ValueKind);
+
+        // Profiles of other tenants cannot be assigned.
+        var otherId = await AddSecondTenantAsync();
+        var foreign = await Json(await _owner.PostAsJsonAsync("/api/profiles", new
+        {
+            tenantId = otherId, name = "Fremd", pinStrategy = "Random", pinLength = 8, forcePinChange = false, factoryResetBeforeRegistration = false, isDefault = false,
+        }));
+        var res = await _owner.PutAsJsonAsync($"/api/tenants/{tenantId}/group-profiles", new[] { new { groupId = "g-x", groupName = "X", profileId = foreign.GetProperty("id").GetGuid() } });
+        Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
     }
 
     [Fact]

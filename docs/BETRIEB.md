@@ -54,7 +54,19 @@ Benötigte Anwendungsberechtigungen (Microsoft Graph): `UserAuthenticationMethod
 
 ## 3. Tenant anbinden
 
-„Tenants“ → „Tenant hinzufügen“ → Anmeldung als Globaler Administrator des Kunden-Tenants → Admin-Consent. Danach prüft die Plattform die Passkey-(FIDO2-)Richtlinie und bietet „Jetzt beheben“ an. Zielgruppe und Sync-Intervall stellen Sie auf der Tenant-Seite ein.
+„Tenants“ → „Tenant hinzufügen“ → Anmeldung als Globaler Administrator des Kunden-Tenants → Admin-Consent. Danach prüft die Plattform die Passkey-(FIDO2-)Richtlinie und bietet „Jetzt beheben“ an. Zielgruppe (mehrere Einschluss- und Ausschlussgruppen) und Sync-Intervall stellen Sie auf der Tenant-Seite ein.
+
+### Hierarchie und Vererbung
+
+Einstellungen liegen auf drei Ebenen: **Plattform → Tenant → Gruppe**.
+
+| Ebene | Was dort eingestellt wird |
+|---|---|
+| Plattform (Menü „Plattform“) | API-Schlüssel, globale Zusatzfelder, Profile für alle Tenants, Benutzer und Rollen |
+| Tenant | Zielgruppe, FIDO2-Prüfung, Sync, eigene Profile und lokale Zusatzfelder; geerbte Zusatzfelder verändern (Bezeichnung, Pflicht, Optionen) oder deaktivieren |
+| Gruppe | Profil pro Entra-Gruppe; der Registrierungs-Assistent schlägt es für Mitglieder vor (erste passende Zeile gewinnt) |
+
+Die Tenant-Seite zeigt bei jedem Zusatzfeld, ob es global geerbt, im Tenant verändert, deaktiviert oder lokal angelegt ist. „Zurücksetzen“ stellt die Vererbung wieder her.
 
 Beim Offboarding entfernt die Plattform ihre Daten nach der Aufbewahrungsfrist. Die Unternehmensanwendung im Kunden-Tenant muss ein Admin dort selbst löschen (Link in der Oberfläche).
 
@@ -72,7 +84,7 @@ Für Tests ohne Key: `YlmAgent.exe --simulate` startet den Agent mit einem simul
 
 ## 5. Lese-API
 
-API-Schlüssel legen Owner auf der Tenant-Seite an. Aufruf mit Header `X-Api-Key: ylm_…`. Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`, die interaktive Dokumentation unter `/api/docs`.
+API-Schlüssel legen Owner unter „Plattform“ an. Ein Schlüssel gilt für alle Tenants (auch künftig angebundene) oder nur für ausgewählte; die Auswahl lässt sich später ändern. Aufruf mit Header `X-Api-Key: ylm_…`. `GET /api/v1/tenants` listet die Tenants des Schlüssels; die anderen Endpunkte liefern ohne Parameter alle diese Tenants, mit `?tenant=` (Plattform-ID, Entra-Tenant-ID oder Standard-Domain) nur einen. Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`, die interaktive Dokumentation unter `/api/docs`.
 
 ## 6. Entwicklung
 

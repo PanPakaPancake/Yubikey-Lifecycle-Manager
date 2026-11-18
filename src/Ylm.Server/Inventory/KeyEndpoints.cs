@@ -100,7 +100,7 @@ public static class KeyEndpoints
             var user = await cu.RequireTenantAsync(key.TenantId, Permission.ManageInventory);
             var before = new { key.Tags, key.CustomFields, key.Notes };
             if (body.Tags is not null) key.Tags = Tags.Normalize(body.Tags).ToList();
-            if (body.CustomFields is not null) key.CustomFields = await keys.ValidateFieldsAsync(key.TenantId, body.CustomFields);
+            if (body.CustomFields is not null) key.CustomFields = await keys.ValidateFieldsAsync(key.TenantId, body.CustomFields, key.CustomFields);
             if (body.Notes is not null) key.Notes = body.Notes.Length == 0 ? null : body.Notes;
             key.UpdatedAt = DateTimeOffset.UtcNow;
             audit.Add(AuditService.User(user), AuditActions.KeyUpdated, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { before, after = new { key.Tags, key.CustomFields, key.Notes } });
