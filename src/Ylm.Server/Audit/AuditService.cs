@@ -16,6 +16,7 @@ public static class AuditActions
     public const string UserSetupLinkCreated = "user.setup_link_created";
     public const string UserPasskeyAdded = "user.passkey_added";
     public const string UserPasskeyRemoved = "user.passkey_removed";
+    public const string UpdateStarted = "platform.update_started";
     public const string LoginSettingsChanged = "settings.login_changed";
     public const string TenantOnboarded = "tenant.onboarded";
     public const string TenantUpdated = "tenant.updated";

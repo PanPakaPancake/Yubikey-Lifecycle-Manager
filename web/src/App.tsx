@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router';
 import { api, type Me } from './api';
 import { AuthContext } from './auth';
-import { Spinner } from './ui';
+import { Spinner, useApi } from './ui';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
 import AccountSetupPage from './pages/AccountSetup';
@@ -70,6 +70,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   const location = useLocation();
   const { tenant } = useTenant();
   const partner = isPartnerPath(location.pathname);
+  const { data: updates } = useApi<{ updateAvailable: boolean; latestVersion?: string }>(can('ManageSettings') ? '/api/platform/updates' : null);
   return (
     <div className="shell">
       <aside className="sidebar">
@@ -92,7 +93,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <NavLink to="/tenants">Tenants</NavLink>
           {can('ManagePartnerStock') && <NavLink to="/partner/stock">Partnerlager</NavLink>}
           {can('ManageUsers') && <NavLink to="/users">Benutzer &amp; Rollen</NavLink>}
-          <NavLink to="/platform">Globale Einstellungen</NavLink>
+          <NavLink to="/platform">Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn" title={`Update auf ${updates.latestVersion} verfügbar`} />}</NavLink>
           {can('ReadAudit') && <NavLink to="/partner/audit">Audit-Log (alle)</NavLink>}
           {(can('RegisterKeys') || can('ManageInventory')) && <NavLink to="/agents">Mein Agent</NavLink>}
         </nav>
@@ -100,6 +101,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div><NavLink to="/account" className="account-link"><strong>{me.user?.displayName}</strong></NavLink></div>
           <div className="muted small">{me.user?.role === 'Custom' ? me.user?.customRoleName : roleLabel[me.user?.role ?? ''] ?? me.user?.role}</div>
           <button className="link small" onClick={logout}>Abmelden</button>
+          {me.version && <div className="small muted">Version {me.version}</div>}
         </div>
       </aside>
       <main className="main">

@@ -33,6 +33,7 @@ public static class UserEndpoints
                 authenticated = true,
                 setupComplete = settings.IsSetupComplete,
                 organizationName = settings.OrganizationName,
+                version = Updates.UpdateService.CurrentVersion,
                 user = ToDto(user),
                 permissions = RolePermissions.Split(CurrentUser.Effective(user)).Select(p => p.ToString()),
             });
