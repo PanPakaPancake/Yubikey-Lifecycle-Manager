@@ -21,11 +21,15 @@ builder.Services.AddSingleton<ISecretProtector>(_ => OperatingSystem.IsWindows()
 builder.Services.AddSingleton(sp => new AgentSettingsStore(Path.Combine(dataDir, "agent.json"), sp.GetRequiredService<ISecretProtector>()));
 if (simulate) builder.Services.AddSingleton<IKeyDevice, SimulatedKeyDevice>();
 else builder.Services.AddSingleton<IKeyDevice, YubiKeyHardware>();
+var agentVersion = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
 builder.Services.AddSingleton(sp => new AgentConnection(
     sp.GetRequiredService<IKeyDevice>(),
     sp.GetRequiredService<AgentSettingsStore>(),
     sp.GetRequiredService<ILoggerFactory>().CreateLogger("Ylm.Agent.Connection"),
-    typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0"));
+    agentVersion));
+builder.Services.AddHostedService(sp => new AgentUpdater(
+    sp.GetRequiredService<AgentConnection>(), sp.GetRequiredService<AgentSettingsStore>(), sp.GetRequiredService<IConfiguration>(),
+    sp.GetRequiredService<ILogger<AgentUpdater>>(), agentVersion));
 builder.Services.AddHostedService<AgentWorker>();
 builder.Services.AddHostedService<TrayPipeServer>();
 

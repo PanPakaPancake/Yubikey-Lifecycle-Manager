@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
+import { Link, useNavigate, useParams } from 'react-router';
 import { api, fmtDate, lockReasons, type AgentInfo, type AuditEntry, type CustomField, type Job, type YubiKey } from '../api';
 import { useCan } from '../auth';
 import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, StatusBadge, useAction, useApi, usePolling } from '../ui';
@@ -18,7 +18,7 @@ export default function KeyDetailPage() {
   const history = data?.history;
   // Partnerlager: nur globale Felder.
   const { data: fields } = useApi<CustomField[]>(key ? (key.tenantId ? `/api/tenants/${key.tenantId}/fields` : '/api/fields') : null, [key?.id, key?.tenantId]);
-  const [modal, setModal] = useState<'lock' | 'retire' | 'reset' | 'edit' | 'toPartner' | 'assign' | null>(null);
+  const [modal, setModal] = useState<'lock' | 'retire' | 'reset' | 'edit' | 'toPartner' | 'assign' | 'delete' | null>(null);
 
   if (error) return <ErrorBox error={error} />;
   if (!key) return <Spinner label="Wird geladen …" />;
@@ -39,6 +39,7 @@ export default function KeyDetailPage() {
           {can('LockKeys') && key.nextStates.includes('Locked') && <button className="danger" onClick={() => setModal('lock')}>Sperren</button>}
           {can('ResetKeys') && key.nextStates.includes('InStock') && key.serialNumber && <button onClick={() => setModal('reset')}>Zurücksetzen …</button>}
           {can('RetireKeys') && key.nextStates.includes('Retired') && <button className="danger" onClick={() => setModal('retire')}>Ausmustern …</button>}
+          {can('ManageInventory') && (key.status === 'InStock' || key.status === 'Retired') && key.registrations.every((r) => r.removedAt) && <button className="danger" onClick={() => setModal('delete')}>Löschen …</button>}
         </>}
       />
       {key.needsDetails && key.status !== 'Retired' && (
@@ -103,6 +104,7 @@ export default function KeyDetailPage() {
           </table>
         </Card>
       )}
+      {modal === 'delete' && <DeleteModal keyItem={key} onClose={() => setModal(null)} />}
       {modal === 'lock' && <LockModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
       {modal === 'retire' && <RetireModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
       {modal === 'reset' && <ResetModal keyItem={key} onClose={() => { setModal(null); reload(); }} />}
@@ -274,6 +276,21 @@ function EditModal({ keyItem, fields, onClose, onDone }: { keyItem: YubiKey; fie
         </Field>
       ))}
       <Field label="Notiz"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} /></Field>
+      <ErrorBox error={error} />
+    </Modal>
+  );
+}
+
+function DeleteModal({ keyItem, onClose }: { keyItem: YubiKey; onClose: () => void }) {
+  const navigate = useNavigate();
+  const { busy, error, run } = useAction();
+  const go = () => run(async () => {
+    await api.del('/api/keys/' + keyItem.id);
+    navigate(keyItem.inPartnerStock ? '/partner/stock' : '/keys');
+  });
+  return (
+    <Modal title="Key löschen" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="danger" disabled={busy} onClick={go}>Endgültig löschen</button></>}>
+      <p>Key <span className="mono">{keyItem.serialNumber ?? 'ohne Seriennummer'}</span> aus dem Inventar löschen? Der Verlauf bleibt im Audit-Log erhalten.</p>
       <ErrorBox error={error} />
     </Modal>
   );

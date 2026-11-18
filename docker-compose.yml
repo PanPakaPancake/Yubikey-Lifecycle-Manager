@@ -17,8 +17,9 @@ services:
       retries: 5
 
   server:
+    # Fertiges Image aus den Releases; `docker compose up -d --build` baut stattdessen lokal aus dem Quellcode.
+    image: ghcr.io/panpakapancake/yubikey-lifecycle-manager:${YLM_VERSION:-latest}
     build: .
-    image: yubikey-lifecycle-manager:latest
     restart: unless-stopped
     depends_on:
       db:
@@ -26,12 +27,26 @@ services:
     environment:
       ConnectionStrings__Postgres: Host=db;Database=ylm;Username=ylm;Password=${POSTGRES_PASSWORD}
       Ylm__PublicBaseUrl: ${YLM_PUBLIC_URL:-}
+      Ylm__UpdaterUrl: http://updater:8090
+      Ylm__UpdaterToken: ${UPDATER_TOKEN:-}
       TZ: Europe/Berlin
     volumes:
       # Zertifikat (verschlüsselt), Data-Protection-Schlüssel – unbedingt sichern.
       - data:/data
     ports:
       - "127.0.0.1:8080:8080"
+
+  # Update per Klick: holt auf Anforderung der Plattform das neue Server-Image und startet den Server neu.
+  # Nur dieser Container sieht den Docker-Socket. Ohne UPDATER_TOKEN in .env nimmt er keine Aufträge an.
+  updater:
+    image: ghcr.io/panpakapancake/yubikey-lifecycle-manager-updater:latest
+    build: ./updater
+    restart: unless-stopped
+    environment:
+      UPDATER_TOKEN: ${UPDATER_TOKEN:-}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - .:/project:ro
 
 volumes:
   db:

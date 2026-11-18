@@ -7,8 +7,8 @@ Voraussetzungen: Linux-Host mit Docker und Docker Compose, ein DNS-Name und ein 
 ```bash
 git clone https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager.git
 cd Yubikey-Lifecycle-Manager
-cp .env.example .env        # Passwort und öffentliche Adresse eintragen
-docker compose up -d --build
+cp .env.example .env        # Passwort, öffentliche Adresse und UPDATER_TOKEN eintragen
+docker compose up -d        # fertige Images aus den Releases; mit --build lokal aus dem Quellcode
 docker compose logs server | grep Setup-Token
 ```
 
@@ -39,6 +39,9 @@ Beim ersten Start einer leeren Datenbank meldet Entity Framework einmal einen Fe
 | `Ylm__DefaultSyncIntervalMinutes` | 60 | Sync-Intervall für neue Tenants |
 | `Ylm__OffboardingRetentionDays` | 30 | Aufbewahrung nach dem Offboarding |
 | `Ylm__RequirePhishingResistantSignIn` | true | Anmeldung nur mit Passkey/YubiKey (Claim `amr` = `fido`) |
+| `Ylm__UpdateCheckEnabled` | true | Auf GitHub nach neuen Versionen suchen |
+| `YLM_VERSION` (in `.env`) | latest | Version des Server-Images festhalten |
+| `UPDATER_TOKEN` (in `.env`) | leer | Geheimnis für das Update per Klick; leer = aus |
 
 ## 2. Einrichtung (einmalig)
 
@@ -51,6 +54,19 @@ Beim ersten Start einer leeren Datenbank meldet Entity Framework einmal einen Fe
 Ausweichweg, z. B. wenn Conditional Access die Code-Anmeldung sperrt: Im Assistenten „Alternativ: per PowerShell-Skript oder manuell anlegen“ aufklappen, das Skript als Globaler Administrator im Heim-Tenant ausführen (oder die App nach der Anleitung von Hand anlegen) und Client-ID und Tenant-ID eintragen.
 
 Benötigte Anwendungsberechtigungen (Microsoft Graph): `UserAuthenticationMethod.ReadWrite.All`, `User.Read.All`, `GroupMember.Read.All`, `Policy.Read.All`, `Policy.ReadWrite.AuthenticationMethod`, `AuditLog.Read.All`, `Organization.Read.All`.
+
+### Updates
+
+**Globale Einstellungen → Version und Updates** zeigt die installierte und die neueste Version (GitHub-Releases, Prüfung alle 6 Stunden). Ein Punkt neben „Globale Einstellungen“ weist Owner auf ein Update hin.
+
+- **Update per Klick:** Der Container `updater` holt das neue Server-Image und startet den Server neu (`docker compose pull server` und `up -d server`). Nur dieser Container hat Zugriff auf den Docker-Socket, der Server selbst nicht. Dafür in `.env` ein langes Geheimnis setzen, z. B. `UPDATER_TOKEN=$(openssl rand -hex 32)`, danach `docker compose up -d`. Ohne Token nimmt der Updater keine Aufträge an.
+- **Von Hand:** `docker compose pull && docker compose up -d`.
+- **Agents:** Jedes Server-Image bringt das passende Agent-MSI mit. „Mein Agent“ bietet es zum Download an, und verbundene Agents installieren neue Versionen innerhalb von 4 Stunden selbst (still per msiexec, Prüfsumme wird geprüft). Abschalten pro PC mit `"Agent": { "AutoUpdate": false }` in der `appsettings.json` des Agents.
+- Die Updateprüfung lässt sich mit `Ylm__UpdateCheckEnabled=false` abschalten (z. B. ohne Internetzugang).
+
+### Neue Version veröffentlichen (Entwicklung)
+
+Tag setzen und pushen, z. B. `git tag v0.2.0 && git push origin v0.2.0`. Der Workflow `Release` baut das Agent-MSI, legt es ins Server-Image, veröffentlicht `ghcr.io/panpakapancake/yubikey-lifecycle-manager` und das Updater-Image auf GHCR und erstellt das GitHub-Release mit dem MSI. Die Pakete auf GHCR müssen einmalig auf „Public“ gestellt werden, damit Installationen sie ohne Anmeldung laden können.
 
 ### Benutzer und Anmeldung
 

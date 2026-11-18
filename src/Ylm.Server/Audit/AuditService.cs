@@ -16,6 +16,7 @@ public static class AuditActions
     public const string UserSetupLinkCreated = "user.setup_link_created";
     public const string UserPasskeyAdded = "user.passkey_added";
     public const string UserPasskeyRemoved = "user.passkey_removed";
+    public const string UpdateStarted = "platform.update_started";
     public const string LoginSettingsChanged = "settings.login_changed";
     public const string TenantOnboarded = "tenant.onboarded";
     public const string TenantUpdated = "tenant.updated";
@@ -36,6 +37,7 @@ public static class AuditActions
     public const string KeyLocked = "key.locked";
     public const string KeyReset = "key.reset";
     public const string KeyRetired = "key.retired";
+    public const string KeyDeleted = "key.deleted";
     public const string KeyMovedToPartnerStock = "key.moved_to_partner_stock";
     public const string KeyAssignedToTenant = "key.assigned_to_tenant";
     public const string RoleCreated = "role.created";

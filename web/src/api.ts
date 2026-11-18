@@ -62,7 +62,18 @@ export const loginKindLabel: Record<LoginKind, string> = { Entra: 'Entra-SSO', L
 export interface UserPasskey { id: string; name: string; aaguid: string; createdAt: string; lastUsedAt?: string | null }
 
 export interface Me {
-  authenticated: boolean; setupComplete: boolean; organizationName?: string; user?: PlatformUser; permissions?: string[];
+  authenticated: boolean; setupComplete: boolean; organizationName?: string; version?: string; user?: PlatformUser; permissions?: string[];
+}
+
+export interface AgentPackageInfo { available: boolean; version?: string | null; size?: number | null; sha256?: string | null; downloadUrl?: string | null }
+
+/** "1.2.3" > "1.2.0"; unbekannte oder ungültige Versionen sind nie neuer. */
+export function isNewer(candidate?: string | null, current?: string | null) {
+  const parse = (v?: string | null) => v?.replace(/^v/i, '').split(/[-+]/)[0].split('.').map(Number);
+  const a = parse(candidate), b = parse(current);
+  if (!a || !b || a.some(isNaN) || b.some(isNaN)) return false;
+  for (let i = 0; i < 3; i++) { const d = (a[i] ?? 0) - (b[i] ?? 0); if (d) return d > 0; }
+  return false;
 }
 
 export interface GroupRef { id: string; name: string }

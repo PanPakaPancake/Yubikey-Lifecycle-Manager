@@ -34,6 +34,24 @@ public sealed class YlmOptions
     /// <summary>Login authority host (overridable for sovereign clouds).</summary>
     public string LoginAuthority { get; set; } = "https://login.microsoftonline.com";
 
+    /// <summary>Täglich auf GitHub nach einer neuen Version suchen.</summary>
+    public bool UpdateCheckEnabled { get; set; } = true;
+
+    /// <summary>GitHub-Repository mit den Releases (owner/name).</summary>
+    public string UpdateRepository { get; set; } = "PanPakaPancake/Yubikey-Lifecycle-Manager";
+
+    /// <summary>GitHub-API (für GitHub Enterprise oder Tests änderbar).</summary>
+    public string UpdateApiBaseUrl { get; set; } = "https://api.github.com";
+
+    /// <summary>Ordner mit dem mitgelieferten Agent-MSI und version.txt (Standard: &lt;App&gt;/agent).</summary>
+    public string? AgentPackageDirectory { get; set; }
+
+    /// <summary>Adresse des Updater-Containers (z. B. http://updater:8090). Leer = kein Update per Klick.</summary>
+    public string? UpdaterUrl { get; set; }
+
+    /// <summary>Gemeinsames Geheimnis mit dem Updater-Container.</summary>
+    public string? UpdaterToken { get; set; }
+
     /// <summary>Run background jobs (sync, retention). Disabled in tests.</summary>
     public bool EnableBackgroundJobs { get; set; } = true;
 }

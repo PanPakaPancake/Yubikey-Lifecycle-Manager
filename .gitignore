@@ -12,3 +12,5 @@ installer/out/
 *.tsbuildinfo
 .env
 installer/publish/
+agent-package/*.msi
+agent-package/version.txt

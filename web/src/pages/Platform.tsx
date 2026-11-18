@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { api, fieldTypes, fmtDate, keyFromLabel, type CustomField, type GlobalField, type Tenant } from '../api';
 import { useAuth, useCan } from '../auth';
@@ -27,6 +27,7 @@ export default function PlatformPage() {
           <dt>Gruppe</dt><dd>Profil pro Entra-Gruppe: Der Registrierungs-Assistent schlägt es für Mitglieder vor. Einstellbar im jeweiligen Tenant.</dd>
         </dl>
       </Card>
+      {can('ManageSettings') && <UpdatesCard />}
       {can('ManageSettings') && <LoginSettingsCard />}
       <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
       {can('ManageApiKeys') && <ApiKeysCard />}
@@ -224,6 +225,86 @@ function LoginSettingsCard() {
       )}
       <p className="small muted">Lokale Konten und Notfallkonten legen Sie unter <Link to="/users">Benutzer &amp; Rollen</Link> an. Entra-SSO lässt sich nur abschalten, wenn ein Owner ein eingerichtetes lokales Konto hat.</p>
       <ErrorBox error={error} />
+    </Card>
+  );
+}
+
+type UpdaterStatus = { state: 'idle' | 'running' | 'done' | 'failed' | 'unreachable' | 'error'; message?: string; version?: string; log?: string[]; finishedAt?: string | null };
+export type UpdateInfo = {
+  currentVersion: string; latestVersion?: string | null; updateAvailable: boolean; releaseUrl?: string | null; publishedAt?: string | null; notes?: string | null;
+  error?: string | null; checkedAt: string;
+  updater: { configured: boolean; status?: UpdaterStatus | null };
+  agent: { bundledVersion?: string | null; latestVersion?: string | null; agents: number; outdated: number };
+};
+
+function UpdatesCard() {
+  const [refresh, setRefresh] = useState(0);
+  const { data, error, reload } = useApi<UpdateInfo>('/api/platform/updates' + (refresh ? '?refresh=true' : ''), [refresh]);
+  const { busy, error: actionError, run } = useAction();
+  const [phase, setPhase] = useState<'idle' | 'running' | 'restarting'>('idle');
+  const [log, setLog] = useState<string[]>([]);
+  const [from, setFrom] = useState<string>();
+  const doneChecks = useRef(0);
+
+  // Während des Updates: Updater-Status abfragen; wenn der Server neu startet, auf die neue Version warten.
+  useEffect(() => {
+    if (phase === 'idle') return;
+    const t = setInterval(async () => {
+      try {
+        const s = await api.get<{ currentVersion: string; status?: UpdaterStatus }>('/api/platform/updates/status');
+        if (s.status?.log) setLog(s.status.log);
+        if (s.currentVersion !== from) { window.location.reload(); return; }
+        if (s.status?.state === 'failed') { setPhase('idle'); reload(); }
+        // Fertig, aber derselbe Server läuft noch: Image war schon aktuell oder der Neustart steht noch aus.
+        if (s.status?.state === 'done') { doneChecks.current += 1; if (doneChecks.current > 24) { setPhase('idle'); reload(); } }
+      } catch {
+        setPhase('restarting');
+      }
+    }, 2500);
+    return () => clearInterval(t);
+  }, [phase, from, reload]);
+
+  const apply = () => run(async () => {
+    if (!window.confirm(`Auf Version ${data!.latestVersion} aktualisieren? Die Plattform ist dabei etwa eine Minute nicht erreichbar. Laufende Registrierungen vorher abschließen.`)) return;
+    setFrom(data!.currentVersion);
+    await api.post('/api/platform/updates/apply', { version: data!.latestVersion });
+    setLog([]);
+    doneChecks.current = 0;
+    setPhase('running');
+  });
+
+  const status = data?.updater.status;
+  return (
+    <Card title="Version und Updates" actions={<button disabled={busy || phase !== 'idle'} onClick={() => setRefresh((r) => r + 1)}>Jetzt prüfen</button>}>
+      <ErrorBox error={error ?? actionError} />
+      {!data && !error && <Spinner />}
+      {data && <>
+        <table>
+          <tbody>
+            <tr><th>Installiert</th><td className="mono">{data.currentVersion}</td></tr>
+            <tr><th>Neueste Version</th><td>{data.latestVersion
+              ? <><span className="mono">{data.latestVersion}</span> {data.updateAvailable ? <Badge tone="warn">Update verfügbar</Badge> : <Badge tone="ok">aktuell</Badge>}
+                {data.publishedAt && <span className="small muted"> vom {fmtDate(data.publishedAt, false)}</span>}
+                {data.releaseUrl && <> · <a href={data.releaseUrl} target="_blank" rel="noreferrer">Änderungen</a></>}</>
+              : <span className="muted">{data.error ?? 'unbekannt'}</span>}</td></tr>
+            <tr><th>Agent im Paket</th><td>{data.agent.bundledVersion
+              ? <><span className="mono">{data.agent.bundledVersion}</span> · {data.agent.outdated > 0 ? `${data.agent.outdated} von ${data.agent.agents} Agents aktualisieren sich automatisch` : `alle ${data.agent.agents} Agents aktuell`}</>
+              : <span className="muted">nicht enthalten (lokaler Build)</span>}</td></tr>
+            <tr><th>Geprüft</th><td className="small muted">{fmtDate(data.checkedAt)}</td></tr>
+          </tbody>
+        </table>
+        {phase !== 'idle' && <Info>{phase === 'restarting' ? 'Der Server startet neu … Die Seite lädt automatisch, sobald die neue Version läuft.' : 'Update läuft: neues Image wird geladen …'}</Info>}
+        {data.updateAvailable && phase === 'idle' && (data.updater.configured
+          ? <button className="primary" disabled={busy || status?.state === 'running'} onClick={apply}>Jetzt auf {data.latestVersion} aktualisieren</button>
+          : <Info>Für das Update per Klick fehlt der Updater-Container: in <code>.env</code> <code>UPDATER_TOKEN</code> setzen (z. B. <code>openssl rand -hex 32</code>) und <code>docker compose up -d</code> ausführen. Alternativ von Hand: <code>docker compose pull &amp;&amp; docker compose up -d</code>.</Info>)}
+        {data.updater.configured && status && (status.state === 'unreachable' || status.state === 'error') && <Info tone="warn">{status.message}</Info>}
+        {status?.state === 'failed' && phase === 'idle' && <Info tone="error">Das letzte Update ist fehlgeschlagen. Details im Protokoll unten.</Info>}
+        {(log.length > 0 || (status?.state === 'failed' && status.log?.length)) && (
+          <details open={phase !== 'idle' || status?.state === 'failed'}><summary className="small muted">Protokoll</summary>
+            <pre className="script" style={{ maxHeight: 220, overflow: 'auto' }}>{(log.length ? log : status?.log ?? []).join('\n')}</pre>
+          </details>
+        )}
+      </>}
     </Card>
   );
 }

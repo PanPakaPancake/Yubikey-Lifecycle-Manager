@@ -1,0 +1,66 @@
+name: Release
+
+# Neue Version veröffentlichen: Tag setzen, z. B. `git tag v0.2.0 && git push origin v0.2.0`.
+# Baut das Agent-MSI, legt es ins Server-Image, veröffentlicht beide Images auf GHCR
+# und erstellt ein GitHub-Release mit dem MSI. Die Updateprüfung der Plattform liest dieses Release.
+on:
+  push:
+    tags: ['v*.*.*']
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  agent:
+    name: Agent-MSI
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - name: MSI bauen
+        shell: pwsh
+        run: ./installer/build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v')
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agent-msi
+          path: installer/out/*.msi
+
+  images:
+    name: Docker-Images und Release
+    needs: agent
+    runs-on: ubuntu-latest
+    env:
+      SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/yubikey-lifecycle-manager
+      UPDATER_IMAGE: ghcr.io/${{ github.repository_owner }}/yubikey-lifecycle-manager-updater
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: agent-msi
+          path: agent-package
+      - name: Version
+        id: v
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "$VERSION" > agent-package/version.txt
+          ls -l agent-package
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Images bauen und veröffentlichen
+        run: |
+          OWNER_LC="${SERVER_IMAGE,,}"; UPD_LC="${UPDATER_IMAGE,,}"
+          docker build --build-arg VERSION=${{ steps.v.outputs.version }} -t "$OWNER_LC:${{ steps.v.outputs.version }}" -t "$OWNER_LC:latest" .
+          docker build -t "$UPD_LC:${{ steps.v.outputs.version }}" -t "$UPD_LC:latest" ./updater
+          docker push --all-tags "$OWNER_LC"
+          docker push --all-tags "$UPD_LC"
+      - name: GitHub-Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" agent-package/*.msi --title "$GITHUB_REF_NAME" --generate-notes
