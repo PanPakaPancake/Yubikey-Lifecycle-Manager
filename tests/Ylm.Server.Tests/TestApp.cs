@@ -22,6 +22,7 @@ public sealed class TestApp : WebApplicationFactory<Program>
     private readonly string _database = "ylm_test_" + Guid.NewGuid().ToString("N")[..10];
     private readonly string _dataDir = Path.Combine(Path.GetTempPath(), "ylm-test-" + Guid.NewGuid().ToString("N")[..8]);
     public FakeGraphFactory Graph { get; } = new();
+    public FakeEntraBootstrap Bootstrap { get; } = new();
     public string ConnectionString => $"{BaseConnection};Database={_database}";
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -36,6 +37,8 @@ public sealed class TestApp : WebApplicationFactory<Program>
         {
             s.RemoveAll<IGraphClientFactory>();
             s.AddSingleton<IGraphClientFactory>(Graph);
+            s.RemoveAll<Ylm.Server.Setup.IEntraBootstrap>();
+            s.AddSingleton<Ylm.Server.Setup.IEntraBootstrap>(Bootstrap);
         });
     }
 
