@@ -172,6 +172,7 @@ app.MapUsers();
 app.MapRoles();
 app.MapTenants();
 app.MapKeys();
+app.MapKeyBulk();
 app.MapProfiles();
 app.MapCustomFields();
 app.MapGroupProfiles();
