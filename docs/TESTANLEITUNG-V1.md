@@ -234,7 +234,7 @@ Plattform → **Tenants** → **Tenant hinzufügen** → **Weiter zu Microsoft**
 
 ### 3.3 Zielgruppe setzen
 
-Auf der Tenant-Seite → Einstellungen → **Zielgruppe**: `YLM-Test-Keyuser` suchen und wählen, Sync-Intervall z. B. 60 Minuten, speichern.
+Auf der Tenant-Seite → Einstellungen → **Zielgruppe** → Einschließen: `YLM-Test-Keyuser` suchen und wählen (weitere Gruppen und Ausschlussgruppen sind möglich), Sync-Intervall z. B. 60 Minuten, speichern.
 
 **Erwartet:** Die Gruppe wird über die Suche gefunden (zeigt, dass `GroupMember.Read.All`/`Group`-Suche funktioniert).
 

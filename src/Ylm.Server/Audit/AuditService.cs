@@ -39,6 +39,8 @@ public static class AuditActions
     public const string AgentRevoked = "agent.revoked";
     public const string ApiKeyCreated = "apikey.created";
     public const string ApiKeyRevoked = "apikey.revoked";
+    public const string ApiKeyScopeChanged = "apikey.scope_changed";
+    public const string GroupProfilesUpdated = "groupprofiles.updated";
     public const string ExportCreated = "export.created";
     public const string PinLetterDownloaded = "pin_letter.downloaded";
 }

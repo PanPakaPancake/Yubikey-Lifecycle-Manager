@@ -49,8 +49,10 @@ public sealed class Tenant
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? ConsentedAt { get; set; }
     public string? ConsentedBy { get; set; }
-    public string? TargetGroupId { get; set; }
-    public string? TargetGroupName { get; set; }
+    /// <summary>Target audience: members of these groups should get a YubiKey. Empty = all users.</summary>
+    public List<GroupRef> TargetIncludeGroups { get; set; } = [];
+    /// <summary>Members of these groups are not part of the target audience (e.g. service accounts).</summary>
+    public List<GroupRef> TargetExcludeGroups { get; set; } = [];
     public int SyncIntervalMinutes { get; set; } = 60;
     public DateTimeOffset? LastSyncAt { get; set; }
     public bool? LastSyncSucceeded { get; set; }
@@ -147,7 +149,8 @@ public sealed class RegistrationProfile
 public sealed class CustomFieldDefinition
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid TenantId { get; set; }
+    /// <summary>Null = global field on platform level, inherited by every tenant.</summary>
+    public Guid? TenantId { get; set; }
     public string Key { get; set; } = "";
     public string Label { get; set; } = "";
     public CustomFieldType Type { get; set; }
@@ -156,6 +159,33 @@ public sealed class CustomFieldDefinition
     public int SortOrder { get; set; }
 
     public CustomFieldSpec ToSpec() => new(Key, Label, Type, Required, Options);
+
+    public CustomFieldDef ToDef() => new(Id, ToSpec(), SortOrder);
+}
+
+/// <summary>A tenant's change to an inherited global field: disabled, or label/required/options changed.</summary>
+public sealed class CustomFieldOverride
+{
+    public Guid TenantId { get; set; }
+    public Guid FieldId { get; set; }
+    public bool Disabled { get; set; }
+    public string? Label { get; set; }
+    public bool? Required { get; set; }
+    public List<string>? Options { get; set; }
+
+    public CustomFieldOverrideSpec ToSpec() => new(Disabled, Label, Required, Options);
+}
+
+/// <summary>Group level: members of an Entra group get a specific registration profile suggested.</summary>
+public sealed class GroupProfileAssignment
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string GroupId { get; set; } = "";
+    public string GroupName { get; set; } = "";
+    public Guid ProfileId { get; set; }
+    /// <summary>Lower wins when a person is member of several assigned groups.</summary>
+    public int Priority { get; set; }
 }
 
 public enum ActorType { User = 0, Agent = 1, System = 2, Api = 3 }
@@ -200,10 +230,12 @@ public sealed class PairingCode
     public DateTimeOffset? UsedAt { get; set; }
 }
 
+/// <summary>Read API key, managed on platform level. Valid for all tenants or only for the listed ones.</summary>
 public sealed class ApiKey
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid TenantId { get; set; }
+    public bool AllTenants { get; set; }
+    public List<Guid> TenantIds { get; set; } = [];
     public string Name { get; set; } = "";
     public string Prefix { get; set; } = "";
     public string SecretHash { get; set; } = "";

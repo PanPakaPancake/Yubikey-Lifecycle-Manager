@@ -30,7 +30,7 @@ export default function TenantsPage() {
                     <td><Link to={'/tenants/' + t.id}>{t.displayName}</Link></td>
                     <td className="small">{t.defaultDomain}</td>
                     <td>{failed > 0 ? <Badge tone="error">{failed} offen</Badge> : warn > 0 ? <Badge tone="warn">{warn} Hinweis(e)</Badge> : t.checks.length ? <Badge tone="ok">alles ok</Badge> : '–'}</td>
-                    <td>{t.targetGroupName ?? 'Alle Benutzer'}{t.targetUserCount != null && <span className="muted small"> ({t.targetUserCount})</span>}</td>
+                    <td>{t.targetIncludeGroups.length === 0 ? 'Alle Benutzer' : t.targetIncludeGroups.map((g) => g.name).join(', ')}{t.targetExcludeGroups.length > 0 && <span className="muted small"> ohne {t.targetExcludeGroups.map((g) => g.name).join(', ')}</span>}{t.targetUserCount != null && <span className="muted small"> ({t.targetUserCount})</span>}</td>
                     <td>{t.lastSyncSucceeded === false ? <Badge tone="error">Fehler</Badge> : <span className="small">{fmtDate(t.lastSyncAt)}</span>}</td>
                     <td>{t.status === 'Active' ? <Badge tone="ok">aktiv</Badge> : t.status === 'PendingConsent' ? <Badge tone="warn">Consent fehlt</Badge> : <Badge>offboarded, Löschung {fmtDate(t.dataDeletionDueAt, false)}</Badge>}</td>
                   </tr>

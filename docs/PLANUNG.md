@@ -169,7 +169,7 @@ Quelle zur Firmware: [YubiKey 5.7 Firmware Specifics](https://docs.yubico.com/ha
 
 ## 8. Externe API
 
-- **V1:** REST-API mit OpenAPI-Dokumentation, API-Schlüssel pro Tenant, **nur lesend**.
+- **V1:** REST-API mit OpenAPI-Dokumentation, **nur lesend**. API-Schlüssel werden plattformweit verwaltet und gelten für alle oder ausgewählte Tenants (Änderung vom 16.11.2026).
 - **Bewusst nicht vorgesehen:** Statusänderungen über die API (z. B. Key sperren).
 - **Später:**
   - Webhooks für Ereignisse (Key registriert, gesperrt, …)
