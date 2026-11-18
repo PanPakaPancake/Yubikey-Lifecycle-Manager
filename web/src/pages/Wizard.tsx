@@ -1,10 +1,10 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api, type AgentInfo, type Job, type KeyInfo, type Profile } from '../api';
-import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, TenantSelect, useAction, useApi, usePolling } from '../ui';
+import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, TenantSelect, useAction, useApi, useLiveSearch, usePolling } from '../ui';
 import { JobProgress } from './KeyDetail';
 
-interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number }
+interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number; entraPasskeys?: { displayName?: string; model?: string; isYubiKey: boolean }[] | null }
 interface Violation { code: string; message: string; canOverride: boolean; resolvedByReset: boolean }
 interface Preview {
   key: KeyInfo; violations: Violation[]; resetRequired: boolean; resetPlanned: boolean; willForcePinChange: boolean; displayName: string;
@@ -95,8 +95,9 @@ export default function WizardPage() {
                 <div className="alert warn">
                   <strong>Der Key passt nicht vollständig zum Profil:</strong>
                   {preview.violations.map((v) => (
-                    <div key={v.code} className="check-row" style={{ marginTop: 8 }}>
-                      <div style={{ flex: 1 }}>{v.message}{v.resolvedByReset && <div className="small muted">Wird durch einen Werksreset behoben.</div>}</div>
+                    <div key={v.code} className={'violation-row' + (!v.canOverride && !v.resolvedByReset ? ' blocking' : '')}>
+                      <span className="violation-icon" aria-hidden>!</span>
+                      <div>{v.message}{v.resolvedByReset && <div className="small muted">Wird durch einen Werksreset behoben.</div>}</div>
                       {v.canOverride && !(v.resolvedByReset && performReset) && (
                         <label className="check">
                           <input type="checkbox" checked={overrides.includes(v.code)} onChange={(e) => setOverrides((o) => e.target.checked ? [...o, v.code] : o.filter((x) => x !== v.code))} />
@@ -108,11 +109,14 @@ export default function WizardPage() {
                   ))}
                 </div>
               )}
-              <label className="check" style={{ margin: '12px 0' }}>
-                <input type="checkbox" checked={performReset} disabled={preview.resetRequired} onChange={(e) => setPerformReset(e.target.checked)} />
-                FIDO-Werksreset vor der Registrierung {preview.resetRequired && '(erforderlich)'}
-              </label>
-              {performReset && <Info tone="warn">Der Reset löscht alle Passkeys auf dem Key. Der Key muss dafür kurz abgezogen und wieder eingesteckt werden.</Info>}
+              {/* A key in factory state needs no reset: only offer it when the key is already in use or the profile asks for it. */}
+              {(preview.resetRequired || preview.resetPlanned || preview.key.pinIsSet) && <>
+                <label className="check" style={{ margin: '12px 0' }}>
+                  <input type="checkbox" checked={performReset} disabled={preview.resetRequired} onChange={(e) => setPerformReset(e.target.checked)} />
+                  FIDO-Werksreset vor der Registrierung {preview.resetRequired && '(erforderlich)'}
+                </label>
+                {performReset && <Info tone="error"><strong>Achtung:</strong> Der Reset löscht alle Passkeys auf dem Key unwiderruflich. Der Key muss dafür kurz abgezogen und wieder eingesteckt werden.</Info>}
+              </>}
               <button className="primary" disabled={!canStart || busy} onClick={start}>Registrierung starten</button>
             </div>
           )}
@@ -144,28 +148,22 @@ export default function WizardPage() {
 
 function PersonStep({ tenantId, setTenantId, onPick }: { tenantId: string; setTenantId: (v: string) => void; onPick: (u: EntraUser) => void }) {
   const [q, setQ] = useState('');
-  const [users, setUsers] = useState<EntraUser[]>();
-  const { busy, error, run } = useAction();
-  useEffect(() => { setUsers(undefined); }, [tenantId]);
-  const search = () => run(async () => setUsers(await api.get<EntraUser[]>(`/api/tenants/${tenantId}/users?q=${encodeURIComponent(q)}`)));
+  const { results: users, busy, error } = useLiveSearch<EntraUser>(tenantId ? (term) => `/api/tenants/${tenantId}/users?q=${encodeURIComponent(term)}` : null, q);
   return (
     <Card title="Für wen wird der Key registriert?">
       <div className="toolbar">
         <TenantSelect value={tenantId} onChange={setTenantId} allowAll={false} />
-        <form onSubmit={(e) => { e.preventDefault(); if (tenantId && q.trim().length >= 2) search(); }} style={{ display: 'flex', gap: 8, flex: 1 }}>
-          <input type="search" placeholder="Name oder UPN (mind. 2 Zeichen)" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus />
-          <button type="submit" disabled={!tenantId || q.trim().length < 2 || busy}>Suchen</button>
-        </form>
+        <input type="search" placeholder="Name, UPN oder Mail eintippen (ab 2 Zeichen)" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus />
       </div>
       <ErrorBox error={error} />
       {busy && <Spinner label="Suche in Entra ID …" />}
-      {users && users.length === 0 && <Empty>Keine Person gefunden.</Empty>}
+      {!busy && users && users.length === 0 && <Empty>Keine Person gefunden.</Empty>}
       {users && users.length > 0 && (
         <div className="pick">
           {users.map((u) => (
             <button key={u.id} disabled={!u.accountEnabled} onClick={() => onPick(u)}>
               <span><strong>{u.displayName ?? u.userPrincipalName}</strong><br /><span className="small muted">{u.userPrincipalName}{u.department ? ' · ' + u.department : ''}</span></span>
-              <span>{!u.accountEnabled ? <Badge tone="error">deaktiviert</Badge> : u.activeKeys > 0 ? <Badge tone="info">{u.activeKeys} Key(s)</Badge> : <Badge>kein Key</Badge>}</span>
+              <span className="badges"><PersonKeys u={u} /></span>
             </button>
           ))}
         </div>
@@ -174,12 +172,33 @@ function PersonStep({ tenantId, setTenantId, onPick }: { tenantId: string; setTe
   );
 }
 
+/** Keys in the inventory plus passkeys Entra knows about (also ones registered elsewhere or not yet synced). */
+function PersonKeys({ u }: { u: EntraUser }) {
+  if (!u.accountEnabled) return <Badge tone="error">deaktiviert</Badge>;
+  const entra = u.entraPasskeys ?? [];
+  const yubi = entra.filter((p) => p.isYubiKey).length;
+  const other = entra.length - yubi;
+  const title = entra.map((p) => [p.displayName, p.model].filter(Boolean).join(' · ')).join('\n');
+  const parts: ReactNode[] = [];
+  if (u.activeKeys > 0) parts.push(<Badge key="inv" tone="info">{u.activeKeys} Key(s) im Inventar</Badge>);
+  if (yubi > u.activeKeys) parts.push(<span key="y" title={title}><Badge tone="warn">{yubi} YubiKey(s) in Entra</Badge></span>);
+  if (other > 0) parts.push(<span key="o" title={title}><Badge>{other} anderer Passkey{other > 1 ? 's' : ''}</Badge></span>);
+  if (u.entraPasskeys === null || u.entraPasskeys === undefined) parts.push(<Badge key="u">Entra-Status unbekannt</Badge>);
+  if (parts.length === 0) parts.push(<Badge key="n">kein Key</Badge>);
+  return <>{parts}</>;
+}
+
 function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; setAgentId: (v: string) => void; onNext: () => void; onBack: () => void }) {
   const { data: agents, error, reload } = useApi<AgentInfo[]>('/api/agents');
   usePolling(reload, 2000);
   const online = agents?.filter((a) => a.online) ?? [];
   const agent = online.find((a) => a.id === agentId) ?? online[0];
   useEffect(() => { if (agent && agent.id !== agentId) setAgentId(agent.id); }, [agent, agentId, setAgentId]);
+  // Ask the tray app once per agent to show "insert key" while no key is present.
+  const waitingFor = agent && !agent.key ? agent.id : undefined;
+  useEffect(() => {
+    if (waitingFor) void api.post(`/api/agents/${waitingFor}/request-key`, {}).catch(() => undefined);
+  }, [waitingFor]);
   return (
     <Card title="YubiKey einstecken">
       <ErrorBox error={error} />
@@ -194,17 +213,26 @@ function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; set
         </Field>
       )}
       {agent && (agent.key ? (
-        <div className="keycard">
+        <div className={'keycard' + (!agent.key.hasFido2 ? ' error' : !agent.key.supportsForcePinChange ? ' warn' : '')}>
           <div className="keyglyph"><span /></div>
           <div>
             <strong>{agent.key.model ?? 'YubiKey'}</strong>
             <div>Seriennummer <span className="mono">{agent.key.serialNumber ?? '–'}</span> · Firmware <span className="mono">{agent.key.firmwareVersion}</span></div>
-            <div className="small muted">{agent.key.pinIsSet ? 'FIDO-PIN ist gesetzt' : 'Keine FIDO-PIN gesetzt'} · {agent.key.supportsForcePinChange ? 'PIN-Wechsel erzwingbar' : 'PIN-Wechsel nicht erzwingbar (Firmware < 5.7)'}</div>
+            <div className="small muted">{agent.key.pinIsSet ? 'FIDO-PIN ist gesetzt' : 'Keine FIDO-PIN gesetzt (Werkszustand)'}</div>
+            {!agent.key.supportsForcePinChange && (
+              <div className="key-warning"><span className="violation-icon" aria-hidden>!</span> Firmware {agent.key.firmwareVersion}: Der PIN-Wechsel kann nicht erzwungen werden (erst ab 5.7).</div>
+            )}
             {!agent.key.hasFido2 && <Badge tone="error">Kein FIDO2</Badge>}
           </div>
         </div>
       ) : (
-        <Info><Spinner /> Warte auf einen YubiKey an <strong>{agent.machineName}</strong> … Bitte nur einen Key einstecken.</Info>
+        <div className="waiting-key">
+          <Spinner />
+          <div>
+            <strong>Bitte jetzt den YubiKey an {agent.machineName} einstecken.</strong>
+            <div className="small muted">Der Agent wartet auf den Key. Bitte nur einen Key einstecken. Den Fortschritt zeigt auf Wunsch auch das Statusfenster der Tray-App (Doppelklick auf das Symbol).</div>
+          </div>
+        </div>
       ))}
       {agent?.busy && <Info tone="warn">Der Agent ist beschäftigt: {agent.busy}</Info>}
       <div className="actions" style={{ marginTop: 12 }}>

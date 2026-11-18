@@ -108,6 +108,8 @@ public sealed class RegistrationService(
         job.StepNumber = n;
         job.Step = text;
         job.Prompt = prompt;
+        job.Agent = agent;
+        agent.CurrentPrompt = null;
         agents.Progress(agent, new AgentProgress(text, prompt, n, job.TotalSteps));
     }
 

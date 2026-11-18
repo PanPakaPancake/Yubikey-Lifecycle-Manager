@@ -35,7 +35,7 @@ public sealed record WebAuthnCreationOptions
             ? p.EnumerateArray().Where(x => !x.TryGetProperty("type", out var t) || t.GetString() == "public-key").Select(x => x.GetProperty("alg").GetInt32()).ToList()
             : [-7];
         var exclude = r.TryGetProperty("excludeCredentials", out var ex) && ex.ValueKind == JsonValueKind.Array
-            ? ex.EnumerateArray().Select(x => new WebAuthnCredentialDescriptor(Base64Url.Decode(x.GetProperty("id").GetString()!), x.TryGetProperty("type", out var t) ? t.GetString() ?? "public-key" : "public-key")).ToList()
+            ? ex.EnumerateArray().Select(x => new WebAuthnCredentialDescriptor(Base64Url.DecodeOrUtf8(x.GetProperty("id").GetString()!, "excludeCredentials.id"), x.TryGetProperty("type", out var t) ? t.GetString() ?? "public-key" : "public-key")).ToList()
             : [];
         var residentKey = true;
         if (r.TryGetProperty("authenticatorSelection", out var sel))
@@ -62,11 +62,11 @@ public sealed record WebAuthnCreationOptions
         }
         return new WebAuthnCreationOptions
         {
-            Challenge = Base64Url.Decode(r.GetProperty("challenge").GetString()!),
+            Challenge = Base64Url.DecodeOrUtf8(r.GetProperty("challenge").GetString()!, "challenge"),
             RpId = rp.GetProperty("id").GetString()!,
             RpName = rp.TryGetProperty("name", out var n) ? n.GetString() : null,
             User = new WebAuthnUser(
-                Base64Url.Decode(user.GetProperty("id").GetString()!),
+                Base64Url.DecodeOrUtf8(user.GetProperty("id").GetString()!, "user.id"),
                 user.TryGetProperty("name", out var un) ? un.GetString() ?? "" : "",
                 user.TryGetProperty("displayName", out var dn) ? dn.GetString() ?? "" : ""),
             Algorithms = algs.Count == 0 ? [-7] : algs,
@@ -122,5 +122,32 @@ public static class Base64Url
         var s = value.Trim().Replace('-', '+').Replace('_', '/');
         s = s.PadRight(s.Length + (4 - s.Length % 4) % 4, '=');
         return Convert.FromBase64String(s);
+    }
+
+    public static bool TryDecode(string value, out byte[] bytes)
+    {
+        var s = new string(value.Where(c => !char.IsWhiteSpace(c)).ToArray()).TrimEnd('=').Replace('-', '+').Replace('_', '/');
+        bytes = [];
+        if (s.Length % 4 == 1) return false;
+        s = s.PadRight(s.Length + (4 - s.Length % 4) % 4, '=');
+        var buffer = new byte[s.Length * 3 / 4];
+        if (!Convert.TryFromBase64String(s, buffer, out var written)) return false;
+        bytes = buffer[..written];
+        return true;
+    }
+
+    /// <summary>Records which fields were not base64url and taken as text (for the agent log).</summary>
+    [ThreadStatic] public static List<string>? TextFallbacks;
+
+    /// <summary>
+    /// WebAuthn JSON encodes binary fields as base64url. Microsoft Graph's creationOptions has been seen with values
+    /// that are not valid base64url (e.g. a token string); such values are used as their UTF-8 bytes, which is what a
+    /// browser does when the string is passed as the BufferSource.
+    /// </summary>
+    public static byte[] DecodeOrUtf8(string value, string field)
+    {
+        if (TryDecode(value, out var bytes)) return bytes;
+        TextFallbacks?.Add($"{field} (Länge {value.Length})");
+        return Encoding.UTF8.GetBytes(value);
     }
 }

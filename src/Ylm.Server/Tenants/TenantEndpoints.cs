@@ -108,10 +108,12 @@ public static class TenantEndpoints
             if (isNew) db.Tenants.Add(tenant);
             try
             {
+                // A token issued before this consent would still carry the old permissions.
+                graphFactory.Invalidate(entraTenantId);
                 // Consent propagation can take a few seconds.
                 await Task.Delay(TimeSpan.FromSeconds(isNew ? 2 : 0));
                 var org = await (await graphFactory.ForTenantAsync(entraTenantId)).GetOrganizationAsync();
-                tenant.DisplayName = org.DisplayName;
+                tenant.DisplayName = string.IsNullOrWhiteSpace(org.DisplayName) ? org.DefaultDomain ?? entraTenantId.ToString() : org.DisplayName;
                 tenant.DefaultDomain = org.DefaultDomain;
             }
             catch (Exception)
@@ -150,7 +152,7 @@ public static class TenantEndpoints
             var user = await cu.RequireTenantAsync(id, Permission.ReadInventory);
             if (!RolePermissions.Has(user.Role, Permission.ManageTenants) && !RolePermissions.Has(user.Role, Permission.SyncTenants)) throw ApiException.Forbidden();
             var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
-            await checks.RunAsync(t, AuditService.User(user));
+            await checks.RunAsync(t, AuditService.User(user), freshToken: true);
             return Results.Ok(ToDto(t));
         });
 
@@ -173,14 +175,30 @@ public static class TenantEndpoints
         {
             await cu.RequireTenantAsync(id, Permission.RegisterKeys);
             var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
-            var users = await (await gf.ForTenantAsync(t.EntraTenantId)).SearchUsersAsync(q);
+            var graph = await gf.ForTenantAsync(t.EntraTenantId);
+            var users = await graph.SearchUsersAsync(q);
             var upns = users.Select(u => u.UserPrincipalName.ToLower()).ToList();
             var keyCounts = await db.Registrations.Where(r => r.TenantId == id && r.RemovedAt == null && upns.Contains(r.UserPrincipalName.ToLower()))
                 .GroupBy(r => r.UserPrincipalName.ToLower()).Select(x => new { Upn = x.Key, Count = x.Count() }).ToListAsync();
-            return Results.Ok(users.Select(u => new
+            // Passkeys straight from Entra, so a person with a key registered elsewhere (or not synced yet) does not
+            // show up as "no key". A failed lookup only leaves that person's Entra status unknown (null).
+            using var gate = new SemaphoreSlim(5);
+            var passkeys = await Task.WhenAll(users.Select(async u =>
+            {
+                await gate.WaitAsync();
+                try
+                {
+                    var methods = await graph.ListFido2MethodsAsync(u.Id);
+                    return methods.Select(m => new { m.DisplayName, m.Model, IsYubiKey = YubicoAaguids.IsYubiKey(m.AaGuid, m.Model) }).ToList();
+                }
+                catch (Exception) { return null; }
+                finally { gate.Release(); }
+            }));
+            return Results.Ok(users.Select((u, i) => new
             {
                 u.Id, u.UserPrincipalName, u.DisplayName, u.Mail, u.Department, u.AccountEnabled,
                 ActiveKeys = keyCounts.FirstOrDefault(k => k.Upn == u.UserPrincipalName.ToLower())?.Count ?? 0,
+                EntraPasskeys = passkeys[i],
             }));
         });
 
