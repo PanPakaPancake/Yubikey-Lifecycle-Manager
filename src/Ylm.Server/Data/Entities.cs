@@ -305,3 +305,54 @@ public sealed class ApiKey
     public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
 }
+
+public enum BatchStatus { Open = 0, Completed = 1, Cancelled = 2 }
+
+public enum BatchItemStatus { Pending = 0, Running = 1, Done = 2, Failed = 3, Skipped = 4 }
+
+/// <summary>Stapelregistrierung (V1.1): a list of people who get a key one after the other at one agent.</summary>
+public sealed class RegistrationBatch
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string Name { get; set; } = "";
+    /// <summary>Where the list came from, e.g. "Gruppe: Vertrieb", "CSV", "Auswahl".</summary>
+    public string? Source { get; set; }
+    /// <summary>Profile for people without a group profile and without an explicit profile.</summary>
+    public Guid DefaultProfileId { get; set; }
+    public BatchStatus Status { get; set; } = BatchStatus.Open;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Guid? CreatedById { get; set; }
+    public string? CreatedByName { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public List<RegistrationBatchItem> Items { get; set; } = [];
+}
+
+public sealed class RegistrationBatchItem
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BatchId { get; set; }
+    public int Position { get; set; }
+    public string EntraUserId { get; set; } = "";
+    public string UserPrincipalName { get; set; } = "";
+    public string? UserDisplayName { get; set; }
+    public string? Department { get; set; }
+    /// <summary>Explicit profile for this person; null = batch default.</summary>
+    public Guid? ProfileId { get; set; }
+    /// <summary>Name of the Entra group the profile was suggested from (shown in the list).</summary>
+    public string? ProfileGroupName { get; set; }
+    /// <summary>Optional fixed key (from CSV). Only this key is registered for the person.</summary>
+    public int? ExpectedSerialNumber { get; set; }
+    public BatchItemStatus Status { get; set; } = BatchItemStatus.Pending;
+    public Guid? JobId { get; set; }
+    public Guid? KeyId { get; set; }
+    public int? SerialNumber { get; set; }
+    public bool? PinChangeForced { get; set; }
+    /// <summary>Reference to the PIN letter held in memory only (PinLetterStore); the PIN itself is never stored.</summary>
+    public Guid? PinLetterId { get; set; }
+    public string? Error { get; set; }
+    public string? ErrorCode { get; set; }
+    public string? Note { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public string? CompletedByName { get; set; }
+}

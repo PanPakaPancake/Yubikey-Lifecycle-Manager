@@ -21,6 +21,8 @@ public interface IGraphClient
     Task<int?> CountUsersAsync(string? groupId, CancellationToken ct = default);
     /// <summary>Ids of the enabled users in a group (transitive) or, for null/all_users, in the whole tenant.</summary>
     Task<IReadOnlySet<string>> ListUserIdsAsync(string? groupId, CancellationToken ct = default);
+    /// <summary>Transitive user members of a group with their details (Stapelregistrierung). Null when the group does not exist.</summary>
+    Task<IReadOnlyList<GraphUser>?> ListGroupUsersAsync(string groupId, CancellationToken ct = default);
     /// <summary>Which of the given groups the user is a member of (transitive).</summary>
     Task<IReadOnlyList<string>> CheckMemberGroupsAsync(string userId, IReadOnlyCollection<string> groupIds, CancellationToken ct = default);
     IAsyncEnumerable<string> ListUserIdsWithPasskeysAsync(CancellationToken ct = default);
@@ -286,6 +288,22 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
             url = Str(doc.RootElement, "@odata.nextLink");
         }
         return ids;
+    }
+
+    public async Task<IReadOnlyList<GraphUser>?> ListGroupUsersAsync(string groupId, CancellationToken ct = default)
+    {
+        string? url = $"{V1}/groups/{Uri.EscapeDataString(groupId)}/transitiveMembers/microsoft.graph.user?$select=id,userPrincipalName,displayName,mail,department,accountEnabled&$top=999";
+        var users = new List<GraphUser>();
+        var first = true;
+        while (url is not null)
+        {
+            using var doc = await SendAsync(HttpMethod.Get, url, ct, allowNotFound: true);
+            if (doc is null) return first ? null : users;
+            first = false;
+            users.AddRange(doc.RootElement.GetProperty("value").EnumerateArray().Select(ToUser));
+            url = Str(doc.RootElement, "@odata.nextLink");
+        }
+        return users;
     }
 
     public async Task<IReadOnlyList<string>> CheckMemberGroupsAsync(string userId, IReadOnlyCollection<string> groupIds, CancellationToken ct = default)

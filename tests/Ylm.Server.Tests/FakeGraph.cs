@@ -66,6 +66,9 @@ public sealed class FakeGraph : IGraphClient
             ? Users.Where(u => u.AccountEnabled).Select(u => u.Id).ToHashSet()
             : (GroupMembers.GetValueOrDefault(groupId) ?? []).ToHashSet());
 
+    public Task<IReadOnlyList<GraphUser>?> ListGroupUsersAsync(string groupId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<GraphUser>?>(GroupMembers.TryGetValue(groupId, out var ids) ? Users.Where(u => ids.Contains(u.Id)).ToList() : null);
+
     public Task<IReadOnlyList<string>> CheckMemberGroupsAsync(string userId, IReadOnlyCollection<string> groupIds, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<string>>(groupIds.Where(g => GroupMembers.GetValueOrDefault(g)?.Contains(userId) == true).ToList());
 

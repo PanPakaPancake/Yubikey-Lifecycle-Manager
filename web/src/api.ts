@@ -154,3 +154,26 @@ export const lockReasons: Record<string, string> = { Lost: 'Verloren', Defective
 
 export const fmtDate = (s?: string | null, withTime = true) =>
   s ? new Date(s).toLocaleString('de-DE', withTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' }) : '–';
+
+export type BatchStatus = 'Open' | 'Completed' | 'Cancelled';
+export type BatchItemStatus = 'Pending' | 'Running' | 'Done' | 'Failed' | 'Skipped';
+export interface BatchCounts { total: number; pending: number; running: number; done: number; failed: number; skipped: number }
+
+export interface BatchItem {
+  id: string; position: number; entraUserId: string; userPrincipalName: string; userDisplayName?: string | null; department?: string | null;
+  profileId?: string | null; profileGroupName?: string | null; expectedSerialNumber?: number | null; status: BatchItemStatus;
+  jobId?: string | null; keyId?: string | null; serialNumber?: number | null; pinChangeForced?: boolean | null; error?: string | null; errorCode?: string | null;
+  note?: string | null; completedAt?: string | null; completedByName?: string | null; pinLetterId?: string | null; pinLetterAvailable: boolean;
+}
+
+export interface BatchSummary { id: string; name: string; source?: string | null; status: BatchStatus; createdAt: string; createdByName?: string | null; completedAt?: string | null; counts: BatchCounts }
+
+export interface Batch extends BatchSummary { tenantId: string; defaultProfileId: string; items: BatchItem[] }
+
+export interface BatchCandidate {
+  entraUserId: string; userPrincipalName: string; displayName?: string | null; department?: string | null; accountEnabled: boolean; activeKeys: number;
+  entraYubiKeys?: number | null; entraOtherPasskeys?: number | null; profileId?: string | null; profileGroupName?: string | null; expectedSerialNumber?: number | null;
+}
+
+export const batchStatusLabels: Record<BatchStatus, string> = { Open: 'Offen', Completed: 'Abgeschlossen', Cancelled: 'Abgebrochen' };
+export const batchItemLabels: Record<BatchItemStatus, string> = { Pending: 'Offen', Running: 'Läuft', Done: 'Registriert', Failed: 'Fehlgeschlagen', Skipped: 'Übersprungen' };

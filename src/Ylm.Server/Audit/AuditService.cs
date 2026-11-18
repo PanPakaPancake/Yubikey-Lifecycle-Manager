@@ -55,6 +55,10 @@ public static class AuditActions
     public const string GroupProfilesUpdated = "groupprofiles.updated";
     public const string ExportCreated = "export.created";
     public const string PinLetterDownloaded = "pin_letter.downloaded";
+    public const string BatchCreated = "batch.created";
+    public const string BatchChanged = "batch.changed";
+    public const string BatchCompleted = "batch.completed";
+    public const string BatchCancelled = "batch.cancelled";
 }
 
 public sealed record AuditActor(ActorType Type, Guid? Id, string? Name);

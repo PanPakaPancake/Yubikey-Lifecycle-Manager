@@ -6,8 +6,8 @@ import { JobProgress } from './KeyDetail';
 import { useTenant } from '../tenant';
 
 interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number; entraPasskeys?: { displayName?: string; model?: string; isYubiKey: boolean }[] | null }
-interface Violation { code: string; message: string; canOverride: boolean; resolvedByReset: boolean }
-interface Preview {
+export interface Violation { code: string; message: string; canOverride: boolean; resolvedByReset: boolean }
+export interface Preview {
   key: KeyInfo; violations: Violation[]; resetRequired: boolean; resetPlanned: boolean; willForcePinChange: boolean; displayName: string;
   inventoryKey?: { id: string; tenantId?: string | null; tenantName?: string; status: string; activeRegistrations: string[] } | null;
   user: { id: string; userPrincipalName: string; displayName?: string; department?: string; accountEnabled: boolean };
@@ -72,12 +72,11 @@ export default function WizardPage() {
     setStep(3);
   });
 
-  const blocking = preview?.violations.filter((v) => !(v.resolvedByReset && performReset) && !overrides.includes(v.code)) ?? [];
-  const canStart = preview && blocking.length === 0 && !preview.inventoryKey?.activeRegistrations.length;
+  const canStart = !!preview && canStartPreview(preview, overrides, performReset);
 
   return (
     <>
-      <PageHeader title="Key registrieren" subtitle="Einzelregistrierung im Auftrag einer Person (Registrierung on Behalf)" actions={step > 0 && <button onClick={restart}>Neu beginnen</button>} />
+      <PageHeader title="Key registrieren" subtitle="Einzelregistrierung im Auftrag einer Person (Registrierung on Behalf)" actions={step > 0 ? <button onClick={restart}>Neu beginnen</button> : <Link className="btn" to="/batches">Viele Personen? Stapelregistrierung</Link>} />
       <ol className="steps">
         {stepNames.map((s, i) => <li key={s} className={'step ' + (i < step ? 'done' : i === step ? 'current' : '')}>{s}</li>)}
       </ol>
@@ -95,46 +94,7 @@ export default function WizardPage() {
           </div>
           {preview && (
             <div style={{ marginTop: 16 }}>
-              <table>
-                <tbody>
-                  <tr><th>Person</th><td>{preview.user.displayName} <span className="muted">({preview.user.userPrincipalName})</span> {!preview.user.accountEnabled && <Badge tone="error">deaktiviert</Badge>}</td></tr>
-                  <tr><th>Key</th><td>{preview.key.model} · Seriennummer <span className="mono">{preview.key.serialNumber}</span> · Firmware <span className="mono">{preview.key.firmwareVersion}</span></td></tr>
-                  <tr><th>Anzeigename in Entra</th><td>{preview.displayName}</td></tr>
-                  <tr><th>PIN-Wechsel erzwingen</th><td>{preview.willForcePinChange ? 'Ja' : 'Nein'}</td></tr>
-                </tbody>
-              </table>
-              {preview.userActiveKeys > 0 && <Info tone="warn">{preview.user.displayName} hat bereits {preview.userActiveKeys} aktive(n) Key(s). Die Registrierung fügt einen weiteren hinzu.</Info>}
-              {preview.inventoryKey && (
-                preview.inventoryKey.activeRegistrations.length > 0
-                  ? <Info tone="error">Dieser Key ist bereits registriert für {preview.inventoryKey.activeRegistrations.join(', ')}. Bitte zuerst <Link to={'/keys/' + preview.inventoryKey.id}>zurücksetzen</Link>. Geteilte Keys folgen in Version 1.1.</Info>
-                  : <Info>Key ist im Inventar ({preview.inventoryKey.tenantName ?? 'Partnerlager, wird diesem Tenant zugewiesen'}, Status {preview.inventoryKey.status}) und wird zugewiesen.</Info>
-              )}
-              {preview.violations.length === 0 ? <Info tone="ok">Der Key erfüllt das Profil.</Info> : (
-                <div className="alert warn">
-                  <strong>Der Key passt nicht vollständig zum Profil:</strong>
-                  {preview.violations.map((v) => (
-                    <div key={v.code} className={'violation-row' + (!v.canOverride && !v.resolvedByReset ? ' blocking' : '')}>
-                      <span className="violation-icon" aria-hidden>!</span>
-                      <div>{v.message}{v.resolvedByReset && <div className="small muted">Wird durch einen Werksreset behoben.</div>}</div>
-                      {v.canOverride && !(v.resolvedByReset && performReset) && (
-                        <label className="check">
-                          <input type="checkbox" checked={overrides.includes(v.code)} onChange={(e) => setOverrides((o) => e.target.checked ? [...o, v.code] : o.filter((x) => x !== v.code))} />
-                          Für diesen Key bewusst überschreiben
-                        </label>
-                      )}
-                      {!v.canOverride && !v.resolvedByReset && <Badge tone="error">nicht überschreibbar</Badge>}
-                    </div>
-                  ))}
-                </div>
-              )}
-              {/* A key in factory state needs no reset: only offer it when the key is already in use or the profile asks for it. */}
-              {(preview.resetRequired || preview.resetPlanned || preview.key.pinIsSet) && <>
-                <label className="check" style={{ margin: '12px 0' }}>
-                  <input type="checkbox" checked={performReset} disabled={preview.resetRequired} onChange={(e) => setPerformReset(e.target.checked)} />
-                  FIDO-Werksreset vor der Registrierung {preview.resetRequired && '(erforderlich)'}
-                </label>
-                {performReset && <Info tone="error"><strong>Achtung:</strong> Der Reset löscht alle Passkeys auf dem Key unwiderruflich. Der Key muss dafür kurz abgezogen und wieder eingesteckt werden.</Info>}
-              </>}
+              <PreviewDetails preview={preview} overrides={overrides} setOverrides={setOverrides} performReset={performReset} setPerformReset={setPerformReset} />
               <button className="primary" disabled={!canStart || busy} onClick={start}>Registrierung starten</button>
             </div>
           )}
@@ -293,5 +253,61 @@ function ProfileStep({ tenantId, profileId, setProfileId, suggestion, children }
       )}
       {children}
     </Card>
+  );
+}
+
+/** No blocking violations left after reset and confirmed overrides, and the key is not registered for someone else. */
+export function canStartPreview(preview: Preview, overrides: string[], performReset: boolean) {
+  const blocking = preview.violations.filter((v) => !(v.resolvedByReset && performReset) && !overrides.includes(v.code));
+  return blocking.length === 0 && !preview.inventoryKey?.activeRegistrations.length;
+}
+
+/** Result of the check before a registration: person, key, profile violations, overrides and the optional factory reset. */
+export function PreviewDetails({ preview, overrides, setOverrides, performReset, setPerformReset }: {
+  preview: Preview; overrides: string[]; setOverrides: (fn: (o: string[]) => string[]) => void; performReset: boolean; setPerformReset: (v: boolean) => void;
+}) {
+  return (
+    <>
+      <table>
+        <tbody>
+          <tr><th>Person</th><td>{preview.user.displayName} <span className="muted">({preview.user.userPrincipalName})</span> {!preview.user.accountEnabled && <Badge tone="error">deaktiviert</Badge>}</td></tr>
+          <tr><th>Key</th><td>{preview.key.model} · Seriennummer <span className="mono">{preview.key.serialNumber}</span> · Firmware <span className="mono">{preview.key.firmwareVersion}</span></td></tr>
+          <tr><th>Anzeigename in Entra</th><td>{preview.displayName}</td></tr>
+          <tr><th>PIN-Wechsel erzwingen</th><td>{preview.willForcePinChange ? 'Ja' : 'Nein'}</td></tr>
+        </tbody>
+      </table>
+      {preview.userActiveKeys > 0 && <Info tone="warn">{preview.user.displayName} hat bereits {preview.userActiveKeys} aktive(n) Key(s). Die Registrierung fügt einen weiteren hinzu.</Info>}
+      {preview.inventoryKey && (
+        preview.inventoryKey.activeRegistrations.length > 0
+          ? <Info tone="error">Dieser Key ist bereits registriert für {preview.inventoryKey.activeRegistrations.join(', ')}. Bitte zuerst <Link to={'/keys/' + preview.inventoryKey.id}>zurücksetzen</Link>. Geteilte Keys folgen in Version 1.1.</Info>
+          : <Info>Key ist im Inventar ({preview.inventoryKey.tenantName ?? 'Partnerlager, wird diesem Tenant zugewiesen'}, Status {preview.inventoryKey.status}) und wird zugewiesen.</Info>
+      )}
+      {preview.violations.length === 0 ? <Info tone="ok">Der Key erfüllt das Profil.</Info> : (
+        <div className="alert warn">
+          <strong>Der Key passt nicht vollständig zum Profil:</strong>
+          {preview.violations.map((v) => (
+            <div key={v.code} className={'violation-row' + (!v.canOverride && !v.resolvedByReset ? ' blocking' : '')}>
+              <span className="violation-icon" aria-hidden>!</span>
+              <div>{v.message}{v.resolvedByReset && <div className="small muted">Wird durch einen Werksreset behoben.</div>}</div>
+              {v.canOverride && !(v.resolvedByReset && performReset) && (
+                <label className="check">
+                  <input type="checkbox" checked={overrides.includes(v.code)} onChange={(e) => setOverrides((o) => e.target.checked ? [...o, v.code] : o.filter((x) => x !== v.code))} />
+                  Für diesen Key bewusst überschreiben
+                </label>
+              )}
+              {!v.canOverride && !v.resolvedByReset && <Badge tone="error">nicht überschreibbar</Badge>}
+            </div>
+          ))}
+        </div>
+      )}
+      {/* A key in factory state needs no reset: only offer it when the key is already in use or the profile asks for it. */}
+      {(preview.resetRequired || preview.resetPlanned || preview.key.pinIsSet) && <>
+        <label className="check" style={{ margin: '12px 0' }}>
+          <input type="checkbox" checked={performReset} disabled={preview.resetRequired} onChange={(e) => setPerformReset(e.target.checked)} />
+          FIDO-Werksreset vor der Registrierung {preview.resetRequired && '(erforderlich)'}
+        </label>
+        {performReset && <Info tone="error"><strong>Achtung:</strong> Der Reset löscht alle Passkeys auf dem Key unwiderruflich. Der Key muss dafür kurz abgezogen und wieder eingesteckt werden.</Info>}
+      </>}
+    </>
   );
 }

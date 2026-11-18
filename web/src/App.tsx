@@ -11,6 +11,8 @@ import DashboardPage from './pages/Dashboard';
 import KeysPage from './pages/Keys';
 import KeyDetailPage from './pages/KeyDetail';
 import WizardPage from './pages/Wizard';
+import BatchesPage, { NewBatchPage } from './pages/Batches';
+import BatchRunPage from './pages/BatchRun';
 import TenantsPage from './pages/Tenants';
 import TenantDetailPage from './pages/TenantDetail';
 import ProfilesPage from './pages/Profiles';
@@ -84,6 +86,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <NavLink to="/" end>Übersicht</NavLink>
           <NavLink to="/keys">Inventar</NavLink>
           {can('RegisterKeys') && <NavLink to="/register">Key registrieren</NavLink>}
+          {can('RegisterKeys') && <NavLink to="/batches">Stapelregistrierung</NavLink>}
           {tenant && <NavLink to="/tenant">Tenant-Einstellungen</NavLink>}
           <NavLink to="/profiles">Profile</NavLink>
           {can('ReadAudit') && <NavLink to="/audit">Audit-Log</NavLink>}
@@ -116,6 +119,9 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/keys" element={<KeysPage />} />
           <Route path="/keys/:id" element={<KeyDetailPage />} />
           <Route path="/register" element={<WizardPage />} />
+          <Route path="/batches" element={<BatchesPage />} />
+          <Route path="/batches/new" element={<NewBatchPage />} />
+          <Route path="/batches/:id" element={<BatchRunPage />} />
           <Route path="/tenant" element={<SelectedTenantPage />} />
           <Route path="/profiles" element={<ProfilesPage />} />
           <Route path="/audit" element={<AuditPage />} />

@@ -29,6 +29,18 @@ public sealed class SimulatedKeyDevice : IKeyDevice
     public void Insert() { Inserted = true; KeyChanged?.Invoke(this, EventArgs.Empty); }
     public void Remove() { Inserted = false; KeyChanged?.Invoke(this, EventArgs.Empty); }
 
+    /// <summary>Simulates unplugging this key and plugging in another one in factory state.</summary>
+    public void ReplaceWith(int serialNumber, string? firmware = null)
+    {
+        SerialNumber = serialNumber;
+        if (firmware is not null) Firmware = firmware;
+        _pin = null;
+        _forceChange = false;
+        _credentials.Clear();
+        Inserted = true;
+        KeyChanged?.Invoke(this, EventArgs.Empty);
+    }
+
     private bool SupportsForce => Ylm.Core.FirmwareVersion.TryParse(Firmware, out var v) && v >= Ylm.Core.FirmwareVersion.ForcePinChangeMinimum;
 
     public Task<KeyInfo?> ReadAsync(CancellationToken ct = default) => Task.FromResult(Inserted ? Info() : null);
