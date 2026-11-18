@@ -248,7 +248,7 @@ tr.disabled-row td { opacity: .55; }
 .tenant-options button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 0; background: none; text-align: left; padding: 7px 10px; white-space: normal; }
 .tenant-options button.selected { background: var(--accent-soft); }
 .dot-warn { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: middle; }
-.nav .section.partner { display: flex; align-items: center; gap: 6px; }
+.nav .section.partner, .nav .section.customer { display: flex; align-items: center; gap: 6px; }
 .nav .section .context-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .nav .section.customer .context-dot { background: var(--accent); }
 .nav .section.partner .context-dot { background: var(--warn); }

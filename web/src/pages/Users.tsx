@@ -102,7 +102,7 @@ function RolesTab({ roles, error, onEdit }: { roles?: RolesResponse; error?: str
 function RoleModal({ role, catalog, onClose, onSaved }: { role: Partial<CustomRole>; catalog: CatalogEntry[]; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(role.name ?? '');
   const [description, setDescription] = useState(role.description ?? '');
-  const [perms, setPerms] = useState<string[]>(role.permissions ?? ['ViewInventory']);
+  const [perms, setPerms] = useState<string[]>(role.permissions ?? ['ReadInventory']);
   const { busy, error, run } = useAction();
   const isNew = !role.id;
   const groups = [...new Set(catalog.map((c) => c.group))];
