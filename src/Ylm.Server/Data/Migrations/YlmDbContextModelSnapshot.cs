@@ -316,6 +316,9 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<Guid?>("ClientId")
                         .HasColumnType("uuid");
 
+                    b.Property<bool>("EntraSsoEnabled")
+                        .HasColumnType("boolean");
+
                     b.Property<Guid?>("HomeTenantId")
                         .HasColumnType("uuid");
 
@@ -452,18 +455,45 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<Guid?>("EntraObjectId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("FailedLoginCount")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
                     b.Property<DateTimeOffset?>("LastLoginAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("LoginKind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PasswordHash")
+                        .HasColumnType("text");
+
                     b.Property<int>("Role")
                         .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("SetupTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("SetupTokenHash")
+                        .HasColumnType("text");
+
+                    b.Property<long?>("TotpLastStep")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TotpSecretProtected")
+                        .HasColumnType("text");
 
                     b.Property<string>("Upn")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<byte[]>("WebAuthnUserHandle")
+                        .HasColumnType("bytea");
 
                     b.HasKey("Id");
 
@@ -472,7 +502,13 @@ namespace Ylm.Server.Data.Migrations
                     b.HasIndex("EntraObjectId")
                         .IsUnique();
 
+                    b.HasIndex("SetupTokenHash")
+                        .IsUnique();
+
                     b.HasIndex("Upn")
+                        .IsUnique();
+
+                    b.HasIndex("WebAuthnUserHandle")
                         .IsUnique();
 
                     b.ToTable("platform_users", (string)null);
@@ -623,6 +659,49 @@ namespace Ylm.Server.Data.Migrations
                         .IsUnique();
 
                     b.ToTable("tenants", (string)null);
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.UserPasskey", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("Aaguid")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<byte[]>("CredentialId")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PlatformUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<byte[]>("PublicKey")
+                        .IsRequired()
+                        .HasColumnType("bytea");
+
+                    b.Property<long>("SignCount")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CredentialId")
+                        .IsUnique();
+
+                    b.HasIndex("PlatformUserId");
+
+                    b.ToTable("user_passkeys", (string)null);
                 });
 
             modelBuilder.Entity("Ylm.Server.Data.YubiKey", b =>
@@ -799,6 +878,17 @@ namespace Ylm.Server.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.UserPasskey", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.PlatformUser", "PlatformUser")
+                        .WithMany("Passkeys")
+                        .HasForeignKey("PlatformUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PlatformUser");
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.YubiKey", b =>
                 {
                     b.HasOne("Ylm.Server.Data.Tenant", "Tenant")
@@ -811,6 +901,8 @@ namespace Ylm.Server.Data.Migrations
 
             modelBuilder.Entity("Ylm.Server.Data.PlatformUser", b =>
                 {
+                    b.Navigation("Passkeys");
+
                     b.Navigation("TenantAssignments");
                 });
 

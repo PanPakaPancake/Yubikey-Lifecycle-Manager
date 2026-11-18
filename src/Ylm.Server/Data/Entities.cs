@@ -14,6 +14,34 @@ public sealed class InstallationSettings
     public string? BootstrapOwnerUpn { get; set; }
     public DateTimeOffset? SetupCompletedAt { get; set; }
     public bool IsSetupComplete => SetupCompletedAt is not null;
+    /// <summary>Anmeldung mit Entra-Konten aus dem Heim-Tenant erlaubt (Standard). Lokale Konten gehen immer.</summary>
+    public bool EntraSsoEnabled { get; set; } = true;
+}
+
+/// <summary>Wie sich ein Plattform-Benutzer anmeldet.</summary>
+public enum UserLoginKind
+{
+    /// <summary>Entra-Konto aus dem Heim-Tenant (SSO).</summary>
+    Entra = 0,
+    /// <summary>Lokales Konto, Anmeldung mit Passkey bzw. YubiKey direkt an der Plattform.</summary>
+    Local = 1,
+    /// <summary>Notfallkonto mit Passwort und TOTP, z. B. wenn Entra nicht erreichbar ist.</summary>
+    Emergency = 2,
+}
+
+/// <summary>Passkey (WebAuthn) eines lokalen Benutzers für die Anmeldung an der Plattform.</summary>
+public sealed class UserPasskey
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PlatformUserId { get; set; }
+    public PlatformUser? PlatformUser { get; set; }
+    public byte[] CredentialId { get; set; } = [];
+    public byte[] PublicKey { get; set; } = [];
+    public long SignCount { get; set; }
+    public Guid Aaguid { get; set; }
+    public string Name { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? LastUsedAt { get; set; }
 }
 
 public sealed class PlatformUser
@@ -32,6 +60,22 @@ public sealed class PlatformUser
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastLoginAt { get; set; }
     public List<PlatformUserTenant> TenantAssignments { get; set; } = [];
+
+    public UserLoginKind LoginKind { get; set; } = UserLoginKind.Entra;
+    /// <summary>WebAuthn user handle (zufällig, nicht die Benutzer-ID).</summary>
+    public byte[]? WebAuthnUserHandle { get; set; }
+    public List<UserPasskey> Passkeys { get; set; } = [];
+    /// <summary>Notfallkonto: PBKDF2-Hash des Passworts.</summary>
+    public string? PasswordHash { get; set; }
+    /// <summary>Notfallkonto: TOTP-Geheimnis, mit Data Protection verschlüsselt.</summary>
+    public string? TotpSecretProtected { get; set; }
+    /// <summary>Zuletzt verwendeter TOTP-Zeitschritt (verhindert Wiederverwendung eines Codes).</summary>
+    public long? TotpLastStep { get; set; }
+    public int FailedLoginCount { get; set; }
+    public DateTimeOffset? LockedUntil { get; set; }
+    /// <summary>Einmal-Link zum Einrichten des Kontos (Passkey bzw. Passwort + TOTP), als SHA-256-Hash.</summary>
+    public string? SetupTokenHash { get; set; }
+    public DateTimeOffset? SetupTokenExpiresAt { get; set; }
 }
 
 /// <summary>Selbst definierte Rolle aus einzelnen Berechtigungen.</summary>

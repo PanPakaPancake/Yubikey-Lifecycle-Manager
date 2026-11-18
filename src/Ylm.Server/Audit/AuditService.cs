@@ -13,6 +13,10 @@ public static class AuditActions
     public const string LoginDenied = "auth.login_denied";
     public const string UserCreated = "user.created";
     public const string UserUpdated = "user.updated";
+    public const string UserSetupLinkCreated = "user.setup_link_created";
+    public const string UserPasskeyAdded = "user.passkey_added";
+    public const string UserPasskeyRemoved = "user.passkey_removed";
+    public const string LoginSettingsChanged = "settings.login_changed";
     public const string TenantOnboarded = "tenant.onboarded";
     public const string TenantUpdated = "tenant.updated";
     public const string TenantChecked = "tenant.checked";

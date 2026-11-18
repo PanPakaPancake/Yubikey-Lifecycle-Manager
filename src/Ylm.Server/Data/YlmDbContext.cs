@@ -13,6 +13,7 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
 
     public DbSet<InstallationSettings> Installation => Set<InstallationSettings>();
     public DbSet<PlatformUser> PlatformUsers => Set<PlatformUser>();
+    public DbSet<UserPasskey> UserPasskeys => Set<UserPasskey>();
     public DbSet<CustomRole> CustomRoles => Set<CustomRole>();
     public DbSet<PlatformUserTenant> PlatformUserTenants => Set<PlatformUserTenant>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -43,6 +44,15 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.HasIndex(x => x.Upn).IsUnique();
             e.HasMany(x => x.TenantAssignments).WithOne().HasForeignKey(x => x.PlatformUserId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne(x => x.CustomRole).WithMany().HasForeignKey(x => x.CustomRoleId).OnDelete(DeleteBehavior.Restrict);
+            e.HasMany(x => x.Passkeys).WithOne(x => x.PlatformUser).HasForeignKey(x => x.PlatformUserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => x.WebAuthnUserHandle).IsUnique();
+            e.HasIndex(x => x.SetupTokenHash).IsUnique();
+        });
+
+        b.Entity<UserPasskey>(e =>
+        {
+            e.ToTable("user_passkeys");
+            e.HasIndex(x => x.CredentialId).IsUnique();
         });
 
         b.Entity<CustomRole>(e =>

@@ -17,7 +17,7 @@ async function request<T>(method: string, url: string, body?: unknown, headers: 
     }
   }
   const res = await fetch(url, init);
-  if (res.status === 401 && !url.startsWith('/api/me') && !url.startsWith('/api/setup')) {
+  if (res.status === 401 && !url.startsWith('/api/me') && !url.startsWith('/api/setup') && !url.startsWith('/auth/')) {
     window.location.href = '/login?returnUrl=' + encodeURIComponent(window.location.pathname + window.location.search);
   }
   if (!res.ok) {
@@ -53,7 +53,13 @@ export type KeyStatus = 'InStock' | 'Active' | 'Locked' | 'Retired';
 export interface PlatformUser {
   id: string; upn: string; displayName: string; role: Role; customRoleId?: string | null; customRoleName?: string | null; allTenants: boolean; tenantIds: string[];
   isActive: boolean; createdAt: string; lastLoginAt?: string; linked: boolean;
+  loginKind: LoginKind; passkeyCount: number; emergencyReady: boolean; setupPending: boolean; setupTokenExpiresAt?: string | null; lockedUntil?: string | null;
 }
+
+export type LoginKind = 'Entra' | 'Local' | 'Emergency';
+export const loginKindLabel: Record<LoginKind, string> = { Entra: 'Entra-SSO', Local: 'Lokal mit Passkey', Emergency: 'Notfallkonto' };
+
+export interface UserPasskey { id: string; name: string; aaguid: string; createdAt: string; lastUsedAt?: string | null }
 
 export interface Me {
   authenticated: boolean; setupComplete: boolean; organizationName?: string; user?: PlatformUser; permissions?: string[];

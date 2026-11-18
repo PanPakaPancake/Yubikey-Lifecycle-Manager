@@ -52,6 +52,18 @@ Ausweichweg, z. B. wenn Conditional Access die Code-Anmeldung sperrt: Im Assiste
 
 Benötigte Anwendungsberechtigungen (Microsoft Graph): `UserAuthenticationMethod.ReadWrite.All`, `User.Read.All`, `GroupMember.Read.All`, `Policy.Read.All`, `Policy.ReadWrite.AuthenticationMethod`, `AuditLog.Read.All`, `Organization.Read.All`.
 
+### Benutzer und Anmeldung
+
+Unter **Partner → Benutzer & Rollen** gibt es drei Anmeldearten:
+
+- **Entra-SSO:** Konten aus dem Heim-Tenant melden sich über Microsoft an, passwortlos mit YubiKey.
+- **Lokal mit Passkey:** Das Konto existiert nur auf der Plattform. Nach dem Anlegen zeigt die Oberfläche einen Einmal-Link, der drei Tage gilt. Darüber registriert die Person ihren YubiKey als Passkey. Weitere Schlüssel fügt sie unter „Mein Konto“ hinzu.
+- **Notfallkonto:** Anmeldung mit Passwort (mindestens 14 Zeichen) und TOTP-Code aus einer Authenticator-App, ebenfalls per Einmal-Link eingerichtet. Nach fünf Fehlversuchen ist das Konto 15 Minuten gesperrt. Ein neuer Link setzt Passwort und TOTP zurück.
+
+Passkeys sind an die Server-Adresse gebunden (`Ylm__PublicBaseUrl` bzw. die Adresse aus der Einrichtung) und funktionieren nur über HTTPS (Ausnahme: `localhost`). Wird die Adresse später geändert, müssen lokale Benutzer ihre Passkeys neu einrichten.
+
+Entra-SSO lässt sich unter **Globale Einstellungen → Anmeldung an der Plattform** abschalten, sobald ein aktiver Owner ein eingerichtetes lokales Konto hat.
+
 ## 3. Tenant anbinden
 
 „Tenants“ → „Tenant hinzufügen“ → Anmeldung als Globaler Administrator des Kunden-Tenants → Admin-Consent. Danach prüft die Plattform die Passkey-(FIDO2-)Richtlinie und bietet „Jetzt beheben“ an. Zielgruppe (mehrere Einschluss- und Ausschlussgruppen) und Sync-Intervall stellen Sie auf der Tenant-Seite ein.

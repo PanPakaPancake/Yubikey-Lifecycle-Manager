@@ -14,9 +14,11 @@ public static class AuthEndpoints
 
     public static void MapAuth(this IEndpointRouteBuilder app, IWebHostEnvironment env, YlmOptions options)
     {
-        app.MapGet("/auth/login", (string? returnUrl) =>
+        app.MapGet("/auth/login", async (string? returnUrl, YlmDbContext db) =>
         {
             var target = returnUrl is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") ? r : "/";
+            var settings = await db.Installation.AsNoTracking().FirstOrDefaultAsync();
+            if (settings is { EntraSsoEnabled: false }) return Results.Redirect("/login?error=sso_disabled");
             return Results.Challenge(new AuthenticationProperties { RedirectUri = target }, [AuthSchemes.Entra]);
         }).AllowAnonymous();
 
