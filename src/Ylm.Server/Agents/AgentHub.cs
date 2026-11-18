@@ -15,6 +15,8 @@ public sealed record ConnectedAgent(Guid AgentId, Guid UserId, string Connection
     public KeyInfo? CurrentKey { get; set; }
     public DateTimeOffset LastSeen { get; set; } = DateTimeOffset.UtcNow;
     public string? BusyWith { get; set; }
+    /// <summary>Live instruction from the agent during an operation (unplug, plug in, touch).</summary>
+    public string? CurrentPrompt { get; set; }
 }
 
 /// <summary>In-memory registry of connected agents (single server instance; see docs/BETRIEB.md for scale-out).</summary>
@@ -68,6 +70,12 @@ public sealed class AgentHub(AgentRegistry registry, YlmDbContext db, ILogger<Ag
         agent.LastSeenAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync();
         if (registry.Get(AgentId) is { } a) registry.Connected(a with { MachineName = hello.MachineName, Version = hello.AgentVersion });
+    }
+
+    public Task ReportPrompt(string? text)
+    {
+        if (registry.Get(AgentId) is { } a) a.CurrentPrompt = text;
+        return Task.CompletedTask;
     }
 
     public Task ReportKeyState(KeyInfo? key)

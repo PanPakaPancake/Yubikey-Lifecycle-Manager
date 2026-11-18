@@ -53,7 +53,12 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         StatusChanged?.Invoke(_status);
     }
 
-    public void Prompt(string text) => Update(s => s with { Operation = (s.Operation ?? new AgentProgress("Vorgang")) with { Prompt = text } });
+    public void Prompt(string text)
+    {
+        _logger.LogInformation("Hinweis: {Prompt}", text);
+        Update(s => s with { Operation = (s.Operation ?? new AgentProgress("Vorgang")) with { Prompt = text } });
+        if (_hub?.State == HubConnectionState.Connected) _ = _hub.InvokeAsync(AgentProtocol.ReportPromptMethod, text);
+    }
 
     private async Task OnKeyChangedAsync()
     {
@@ -66,7 +71,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         }
         catch (Exception ex)
         {
-            _logger.LogDebug(ex, "Key state report failed");
+            _logger.LogWarning(ex, "Key state report failed");
         }
     }
 
@@ -100,32 +105,97 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         hub.On<MakeCredentialRequest, MakeCredentialResult>(nameof(IAgentClient.MakeCredential), async req =>
         {
             WebAuthnCreationOptions options;
-            try { options = WebAuthnCreationOptions.Parse(req.PublicKeyOptionsJson); }
-            catch (Exception ex) { return new MakeCredentialResult { Success = false, Error = "Ungültige creationOptions: " + ex.Message, ErrorCode = "invalid_options" }; }
+            Base64Url.TextFallbacks = [];
+            try
+            {
+                options = WebAuthnCreationOptions.Parse(req.PublicKeyOptionsJson);
+                if (Base64Url.TextFallbacks.Count > 0)
+                    _logger.LogWarning("creationOptions: Felder nicht base64url, als Text verwendet: {Fields}", string.Join(", ", Base64Url.TextFallbacks));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "creationOptions could not be parsed. Structure: {Structure}", DescribeJson(req.PublicKeyOptionsJson));
+                return new MakeCredentialResult { Success = false, Error = "Ungültige creationOptions: " + ex.Message, ErrorCode = "invalid_options" };
+            }
+            finally { Base64Url.TextFallbacks = null; }
             return await RunAsync("Passkey erzeugen", () => _device.MakeCredentialAsync(req.ExpectedSerialNumber, req.Pin, options, req.Origin, this));
         });
         hub.On<ForcePinChangeRequest, OperationResult>(nameof(IAgentClient.ForcePinChange), async req =>
             await RunAsync("PIN-Wechsel erzwingen", () => _device.ForcePinChangeAsync(req.ExpectedSerialNumber, req.Pin)));
         hub.On<AgentProgress>(nameof(IAgentClient.ShowProgress), p =>
         {
+            _logger.LogInformation("Server: {Title}{Prompt}", p.Title, p.Prompt is null ? "" : " – " + p.Prompt);
             Update(s => s with { Operation = p.Done || p.Failed ? null : p });
             if (p.Done || p.Failed) Notification?.Invoke(p.Title, p.Prompt ?? "", p.Failed);
         });
 
-        hub.Reconnecting += _ => { Update(s => s with { Connection = BackendConnectionState.Connecting }); return Task.CompletedTask; };
-        hub.Reconnected += async _ => { Update(s => s with { Connection = BackendConnectionState.Connected, LastError = null }); await HelloAsync(hub); };
+        hub.Reconnecting += ex => { _logger.LogWarning("Verbindung unterbrochen, verbinde neu: {Error}", ex?.Message); Update(s => s with { Connection = BackendConnectionState.Connecting }); return Task.CompletedTask; };
+        hub.Reconnected += async _ => { _logger.LogInformation("Wieder verbunden"); Update(s => s with { Connection = BackendConnectionState.Connected, LastError = null }); await HelloAsync(hub); };
         hub.Closed += ex =>
         {
+            _logger.LogWarning("Verbindung geschlossen: {Error}", ex?.Message);
             Update(s => s with { Connection = IsUnauthorized(ex) ? BackendConnectionState.Unauthorized : BackendConnectionState.Disconnected, LastError = ex?.Message });
             return Task.CompletedTask;
         };
         return hub;
     }
 
+    /// <summary>Field names, types and lengths of a JSON document (no values) for diagnostics.</summary>
+    internal static string DescribeJson(string json)
+    {
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var parts = new List<string>();
+            void Walk(System.Text.Json.JsonElement e, string path)
+            {
+                switch (e.ValueKind)
+                {
+                    case System.Text.Json.JsonValueKind.Object:
+                        foreach (var p in e.EnumerateObject()) Walk(p.Value, path.Length == 0 ? p.Name : path + "." + p.Name);
+                        break;
+                    case System.Text.Json.JsonValueKind.Array:
+                        var i = 0;
+                        foreach (var x in e.EnumerateArray()) Walk(x, $"{path}[{i++}]");
+                        break;
+                    case System.Text.Json.JsonValueKind.String:
+                        var v = e.GetString() ?? "";
+                        parts.Add($"{path}=string({v.Length}{(v.Length > 0 && !Base64Url.TryDecode(v, out _) ? ", kein base64url" : "")})");
+                        break;
+                    default:
+                        parts.Add($"{path}={e.ValueKind}");
+                        break;
+                }
+            }
+            Walk(doc.RootElement, "");
+            return string.Join("; ", parts);
+        }
+        catch (Exception ex) { return "kein JSON: " + ex.Message; }
+    }
+
     private async Task<T> RunAsync<T>(string title, Func<Task<T>> op)
     {
         Update(s => s with { Operation = new AgentProgress(title) });
-        try { return await op(); }
+        _logger.LogInformation("Vorgang gestartet: {Title}", title);
+        var started = DateTimeOffset.UtcNow;
+        try
+        {
+            var result = await op();
+            var (ok, error) = result switch
+            {
+                OperationResult r => (r.Success, r.Error),
+                MakeCredentialResult m => (m.Success, m.Error),
+                _ => (true, null),
+            };
+            if (ok) _logger.LogInformation("Vorgang erfolgreich: {Title} ({Ms} ms)", title, (int)(DateTimeOffset.UtcNow - started).TotalMilliseconds);
+            else _logger.LogWarning("Vorgang fehlgeschlagen: {Title}: {Error}", title, error);
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Vorgang abgebrochen: {Title}", title);
+            throw;
+        }
         finally { Update(s => s with { Operation = s.Operation?.Title == title ? null : s.Operation }); }
     }
 
@@ -152,10 +222,12 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
                 await _hub.StartAsync(ct);
                 await HelloAsync(_hub);
                 Update(s => s with { Connection = BackendConnectionState.Connected, LastError = null });
+                _logger.LogInformation("Mit Server verbunden: {Url}", _settings.ServerUrl);
                 return;
             }
             catch (Exception ex) when (!ct.IsCancellationRequested)
             {
+                _logger.LogWarning("Verbindung zum Server fehlgeschlagen (Versuch {Attempt}): {Error}", attempt + 1, ex.Message);
                 if (IsUnauthorized(ex))
                 {
                     Update(s => s with { Connection = BackendConnectionState.Unauthorized, LastError = "Agent wurde abgemeldet oder widerrufen. Bitte neu koppeln." });
@@ -189,11 +261,13 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
             }, pairing.AgentToken);
             _store.Save(_settings);
             Update(s => s with { ServerUrl = _settings.ServerUrl, PairedUser = pairing.UserDisplayName, InstanceName = pairing.InstanceName });
+            _logger.LogInformation("Gekoppelt mit {Url} ({Instance}) als {User}", serverUrl, pairing.InstanceName, pairing.UserDisplayName);
             _ = ConnectAsync(CancellationToken.None);
             return (true, $"Gekoppelt mit {pairing.InstanceName} als {pairing.UserDisplayName}.");
         }
         catch (Exception ex)
         {
+            _logger.LogWarning(ex, "Kopplung fehlgeschlagen");
             return (false, "Server nicht erreichbar: " + ex.Message);
         }
     }

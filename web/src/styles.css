@@ -203,3 +203,29 @@ pre.script { background: var(--surface-2); border: 1px solid var(--line); border
 .hierarchy .level { padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
 .hierarchy .level.current { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 tr.disabled-row td { opacity: .55; }
+/* Profile violations in the wizard */
+.violation-row { display: grid; grid-template-columns: 22px 1fr; gap: 6px 10px; align-items: start; margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-left: 4px solid var(--warn); border-radius: 8px; background: var(--surface-2); }
+.violation-row > .check, .violation-row > .badge { grid-column: 2; margin: 4px 0 0; }
+.violation-row.blocking { border-left-color: var(--error); }
+.violation-icon { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: var(--warn); color: #fff; font-weight: 700; font-size: .8rem; flex: none; }
+.violation-row.blocking .violation-icon { background: var(--error); }
+.keycard.warn { border: 2px solid var(--warn); }
+.keycard.error { border: 2px solid var(--error); }
+.key-warning { display: flex; gap: 8px; align-items: center; margin-top: 6px; color: var(--warn); font-weight: 600; }
+.waiting-key { display: flex; gap: 12px; align-items: center; padding: 16px; border: 2px dashed var(--accent); border-radius: 10px; background: var(--accent-soft); }
+
+/* Animated key instruction during operations */
+.key-prompt { border-width: 2px; }
+.key-anim { position: relative; width: 28px; height: 44px; flex: none; }
+.key-anim .key-body { position: absolute; left: 6px; top: 0; width: 16px; height: 34px; border-radius: 4px; background: var(--ink); opacity: .85; }
+.key-anim .key-dot { position: absolute; left: 10px; top: 6px; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); }
+.key-prompt.unplug .key-anim { animation: key-up 1.2s ease-in-out infinite; }
+.key-prompt.plug .key-anim { animation: key-down 1.2s ease-in-out infinite; }
+.key-prompt.touch .key-dot { animation: key-blink .7s ease-in-out infinite; box-shadow: 0 0 0 0 var(--warn); }
+.key-prompt.wait .key-dot { animation: key-blink 1.4s ease-in-out infinite; }
+@keyframes key-up { 0%, 100% { transform: translateY(8px); } 50% { transform: translateY(-4px); } }
+@keyframes key-down { 0%, 100% { transform: translateY(-4px); } 50% { transform: translateY(8px); } }
+@keyframes key-blink { 0%, 100% { opacity: 1; box-shadow: 0 0 0 0 var(--warn); } 50% { opacity: .3; box-shadow: 0 0 0 6px transparent; } }
+@media (prefers-reduced-motion: reduce) { .key-anim, .key-dot { animation: none !important; } }
+
+.badges { display: inline-flex; flex-wrap: wrap; gap: 4px; justify-content: flex-end; }

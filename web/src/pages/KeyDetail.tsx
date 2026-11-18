@@ -166,12 +166,24 @@ function ResetModal({ keyItem, onClose }: { keyItem: YubiKey; onClose: () => voi
   );
 }
 
+/** Animated instruction for the action expected at the key (unplug, plug in, touch). */
+function KeyPrompt({ text }: { text: string }) {
+  const t = text.toLowerCase();
+  const kind = t.includes('abziehen') ? 'unplug' : t.includes('einstecken') || t.includes('anstecken') ? 'plug' : t.includes('berühren') ? 'touch' : 'wait';
+  return (
+    <div className={'prompt key-prompt ' + kind} role="status" aria-live="polite">
+      <span className="key-anim" aria-hidden><span className="key-body" /><span className="key-dot" /></span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
 export function JobProgress({ job }: { job: Job }) {
   return (
     <div>
       <div className="progress"><span style={{ width: (job.state === 'Succeeded' ? 100 : (job.stepNumber / job.totalSteps) * 100) + '%' }} /></div>
       <p><strong>{job.step}</strong> {job.state === 'Running' && <Spinner />}</p>
-      {job.prompt && job.state === 'Running' && <div className="prompt">{job.prompt}</div>}
+      {job.prompt && job.state === 'Running' && <KeyPrompt text={job.prompt} />}
       {job.state === 'Failed' && <ErrorBox error={job.error ?? 'Vorgang fehlgeschlagen.'} />}
       {job.state === 'Succeeded' && <Info tone="ok">Abgeschlossen.</Info>}
       {job.notes.length > 0 && <ul className="small muted">{job.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}

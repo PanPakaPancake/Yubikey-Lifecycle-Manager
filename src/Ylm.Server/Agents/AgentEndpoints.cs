@@ -35,6 +35,16 @@ public static class AgentEndpoints
             }));
         });
 
+        // The wizard waits for a key: let the tray app ask the admin to insert one.
+        g.MapPost("/{id:guid}/request-key", async (Guid id, CurrentUser cu, AgentGateway gateway) =>
+        {
+            var user = await cu.GetAsync();
+            var agent = gateway.Require(id, user.Id);
+            if (agent.CurrentKey is null && agent.BusyWith is null)
+                gateway.Progress(agent, new AgentProgress("YubiKey einstecken", "Bitte jetzt den YubiKey einstecken, der registriert werden soll.", Done: true));
+            return Results.NoContent();
+        });
+
         // Short-lived code the admin types into the tray app ("Agent koppeln").
         g.MapPost("/pairing-codes", async (CurrentUser cu, YlmDbContext db) =>
         {

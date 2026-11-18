@@ -23,7 +23,16 @@ public sealed class FakeGraph : IGraphClient
     public Task<GraphOrganization> GetOrganizationAsync(CancellationToken ct = default) =>
         Task.FromResult(new GraphOrganization(TenantId.ToString(), "Contoso GmbH", "contoso.com"));
 
-    public Task<IReadOnlyList<string>> GetGrantedApplicationPermissionsAsync(CancellationToken ct = default) => Task.FromResult<IReadOnlyList<string>>(GrantedPermissions);
+    /// <summary>Simulates the app-only token cache: the roles claim is fixed when the token is first issued.</summary>
+    public bool SimulateTokenCache { get; set; }
+    public List<string>? TokenRoles { get; set; }
+
+    public Task<IReadOnlyList<string>> GetGrantedApplicationPermissionsAsync(CancellationToken ct = default)
+    {
+        if (!SimulateTokenCache) return Task.FromResult<IReadOnlyList<string>>(GrantedPermissions);
+        TokenRoles ??= [.. GrantedPermissions];
+        return Task.FromResult<IReadOnlyList<string>>(TokenRoles);
+    }
 
     public Task<Fido2Policy> GetFido2PolicyAsync(CancellationToken ct = default) => Task.FromResult(Policy);
 
@@ -129,4 +138,9 @@ public sealed class FakeGraphFactory : IGraphClientFactory
 
     public Task<IGraphClient> ForTenantAsync(Guid entraTenantId, CancellationToken ct = default) =>
         Tenants.TryGetValue(entraTenantId, out var g) ? Task.FromResult<IGraphClient>(g) : throw new GraphException("unknown tenant", 401);
+
+    public void Invalidate(Guid entraTenantId)
+    {
+        if (Tenants.TryGetValue(entraTenantId, out var g)) g.TokenRoles = null;
+    }
 }

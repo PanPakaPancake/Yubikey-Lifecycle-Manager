@@ -14,10 +14,9 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ToolStripMenuItem _openWeb = new("WebGUI öffnen");
     private readonly ToolStripMenuItem _pair = new("Koppeln …");
     private readonly ToolStripMenuItem _unpair = new("Kopplung lösen");
-    private readonly StatusForm _statusForm = new();
+    private StatusForm _statusForm = new();
     private TrayStatus _status = new();
     private bool _pipeConnected;
-    private string? _lastPrompt;
     private PairForm? _pairForm;
     private TaskCompletionSource<(bool, string)>? _pairResult;
     private Icon? _currentIcon;
@@ -80,13 +79,10 @@ internal sealed class TrayContext : ApplicationContext
                 var previousKey = _status.Key?.SerialNumber;
                 _status = m.Status;
                 Render();
-                if (m.Status.Operation?.Prompt is { } prompt && prompt != _lastPrompt)
-                {
-                    _lastPrompt = prompt;
-                    _icon.ShowBalloonTip(5000, m.Status.Operation.Title, prompt, ToolTipIcon.Info);
-                    ShowStatus();
-                }
-                if (m.Status.Operation is null) _lastPrompt = null;
+                // While the agent is connected the web UI shows every step, so the tray stays quiet (no balloons, no
+                // window popping up). An already open status window is still updated by Render(). Without a server
+                // connection only the key balloon remains.
+                if (Quiet) break;
                 if (m.Status.Key is { } key && key.SerialNumber != previousKey && m.Status.Operation is null)
                 {
                     var compatible = key.SupportsForcePinChange ? "" : " Hinweis: PIN-Wechsel kann nicht erzwungen werden (Firmware < 5.7).";
@@ -94,6 +90,7 @@ internal sealed class TrayContext : ApplicationContext
                 }
                 break;
             case TrayMessageType.Notification:
+                if (Quiet) break;
                 _icon.ShowBalloonTip(6000, m.Title ?? "Yubikey Lifecycle Manager", string.IsNullOrEmpty(m.Text) ? " " : m.Text, m.IsError ? ToolTipIcon.Error : ToolTipIcon.Info);
                 break;
             case TrayMessageType.PairResult:
@@ -101,6 +98,9 @@ internal sealed class TrayContext : ApplicationContext
                 break;
         }
     }
+
+    /// <summary>Connected to the server: the web UI is the place for hints, the tray only shows its icon.</summary>
+    private bool Quiet => _pipeConnected && _status.Connection == BackendConnectionState.Connected;
 
     private void Render()
     {
@@ -121,6 +121,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private void ShowStatus()
     {
+        if (_statusForm.IsDisposed) _statusForm = new StatusForm();
         _statusForm.Show(_status, _pipeConnected);
         if (!_statusForm.Visible) _statusForm.Show();
         _statusForm.Activate();

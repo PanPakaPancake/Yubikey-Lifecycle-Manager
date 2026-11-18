@@ -41,6 +41,38 @@ export function useAction() {
   return { busy, error, run, setError };
 }
 
+/**
+ * Search-as-you-type: queries `url(q)` 300 ms after the last keystroke once `q` has `minLength` characters.
+ * Answers to older queries are dropped, so fast typing never shows stale results.
+ */
+export function useLiveSearch<T>(url: ((q: string) => string) | null, q: string, minLength = 2, delay = 300) {
+  const [results, setResults] = useState<T[] | undefined>();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | undefined>();
+  const seq = useRef(0);
+  const urlRef = useRef(url);
+  urlRef.current = url;
+  const enabled = url !== null;
+  useEffect(() => {
+    const term = q.trim();
+    const mine = ++seq.current;
+    if (!enabled || term.length < minLength) { setResults(undefined); setBusy(false); setError(undefined); return; }
+    setBusy(true);
+    const id = window.setTimeout(async () => {
+      try {
+        const data = await api.get<T[]>(urlRef.current!(term));
+        if (mine === seq.current) { setResults(data); setError(undefined); }
+      } catch (e) {
+        if (mine === seq.current) setError(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (mine === seq.current) setBusy(false);
+      }
+    }, delay);
+    return () => window.clearTimeout(id);
+  }, [q, enabled, minLength, delay]);
+  return { results, busy, error, clear: () => setResults(undefined) };
+}
+
 export function usePolling(fn: () => void, ms: number, active = true) {
   const ref = useRef(fn);
   ref.current = fn;
@@ -152,25 +184,22 @@ export function download(url: string) {
   a.remove();
 }
 
-/** Searches Entra groups of a tenant; calls onPick with the chosen group. */
+/** Searches Entra groups of a tenant while typing (from 2 characters); calls onPick with the chosen group. */
 export function GroupSearch({ tenantId, onPick, exclude = [], placeholder = 'Gruppe suchen …' }: { tenantId: string; onPick: (g: GroupRef) => void; exclude?: string[]; placeholder?: string }) {
   const [q, setQ] = useState('');
-  const [groups, setGroups] = useState<{ id: string; displayName: string }[]>();
-  const { busy, error, run } = useAction();
-  const search = () => run(async () => setGroups(await api.get(`/api/tenants/${tenantId}/groups?q=${encodeURIComponent(q)}`)));
-  const visible = groups?.filter((g) => !exclude.includes(g.id));
+  const search = useLiveSearch<{ id: string; displayName: string }>((term) => `/api/tenants/${tenantId}/groups?q=${encodeURIComponent(term)}`, q);
+  const visible = search.results?.filter((g) => !exclude.includes(g.id));
   return (
     <div>
       <div className="toolbar" style={{ margin: 0 }}>
-        <input type="search" placeholder={placeholder} value={q} onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (q.trim()) search(); } }} />
-        <button type="button" disabled={!q.trim() || busy} onClick={search}>Suchen</button>
-        {groups && <button type="button" className="link" onClick={() => setGroups(undefined)}>Ergebnisse schließen</button>}
+        <input type="search" placeholder={placeholder + ' (ab 2 Zeichen)'} value={q} onChange={(e) => setQ(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} />
+        {search.busy && <Spinner label="Suche …" />}
       </div>
-      <ErrorBox error={error} />
+      <ErrorBox error={search.error} />
       {visible && (
         <div className="pick" style={{ marginTop: 8 }}>
-          {visible.map((g) => <button type="button" key={g.id} onClick={() => { onPick({ id: g.id, name: g.displayName }); setGroups(undefined); setQ(''); }}>{g.displayName}</button>)}
+          {visible.map((g) => <button type="button" key={g.id} onClick={() => { onPick({ id: g.id, name: g.displayName }); setQ(''); }}>{g.displayName}</button>)}
           {visible.length === 0 && <span className="muted small">Keine (weitere) Gruppe gefunden.</span>}
         </div>
       )}
