@@ -8,6 +8,7 @@ namespace Ylm.Server.Audit;
 public static class AuditActions
 {
     public const string SetupCompleted = "setup.completed";
+    public const string SetupAppProvisioned = "setup.app_provisioned";
     public const string Login = "auth.login";
     public const string LoginDenied = "auth.login_denied";
     public const string UserCreated = "user.created";

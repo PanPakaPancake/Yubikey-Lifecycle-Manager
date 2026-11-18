@@ -184,9 +184,10 @@ export function download(url: string) {
   a.remove();
 }
 
-/** Searches Entra groups of a tenant while typing (from 2 characters); calls onPick with the chosen group. */
+/** Searches Entra groups of a tenant; calls onPick with the chosen group. */
 export function GroupSearch({ tenantId, onPick, exclude = [], placeholder = 'Gruppe suchen …' }: { tenantId: string; onPick: (g: GroupRef) => void; exclude?: string[]; placeholder?: string }) {
   const [q, setQ] = useState('');
+  // Searches while typing (from 2 characters, debounced).
   const search = useLiveSearch<{ id: string; displayName: string }>((term) => `/api/tenants/${tenantId}/groups?q=${encodeURIComponent(term)}`, q);
   const visible = search.results?.filter((g) => !exclude.includes(g.id));
   return (
@@ -195,6 +196,7 @@ export function GroupSearch({ tenantId, onPick, exclude = [], placeholder = 'Gru
         <input type="search" placeholder={placeholder + ' (ab 2 Zeichen)'} value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} />
         {search.busy && <Spinner label="Suche …" />}
+        {search.results && <button type="button" className="link" onClick={() => setQ('')}>Ergebnisse schließen</button>}
       </div>
       <ErrorBox error={search.error} />
       {visible && (

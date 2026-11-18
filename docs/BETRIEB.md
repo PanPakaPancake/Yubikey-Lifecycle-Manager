@@ -43,11 +43,12 @@ Beim ersten Start einer leeren Datenbank meldet Entity Framework einmal einen Fe
 ## 2. Einrichtung (einmalig)
 
 1. `https://<adresse>/setup` öffnen und das Setup-Token aus dem Log eingeben.
-2. Organisation, öffentliche Adresse und den ersten Owner (UPN) eintragen.
-3. App-Zertifikat erzeugen.
-4. Das angebotene PowerShell-Skript als Globaler Administrator im **Heim-Tenant** ausführen. Es legt die mandantenfähige App-Registrierung an, lädt das Zertifikat hoch und erteilt den Admin-Consent. Alternativ steht die manuelle Anleitung in der Oberfläche.
-5. Client-ID und Tenant-ID eintragen, testen, abschließen.
-6. Mit dem Konto des ersten Owners anmelden (mit YubiKey).
+2. Organisation und öffentliche Adresse eintragen.
+3. **Bei Microsoft anmelden**: Der Assistent zeigt einen Code für `microsoft.com/devicelogin`. Dort als Globaler Administrator (oder Privileged Role Administrator) des **Heim-Tenants** anmelden. Die Plattform erzeugt dann selbst das App-Zertifikat, legt die mandantenfähige App-Registrierung samt Dienstprinzipal an und erteilt den Admin-Consent. Die Anmeldung läuft über Microsofts App „Microsoft Graph Command Line Tools“, weil die Installation zu diesem Zeitpunkt noch keine eigene App hat; das Token bleibt nur im Arbeitsspeicher und wird nach dem Abschluss verworfen.
+4. Im Abschluss den ersten Owner bestätigen (vorausgefüllt mit dem angemeldeten Konto) und wählen, ob der Heim-Tenant gleich als erster Tenant angebunden wird (Standard: ja).
+5. Mit dem Konto des ersten Owners anmelden (mit YubiKey).
+
+Ausweichweg, z. B. wenn Conditional Access die Code-Anmeldung sperrt: Im Assistenten „Alternativ: per PowerShell-Skript oder manuell anlegen“ aufklappen, das Skript als Globaler Administrator im Heim-Tenant ausführen (oder die App nach der Anleitung von Hand anlegen) und Client-ID und Tenant-ID eintragen.
 
 Benötigte Anwendungsberechtigungen (Microsoft Graph): `UserAuthenticationMethod.ReadWrite.All`, `User.Read.All`, `GroupMember.Read.All`, `Policy.Read.All`, `Policy.ReadWrite.AuthenticationMethod`, `AuditLog.Read.All`, `Organization.Read.All`.
 
