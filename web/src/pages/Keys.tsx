@@ -1,15 +1,22 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api, fmtDate, statusLabels, type AgentInfo, type CustomField, type KeyStatus, type YubiKey } from '../api';
 import { useCan } from '../auth';
-import { Badge, Empty, ErrorBox, Field, Info, Modal, PageHeader, Spinner, StatusBadge, TenantSelect, useAction, useApi } from '../ui';
+import { Badge, Empty, ErrorBox, Field, Info, Modal, PageHeader, Spinner, StatusBadge, useAction, useApi } from '../ui';
+import { useTenant } from '../tenant';
 
 interface KeyPage { total: number; page: number; pageSize: number; items: YubiKey[] }
 
-export default function KeysPage() {
+/** Kundenebene: Keys des gewählten Tenants (oder aller); partner: nur das Partnerlager. */
+export default function KeysPage({ partner }: { partner?: boolean }) {
   const [params, setParams] = useSearchParams();
   const can = useCan();
-  const tenantId = params.get('tenantId') ?? '';
+  const ctx = useTenant();
+  const paramTenant = params.get('tenantId');
+  const { setTenantId } = ctx;
+  useEffect(() => { if (paramTenant) setTenantId(paramTenant); }, [paramTenant, setTenantId]);
+  const tenantId = partner ? '' : ctx.tenantId;
+  const canIntake = partner ? can('ManagePartnerStock') && can('ManageInventory') : can('ManageInventory');
   const status = params.get('status') ?? '';
   const q = params.get('q') ?? '';
   const tag = params.get('tag') ?? '';
@@ -26,7 +33,8 @@ export default function KeysPage() {
   };
 
   const qs = new URLSearchParams();
-  if (tenantId) qs.set('tenantId', tenantId);
+  if (partner) qs.set('partner', 'true');
+  else if (tenantId) qs.set('tenantId', tenantId);
   if (status) qs.set('status', status);
   if (q) qs.set('q', q);
   if (tag) qs.set('tag', tag);
@@ -39,15 +47,16 @@ export default function KeysPage() {
   return (
     <>
       <PageHeader
-        title="Inventar"
-        subtitle={data ? `${data.total} Keys` : undefined}
-        actions={can('ManageInventory') && <>
+        title={partner ? 'Partnerlager' : ctx.tenant ? 'Inventar ' + ctx.tenant.displayName : 'Inventar aller Tenants'}
+        subtitle={partner
+          ? <>Keys, die keinem Kunden zugeordnet sind{data ? ` (${data.total})` : ''}. Von hier aus weisen Sie Keys einem Tenant zu.</>
+          : data ? `${data.total} Keys` : undefined}
+        actions={canIntake && <>
           <button onClick={() => setModal('import')}>CSV importieren</button>
           <button className="primary" onClick={() => setModal('intake')}>Wareneingang per Einstecken</button>
         </>}
       />
       <div className="toolbar">
-        <TenantSelect value={tenantId} onChange={(v) => set('tenantId', v)} />
         <select value={status} onChange={(e) => set('status', e.target.value)} aria-label="Status">
           <option value="">Alle Status</option>
           {(Object.keys(statusLabels) as KeyStatus[]).map((s) => <option key={s} value={s}>{statusLabels[s]}</option>)}
@@ -68,7 +77,7 @@ export default function KeysPage() {
         <div className="card table-wrap" style={{ padding: 0 }}>
           <table>
             <thead>
-              <tr><th>Seriennummer</th><th>Modell</th><th>Firmware</th><th>Status</th><th>Person</th><th>Tenant</th><th>Tags</th><th>Geändert</th></tr>
+              <tr><th>Seriennummer</th><th>Modell</th><th>Firmware</th><th>Status</th><th>Person</th>{!partner && <th>Tenant</th>}<th>Tags</th><th>Geändert</th></tr>
             </thead>
             <tbody>
               {data.items.map((k) => {
@@ -80,7 +89,7 @@ export default function KeysPage() {
                     <td className="mono">{k.firmwareVersion ?? '–'} {k.advisories.some((a) => a.affectsFido) && <Badge tone="warn">Hinweis</Badge>}</td>
                     <td><StatusBadge status={k.status} /></td>
                     <td>{reg.length === 0 ? '–' : reg.map((r) => <div key={r.id}>{r.userDisplayName ?? r.userPrincipalName}<div className="small muted">{r.userPrincipalName}</div></div>)}</td>
-                    <td>{k.tenantName}</td>
+                    {!partner && <td>{k.inPartnerStock ? <Badge tone="warn">Partnerlager</Badge> : k.tenantName}</td>}
                     <td>{k.tags.map((t) => <span className="tag" key={t}>{t}</span>)}</td>
                     <td className="small muted">{fmtDate(k.updatedAt)}</td>
                   </tr>
@@ -97,20 +106,35 @@ export default function KeysPage() {
           <button disabled={page >= pages} onClick={() => set('page', String(page + 1))}>Weiter</button>
         </div>
       )}
-      {modal === 'import' && <ImportModal defaultTenant={tenantId} onClose={() => setModal(null)} onDone={reload} />}
-      {modal === 'intake' && <IntakeModal defaultTenant={tenantId} onClose={() => setModal(null)} onDone={reload} />}
+      {modal === 'import' && <ImportModal defaultTarget={partner ? 'partner' : tenantId} onClose={() => setModal(null)} onDone={reload} />}
+      {modal === 'intake' && <IntakeModal defaultTarget={partner ? 'partner' : tenantId} onClose={() => setModal(null)} onDone={reload} />}
     </>
   );
 }
 
-function ImportModal({ defaultTenant, onClose, onDone }: { defaultTenant: string; onClose: () => void; onDone: () => void }) {
-  const [tenantId, setTenantId] = useState(defaultTenant);
+/** Ziel des Wareneingangs: Tenant-ID oder 'partner' (Partnerlager). */
+function TargetSelect({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const can = useCan();
+  const { tenants } = useTenant();
+  return (
+    <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Ziel">
+      {!value && <option value="">Ziel wählen …</option>}
+      {can('ManagePartnerStock') && <option value="partner">Partnerlager (keinem Kunden zugeordnet)</option>}
+      {tenants.filter((t) => t.status === 'Active').map((t) => <option key={t.id} value={t.id}>Lager von {t.displayName}</option>)}
+    </select>
+  );
+}
+
+const targetUrl = (target: string, action: string) => target === 'partner' ? `/api/partner/keys/${action}` : `/api/tenants/${target}/keys/${action}`;
+
+function ImportModal({ defaultTarget, onClose, onDone }: { defaultTarget: string; onClose: () => void; onDone: () => void }) {
+  const [tenantId, setTenantId] = useState(defaultTarget);
   const [file, setFile] = useState<File>();
   const [result, setResult] = useState<{ created: number; skipped: number; errors: string[] }>();
   const { busy, error, run } = useAction();
   const go = () => run(async () => {
     const text = await file!.text();
-    setResult(await api.post(`/api/tenants/${tenantId}/keys/import`, text, { 'Content-Type': 'text/csv' }));
+    setResult(await api.post(targetUrl(tenantId, 'import'), text, { 'Content-Type': 'text/csv' }));
     onDone();
   });
   return (
@@ -119,7 +143,7 @@ function ImportModal({ defaultTenant, onClose, onDone }: { defaultTenant: string
       <button className="primary" disabled={!tenantId || !file || busy} onClick={go}>Importieren</button>
     </>}>
       <p className="muted">Spalten mit Semikolon getrennt: <code>Seriennummer</code> (Pflicht), <code>Modell</code>, <code>Firmware</code>, <code>Tags</code> (mit Komma getrennt), <code>Notiz</code> sowie Zusatzfelder (Schlüssel oder Bezeichnung als Spaltenkopf). Importierte Keys landen im Lager.</p>
-      <Field label="Tenant"><TenantSelect value={tenantId} onChange={setTenantId} allowAll={false} /></Field>
+      <Field label="Ziel"><TargetSelect value={tenantId} onChange={setTenantId} /></Field>
       <Field label="Datei"><input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0])} /></Field>
       <ErrorBox error={error} />
       {result && (
@@ -132,11 +156,12 @@ function ImportModal({ defaultTenant, onClose, onDone }: { defaultTenant: string
   );
 }
 
-function IntakeModal({ defaultTenant, onClose, onDone }: { defaultTenant: string; onClose: () => void; onDone: () => void }) {
+function IntakeModal({ defaultTarget, onClose, onDone }: { defaultTarget: string; onClose: () => void; onDone: () => void }) {
   const navigate = useNavigate();
-  const [tenantId, setTenantId] = useState(defaultTenant);
+  const [tenantId, setTenantId] = useState(defaultTarget);
   const { data: agents, reload } = useApi<AgentInfo[]>('/api/agents');
-  const { data: fields } = useApi<CustomField[]>(tenantId ? `/api/tenants/${tenantId}/fields` : null, [tenantId]);
+  // Partnerlager: nur die globalen Felder.
+  const { data: fields } = useApi<CustomField[]>(tenantId === 'partner' ? '/api/fields' : tenantId ? `/api/tenants/${tenantId}/fields` : null, [tenantId]);
   const online = agents?.filter((a) => a.online) ?? [];
   const [agentId, setAgentId] = useState('');
   const agent = online.find((a) => a.id === agentId) ?? online[0];
@@ -147,7 +172,7 @@ function IntakeModal({ defaultTenant, onClose, onDone }: { defaultTenant: string
   const { busy, error, run } = useAction();
 
   const go = () => run(async () => {
-    const key = await api.post<YubiKey>(`/api/tenants/${tenantId}/keys/intake`, {
+    const key = await api.post<YubiKey>(targetUrl(tenantId, 'intake'), {
       agentId: agent!.id, tags: tags.split(',').map((t) => t.trim()).filter(Boolean), notes: notes || null,
       customFields: Object.fromEntries(Object.entries(values).map(([k, v]) => [k, v || null])),
     });
@@ -161,7 +186,7 @@ function IntakeModal({ defaultTenant, onClose, onDone }: { defaultTenant: string
       <button className="primary" disabled={!tenantId || !agent || busy} onClick={go}>{busy ? <Spinner label="Key wird gelesen …" /> : 'Eingesteckten Key erfassen'}</button>
     </>}>
       <p className="muted">Stecken Sie neue Keys nacheinander am Admin-PC ein. Seriennummer, Modell und Firmware liest der Agent aus; der Key wird nicht verändert.</p>
-      <Field label="Tenant"><TenantSelect value={tenantId} onChange={setTenantId} allowAll={false} /></Field>
+      <Field label="Ziel"><TargetSelect value={tenantId} onChange={setTenantId} /></Field>
       {online.length === 0 ? (
         <Info tone="warn">Kein Agent online. <button className="link" onClick={reload}>Erneut prüfen</button> · <a href="/agents">Agent koppeln</a></Info>
       ) : (

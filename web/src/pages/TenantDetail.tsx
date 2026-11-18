@@ -6,8 +6,9 @@ import { Badge, Card, download, ErrorBox, Field, GroupChips, GroupSearch, Info, 
 
 const statusText = { Ok: 'In Ordnung', Warning: 'Hinweis', Failed: 'Fehlt' } as const;
 
-export default function TenantDetailPage() {
-  const { id } = useParams();
+export default function TenantDetailPage({ id: propId }: { id?: string }) {
+  const routeParams = useParams();
+  const id = propId ?? routeParams.id;
   const [params] = useSearchParams();
   const can = useCan();
   const { data: t, error, setData } = useApi<Tenant>('/api/tenants/' + id, [id]);

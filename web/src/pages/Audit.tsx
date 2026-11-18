@@ -1,12 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, fmtDate, type AuditEntry } from '../api';
 import { useAuth } from '../auth';
-import { Card, download, Empty, ErrorBox, Info, PageHeader, Spinner, TenantSelect, useAction, useApi } from '../ui';
+import { Card, download, Empty, ErrorBox, Info, PageHeader, Spinner, useAction, useApi } from '../ui';
+import { useTenant } from '../tenant';
 
-export default function AuditPage() {
+/** Kundenebene: Einträge des gewählten Tenants; scope="all": alle Einträge (Partnerebene). */
+export default function AuditPage({ scope }: { scope?: 'all' }) {
   const { me } = useAuth();
-  const [tenantId, setTenantId] = useState('');
+  const ctx = useTenant();
+  const tenantId = scope === 'all' ? '' : ctx.tenantId;
+  useEffect(() => setOlder([]), [tenantId]);
   const [action, setAction] = useState('');
   const [q, setQ] = useState('');
   const [search, setSearch] = useState('');
@@ -47,7 +51,6 @@ export default function AuditPage() {
         ? <Info tone="ok">Die Kette ist intakt ({verify.checkedEntries} Einträge geprüft).</Info>
         : <Info tone="error">Die Kette ist ab Eintrag {verify.brokenAt} verändert worden! ({verify.checkedEntries} Einträge geprüft)</Info>)}
       <div className="toolbar">
-        <TenantSelect value={tenantId} onChange={(v) => resetFilters(() => setTenantId(v))} />
         <select value={action} onChange={(e) => resetFilters(() => setAction(e.target.value))} aria-label="Aktion">
           <option value="">Alle Aktionen</option>
           <option value="key.">Keys</option>

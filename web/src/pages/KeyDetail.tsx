@@ -4,6 +4,7 @@ import { api, fmtDate, lockReasons, type AgentInfo, type AuditEntry, type Custom
 import { useCan } from '../auth';
 import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, StatusBadge, useAction, useApi, usePolling } from '../ui';
 import { CustomFieldInput } from './Keys';
+import { useTenant } from '../tenant';
 
 const sourceLabels: Record<string, string> = {
   Platform: 'Über die Plattform registriert', EntraSync: 'Aus Entra übernommen (selbst registriert)', StockIntake: 'Wareneingang', Import: 'CSV-Import',
@@ -15,8 +16,9 @@ export default function KeyDetailPage() {
   const { data, error, reload } = useApi<{ key: YubiKey; history: AuditEntry[] }>('/api/keys/' + id, [id]);
   const key = data?.key;
   const history = data?.history;
-  const { data: fields } = useApi<CustomField[]>(key ? `/api/tenants/${key.tenantId}/fields` : null, [key?.tenantId]);
-  const [modal, setModal] = useState<'lock' | 'retire' | 'reset' | 'edit' | null>(null);
+  // Partnerlager: nur globale Felder.
+  const { data: fields } = useApi<CustomField[]>(key ? (key.tenantId ? `/api/tenants/${key.tenantId}/fields` : '/api/fields') : null, [key?.id, key?.tenantId]);
+  const [modal, setModal] = useState<'lock' | 'retire' | 'reset' | 'edit' | 'toPartner' | 'assign' | null>(null);
 
   if (error) return <ErrorBox error={error} />;
   if (!key) return <Spinner label="Wird geladen …" />;
@@ -26,12 +28,17 @@ export default function KeyDetailPage() {
     <>
       <PageHeader
         title={key.serialNumber ? `YubiKey ${key.serialNumber}` : 'YubiKey ohne Seriennummer'}
-        subtitle={<><Link to="/keys">Inventar</Link> · {key.tenantName}</>}
+        subtitle={key.inPartnerStock
+          ? <><Link to="/partner/stock">Partnerlager</Link> · keinem Kunden zugeordnet</>
+          : <><Link to="/keys">Inventar</Link> · {key.tenantName}</>}
         actions={<>
-          {can('ManageInventory') && <button onClick={() => setModal('edit')}>Bearbeiten</button>}
+          {(key.inPartnerStock ? can('ManagePartnerStock') : can('ManageInventory')) && <button onClick={() => setModal('edit')}>Bearbeiten</button>}
+          {key.inPartnerStock && key.status === 'InStock' && can('ManagePartnerStock') && can('ManageInventory') && <button className="primary" onClick={() => setModal('assign')}>Einem Tenant zuweisen</button>}
+          {!key.inPartnerStock && (key.status === 'InStock' || key.status === 'Retired') && can('ManagePartnerStock') && can('ManageInventory')
+            && key.registrations.every((r) => r.removedAt) && <button onClick={() => setModal('toPartner')}>Ins Partnerlager</button>}
           {can('LockKeys') && key.nextStates.includes('Locked') && <button className="danger" onClick={() => setModal('lock')}>Sperren</button>}
-          {can('ResetKeys') && key.nextStates.includes('InStock') && key.serialNumber && <button onClick={() => setModal('reset')}>Zurücksetzen und ins Lager</button>}
-          {can('ManageInventory') && key.nextStates.includes('Retired') && <button className="danger" onClick={() => setModal('retire')}>Ausmustern</button>}
+          {can('ResetKeys') && key.nextStates.includes('InStock') && key.serialNumber && <button onClick={() => setModal('reset')}>Zurücksetzen …</button>}
+          {can('RetireKeys') && key.nextStates.includes('Retired') && <button className="danger" onClick={() => setModal('retire')}>Ausmustern …</button>}
         </>}
       />
       {key.needsDetails && key.status !== 'Retired' && (
@@ -84,7 +91,8 @@ export default function KeyDetailPage() {
             </tbody>
           </table>
         )}
-        {active.length === 0 && key.status === 'InStock' && can('RegisterKeys') && <p><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link></p>}
+        {active.length === 0 && key.status === 'InStock' && key.tenantId && can('RegisterKeys') && <p><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link></p>}
+        {key.inPartnerStock && key.status === 'InStock' && <p className="muted small">Keys aus dem Partnerlager werden bei der Registrierung automatisch dem Tenant zugewiesen.</p>}
       </Card>
       {history && history.length > 0 && (
         <Card title="Verlauf" className="mt">
@@ -98,6 +106,8 @@ export default function KeyDetailPage() {
       {modal === 'lock' && <LockModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
       {modal === 'retire' && <RetireModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
       {modal === 'reset' && <ResetModal keyItem={key} onClose={() => { setModal(null); reload(); }} />}
+      {modal === 'toPartner' && <ToPartnerModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
+      {modal === 'assign' && <AssignModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
       {modal === 'edit' && <EditModal keyItem={key} fields={fields ?? []} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
     </>
   );
@@ -129,13 +139,66 @@ function LockModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClose: ()
   );
 }
 
+/** Wahl beim Einlagern/Ausmustern: beim Kunden bleiben oder ins Partnerlager trennen. */
+function StockChoice({ keyItem, toPartner, setToPartner, retire }: { keyItem: YubiKey; toPartner: boolean; setToPartner: (v: boolean) => void; retire?: boolean }) {
+  const can = useCan();
+  if (keyItem.inPartnerStock || !can('ManagePartnerStock')) return null;
+  return (
+    <Field label="Wohin mit dem Key?">
+      <label className={'choice' + (!toPartner ? ' selected' : '')}>
+        <input type="radio" name="stock-target" checked={!toPartner} onChange={() => setToPartner(false)} />
+        <span><strong>Beim Kunden belassen ({keyItem.tenantName})</strong><br />
+          <span className="small muted">{retire ? 'Der Key bleibt ausgemustert im Inventar des Kunden sichtbar.' : 'Der Key bleibt dem Kunden zugeordnet und liegt dort im Lager bereit für die nächste Vergabe.'}</span></span>
+      </label>
+      <label className={'choice' + (toPartner ? ' selected' : '')}>
+        <input type="radio" name="stock-target" checked={toPartner} onChange={() => setToPartner(true)} />
+        <span><strong>Vom Kunden trennen, ins Partnerlager</strong><br />
+          <span className="small muted">{retire ? 'Z. B. Rückläufer, die der Partner entsorgt oder prüft. Der Key verschwindet aus dem Inventar des Kunden.' : 'Der Key gehört danach keinem Kunden mehr und kann später jedem Tenant zugewiesen werden.'}</span></span>
+      </label>
+    </Field>
+  );
+}
+
+function ToPartnerModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClose: () => void; onDone: (k: YubiKey) => void }) {
+  const { busy, error, run } = useAction();
+  const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/to-partner-stock`, {})));
+  return (
+    <Modal title="Ins Partnerlager legen" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy} onClick={go}>Ins Partnerlager</button></>}>
+      <p>Der Key wird von <strong>{keyItem.tenantName}</strong> getrennt und liegt danach im allgemeinen Partnerlager. Von dort kann er jedem Tenant zugewiesen werden.</p>
+      <p className="muted small">Tenant-eigene Zusatzfelder bleiben am Key gespeichert, sind im Partnerlager aber nicht sichtbar. Das zugeordnete Profil wird entfernt.</p>
+      <ErrorBox error={error} />
+    </Modal>
+  );
+}
+
+function AssignModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClose: () => void; onDone: (k: YubiKey) => void }) {
+  const { tenants, tenantId: current } = useTenant();
+  const [tenantId, setTenantId] = useState(current);
+  const { busy, error, run } = useAction();
+  const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/assign`, { tenantId })));
+  return (
+    <Modal title="Einem Tenant zuweisen" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={!tenantId || busy} onClick={go}>Zuweisen</button></>}>
+      <p>Der Key {keyItem.serialNumber} liegt danach im Lager des Tenants bereit.</p>
+      <Field label="Tenant">
+        <select value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
+          {!tenantId && <option value="">Tenant wählen …</option>}
+          {tenants.filter((t) => t.status === 'Active').map((t) => <option key={t.id} value={t.id}>{t.displayName}</option>)}
+        </select>
+      </Field>
+      <ErrorBox error={error} />
+    </Modal>
+  );
+}
+
 function RetireModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClose: () => void; onDone: (k: YubiKey) => void }) {
   const [note, setNote] = useState('');
+  const [toPartner, setToPartner] = useState(false);
   const { busy, error, run } = useAction();
-  const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/retire`, { note: note || null })));
+  const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/retire`, { note: note || null, toPartnerStock: toPartner })));
   return (
     <Modal title="Key ausmustern" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="danger" disabled={busy} onClick={go}>Ausmustern</button></>}>
       <p>Ausgemusterte Keys bleiben im Inventar sichtbar, können aber nicht mehr registriert werden.</p>
+      <StockChoice keyItem={keyItem} toPartner={toPartner} setToPartner={setToPartner} retire />
       <Field label="Notiz (optional)"><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} /></Field>
       <ErrorBox error={error} />
     </Modal>
@@ -149,7 +212,8 @@ function ResetModal({ keyItem, onClose }: { keyItem: YubiKey; onClose: () => voi
   const { busy, error, run } = useAction();
   usePolling(async () => { if (job) setJob(await api.get<Job>('/api/jobs/' + job.id)); }, 1000, job?.state === 'Running');
   const agent = online[0];
-  const go = () => run(async () => setJob(await api.post<Job>(`/api/keys/${keyItem.id}/reset`, { agentId: agent!.id })));
+  const [toPartner, setToPartner] = useState(false);
+  const go = () => run(async () => setJob(await api.post<Job>(`/api/keys/${keyItem.id}/reset`, { agentId: agent!.id, toPartnerStock: toPartner })));
   return (
     <Modal title="Key zurücksetzen" onClose={onClose} footer={<>
       <button onClick={onClose}>{job?.state === 'Succeeded' ? 'Schließen' : 'Abbrechen'}</button>
@@ -157,6 +221,7 @@ function ResetModal({ keyItem, onClose }: { keyItem: YubiKey; onClose: () => voi
     </>}>
       {!job && <>
         <p>Der FIDO-Teil des Keys {keyItem.serialNumber} wird auf Werkseinstellungen zurückgesetzt, alle Registrierungen in Entra werden entfernt und der Key kommt ins Lager.</p>
+        <StockChoice keyItem={keyItem} toPartner={toPartner} setToPartner={setToPartner} />
         {agent ? <Info>Agent: <strong>{agent.machineName}</strong>. Stecken Sie den Key ein und folgen Sie den Hinweisen.</Info>
           : <Info tone="warn">Kein Agent online. <button className="link" onClick={reload}>Erneut prüfen</button></Info>}
       </>}

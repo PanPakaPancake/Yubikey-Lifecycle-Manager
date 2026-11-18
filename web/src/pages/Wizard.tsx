@@ -1,14 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api, type AgentInfo, type Job, type KeyInfo, type Profile } from '../api';
-import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, TenantSelect, useAction, useApi, useLiveSearch, usePolling } from '../ui';
+import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, useAction, useApi, useLiveSearch, usePolling } from '../ui';
 import { JobProgress } from './KeyDetail';
+import { useTenant } from '../tenant';
 
 interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number; entraPasskeys?: { displayName?: string; model?: string; isYubiKey: boolean }[] | null }
 interface Violation { code: string; message: string; canOverride: boolean; resolvedByReset: boolean }
 interface Preview {
   key: KeyInfo; violations: Violation[]; resetRequired: boolean; resetPlanned: boolean; willForcePinChange: boolean; displayName: string;
-  inventoryKey?: { id: string; tenantId: string; tenantName?: string; status: string; activeRegistrations: string[] } | null;
+  inventoryKey?: { id: string; tenantId?: string | null; tenantName?: string; status: string; activeRegistrations: string[] } | null;
   user: { id: string; userPrincipalName: string; displayName?: string; department?: string; accountEnabled: boolean };
   userActiveKeys: number;
 }
@@ -18,7 +19,10 @@ const stepNames = ['Person', 'Key', 'Profil & Prüfung', 'Registrierung', 'PIN-B
 export default function WizardPage() {
   const [params] = useSearchParams();
   const [step, setStep] = useState(0);
-  const [tenantId, setTenantId] = useState(params.get('tenantId') ?? '');
+  // Kundenebene: Tenant kommt aus dem Umschalter oben (Link mit ?tenantId= setzt ihn).
+  const { tenantId, setTenantId } = useTenant();
+  const paramTenant = params.get('tenantId');
+  useEffect(() => { if (paramTenant) setTenantId(paramTenant); }, [paramTenant, setTenantId]);
   const [user, setUser] = useState<EntraUser>();
   const [agentId, setAgentId] = useState('');
   const [profileId, setProfileId] = useState('');
@@ -79,7 +83,7 @@ export default function WizardPage() {
       </ol>
       <ErrorBox error={error} />
 
-      {step === 0 && <PersonStep tenantId={tenantId} setTenantId={setTenantId} onPick={(u) => { setUser(u); setStep(1); void suggestProfile(u); }} />}
+      {step === 0 && <PersonStep tenantId={tenantId} onPick={(u) => { setUser(u); setStep(1); void suggestProfile(u); }} />}
 
       {step === 1 && <KeyStep agentId={agentId} setAgentId={setAgentId} onNext={() => setStep(2)} onBack={() => setStep(0)} />}
 
@@ -103,7 +107,7 @@ export default function WizardPage() {
               {preview.inventoryKey && (
                 preview.inventoryKey.activeRegistrations.length > 0
                   ? <Info tone="error">Dieser Key ist bereits registriert für {preview.inventoryKey.activeRegistrations.join(', ')}. Bitte zuerst <Link to={'/keys/' + preview.inventoryKey.id}>zurücksetzen</Link>. Geteilte Keys folgen in Version 1.1.</Info>
-                  : <Info>Key ist im Inventar ({preview.inventoryKey.tenantName}, Status {preview.inventoryKey.status}) und wird zugewiesen.</Info>
+                  : <Info>Key ist im Inventar ({preview.inventoryKey.tenantName ?? 'Partnerlager, wird diesem Tenant zugewiesen'}, Status {preview.inventoryKey.status}) und wird zugewiesen.</Info>
               )}
               {preview.violations.length === 0 ? <Info tone="ok">Der Key erfüllt das Profil.</Info> : (
                 <div className="alert warn">
@@ -160,15 +164,15 @@ export default function WizardPage() {
   );
 }
 
-function PersonStep({ tenantId, setTenantId, onPick }: { tenantId: string; setTenantId: (v: string) => void; onPick: (u: EntraUser) => void }) {
+function PersonStep({ tenantId, onPick }: { tenantId: string; onPick: (u: EntraUser) => void }) {
   const [q, setQ] = useState('');
   const { results: users, busy, error } = useLiveSearch<EntraUser>(tenantId ? (term) => `/api/tenants/${tenantId}/users?q=${encodeURIComponent(term)}` : null, q);
   return (
     <Card title="Für wen wird der Key registriert?">
       <div className="toolbar">
-        <TenantSelect value={tenantId} onChange={setTenantId} allowAll={false} />
         <input type="search" placeholder="Name, UPN oder Mail eintippen (ab 2 Zeichen)" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus />
       </div>
+      {!tenantId && <Info>Bitte oben im Umschalter den Kunden-Tenant wählen, für den registriert wird.</Info>}
       <ErrorBox error={error} />
       {busy && <Spinner label="Suche in Entra ID …" />}
       {!busy && users && users.length === 0 && <Empty>Keine Person gefunden.</Empty>}
