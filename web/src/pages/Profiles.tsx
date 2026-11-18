@@ -1,20 +1,21 @@
 import { useState } from 'react';
 import { api, type Profile } from '../api';
 import { useCan } from '../auth';
+import { useTenant } from '../tenant';
 import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, TenantSelect, useAction, useApi } from '../ui';
 
 const knownModels = ['YubiKey 5 NFC', 'YubiKey 5C NFC', 'YubiKey 5C', 'YubiKey 5 Nano', 'YubiKey 5C Nano', 'YubiKey 5Ci', 'YubiKey Bio', 'YubiKey C Bio', 'Security Key NFC', 'Security Key C NFC'];
 
 export default function ProfilesPage() {
   const can = useCan();
-  const { data, error, loading, reload } = useApi<Profile[]>('/api/profiles');
-  const { data: tenants } = useApi<{ id: string; displayName: string }[]>('/api/tenants');
+  const { tenantId, tenant, tenants } = useTenant();
+  const { data, error, loading, reload } = useApi<Profile[]>('/api/profiles' + (tenantId ? '?tenantId=' + tenantId : ''), [tenantId]);
   const [editing, setEditing] = useState<Partial<Profile> | null>(null);
   const tenantName = (id?: string) => (id ? tenants?.find((t) => t.id === id)?.displayName ?? 'Tenant' : 'Alle Tenants');
 
   return (
     <>
-      <PageHeader title="Registrierungsprofile" subtitle="Legen fest, wie Keys bei der Registrierung vorbereitet werden." actions={can('ManageProfiles') && <button className="primary" onClick={() => setEditing({})}>Profil anlegen</button>} />
+      <PageHeader title="Registrierungsprofile" subtitle={tenant ? `Profile für ${tenant.displayName}: globale Profile und eigene des Tenants.` : 'Alle Profile. Wählen Sie oben einen Tenant, um nur seine Profile zu sehen.'} actions={can('ManageProfiles') && <button className="primary" onClick={() => setEditing({ tenantId: tenantId || undefined })}>Profil anlegen</button>} />
       <ErrorBox error={error} />
       {loading && !data && <Spinner />}
       <div className="grid cols-2">

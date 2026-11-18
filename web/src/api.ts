@@ -47,11 +47,11 @@ export const api = {
   del: <T>(url: string) => request<T>('DELETE', url),
 };
 
-export type Role = 'Owner' | 'Operator' | 'Helpdesk' | 'Auditor';
+export type Role = 'Owner' | 'Operator' | 'Helpdesk' | 'Auditor' | 'Custom';
 export type KeyStatus = 'InStock' | 'Active' | 'Locked' | 'Retired';
 
 export interface PlatformUser {
-  id: string; upn: string; displayName: string; role: Role; allTenants: boolean; tenantIds: string[];
+  id: string; upn: string; displayName: string; role: Role; customRoleId?: string | null; customRoleName?: string | null; allTenants: boolean; tenantIds: string[];
   isActive: boolean; createdAt: string; lastLoginAt?: string; linked: boolean;
 }
 
@@ -78,7 +78,7 @@ export interface Registration {
 export interface Advisory { id: string; title: string; severity: string; url: string; affectsFido: boolean }
 
 export interface YubiKey {
-  id: string; tenantId: string; tenantName?: string; serialNumber?: number; firmwareVersion?: string; model?: string; formFactor?: string;
+  id: string; tenantId?: string | null; tenantName?: string | null; inPartnerStock: boolean; serialNumber?: number; firmwareVersion?: string; model?: string; formFactor?: string;
   aaGuid?: string; isFips: boolean; status: KeyStatus; statusLabel: string; lockReason?: string; statusNote?: string; source: string;
   needsDetails: boolean; tags: string[]; customFields: Record<string, string | null>; notes?: string; profileId?: string;
   pinChangeForced?: boolean; createdAt: string; updatedAt: string; statusChangedAt: string; advisories: Advisory[];

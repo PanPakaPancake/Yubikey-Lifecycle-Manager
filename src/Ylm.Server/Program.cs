@@ -166,6 +166,7 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous()
 app.MapAuth(app.Environment, ylm);
 app.MapSetup();
 app.MapUsers();
+app.MapRoles();
 app.MapTenants();
 app.MapKeys();
 app.MapProfiles();

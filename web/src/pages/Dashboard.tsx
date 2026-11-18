@@ -1,8 +1,8 @@
-import { useState } from 'react';
 import { Link } from 'react-router';
 import { fmtDate, statusLabels, type KeyStatus } from '../api';
 import { useCan } from '../auth';
-import { Badge, Card, download, Empty, ErrorBox, PageHeader, Spinner, TenantSelect, useApi } from '../ui';
+import { Badge, Card, download, Empty, ErrorBox, PageHeader, Spinner, useApi } from '../ui';
+import { useTenant } from '../tenant';
 
 interface DashboardData {
   generatedAt: string; byStatus: Record<string, number>; inStock: number; total: number; needsDetails: number;
@@ -15,8 +15,10 @@ interface DashboardData {
 
 const monthLabel = (m: string) => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
 
-export default function DashboardPage() {
-  const [tenantId, setTenantId] = useState('');
+/** Kundenebene: gewählter Tenant aus dem Umschalter; scope="all": Partnerebene über alle Kunden. */
+export default function DashboardPage({ scope }: { scope?: 'all' }) {
+  const ctx = useTenant();
+  const tenantId = scope === 'all' ? '' : ctx.tenantId;
   const can = useCan();
   const q = tenantId ? '?tenantId=' + tenantId : '';
   const { data, error, loading } = useApi<DashboardData>('/api/dashboard' + q, [tenantId]);
@@ -25,10 +27,9 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Dashboard"
+        title={scope === 'all' ? 'Übersicht aller Kunden' : ctx.tenant ? 'Übersicht ' + ctx.tenant.displayName : 'Übersicht'}
         subtitle={data ? 'Stand ' + fmtDate(data.generatedAt) : undefined}
         actions={<>
-          <TenantSelect value={tenantId} onChange={setTenantId} />
           {can('ReadReports') && <>
             <button onClick={() => download('/api/exports/keys.csv' + q)}>Keys (CSV)</button>
             <button onClick={() => download('/api/exports/registrations.csv' + q)}>Registrierungen (CSV)</button>

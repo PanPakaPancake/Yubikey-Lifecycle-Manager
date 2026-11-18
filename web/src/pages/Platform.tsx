@@ -16,7 +16,7 @@ export default function PlatformPage() {
 
   return (
     <>
-      <PageHeader title="Plattform" subtitle="Einstellungen für die ganze Installation. Tenants erben sie und können sie teilweise anpassen." />
+      <PageHeader title="Globale Einstellungen" subtitle="Partnerebene: Einstellungen für die ganze Installation. Tenants erben sie und können sie teilweise anpassen." />
       <Card title="Aufbau">
         <div className="hierarchy">
           <span className="level current">Plattform</span><span aria-hidden>→</span><span className="level">Tenant</span><span aria-hidden>→</span><span className="level">Gruppe</span>

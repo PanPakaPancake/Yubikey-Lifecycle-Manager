@@ -23,12 +23,27 @@ public sealed class PlatformUser
     public string Upn { get; set; } = "";
     public string DisplayName { get; set; } = "";
     public PlatformRole Role { get; set; }
+    /// <summary>Eigene Rolle, wenn <see cref="Role"/> = Custom.</summary>
+    public Guid? CustomRoleId { get; set; }
+    public CustomRole? CustomRole { get; set; }
     /// <summary>When false the user only sees the tenants in <see cref="TenantAssignments"/>.</summary>
     public bool AllTenants { get; set; } = true;
     public bool IsActive { get; set; } = true;
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastLoginAt { get; set; }
     public List<PlatformUserTenant> TenantAssignments { get; set; } = [];
+}
+
+/// <summary>Selbst definierte Rolle aus einzelnen Berechtigungen.</summary>
+public sealed class CustomRole
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string? Description { get; set; }
+    /// <summary>Bitmaske aus <see cref="Ylm.Core.Permission"/>.</summary>
+    public long Permissions { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
 public sealed class PlatformUserTenant
@@ -69,7 +84,8 @@ public sealed class Tenant
 public sealed class YubiKey
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public Guid TenantId { get; set; }
+    /// <summary>Null = Partnerlager (keinem Kunden-Tenant zugeordnet).</summary>
+    public Guid? TenantId { get; set; }
     public int? SerialNumber { get; set; }
     public string? FirmwareVersion { get; set; }
     public string? Model { get; set; }

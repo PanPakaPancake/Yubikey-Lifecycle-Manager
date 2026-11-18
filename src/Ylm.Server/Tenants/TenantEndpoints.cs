@@ -157,7 +157,7 @@ public static class TenantEndpoints
         g.MapPost("/{id:guid}/checks", async (Guid id, CurrentUser cu, YlmDbContext db, TenantCheckService checks) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.ReadInventory);
-            if (!RolePermissions.Has(user.Role, Permission.ManageTenants) && !RolePermissions.Has(user.Role, Permission.SyncTenants)) throw ApiException.Forbidden();
+            if (!CurrentUser.Has(user, Permission.ManageTenants) && !CurrentUser.Has(user, Permission.SyncTenants)) throw ApiException.Forbidden();
             var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
             await checks.RunAsync(t, AuditService.User(user), freshToken: true);
             return Results.Ok(ToDto(t));

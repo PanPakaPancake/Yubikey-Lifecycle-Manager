@@ -230,3 +230,34 @@ pre.script { background: var(--surface-2); border: 1px solid var(--line); border
 .hierarchy .level { padding: 3px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); }
 .hierarchy .level.current { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
 tr.disabled-row td { opacity: .55; }
+
+/* Top bar with tenant switcher (Kundenebene) and context badge */
+.topbar { display: flex; align-items: center; gap: 14px; margin: -8px 0 20px; padding-bottom: 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.context-badge { font-size: .75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; padding: 4px 10px; border-radius: 999px; }
+.context-badge.partner { background: color-mix(in srgb, var(--warn) 18%, transparent); color: var(--ink); border: 1px solid color-mix(in srgb, var(--warn) 50%, transparent); }
+.context-badge.customer { background: var(--accent-soft); color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+.tenant-switcher { position: relative; }
+.tenant-switcher.dim .tenant-current { opacity: .6; }
+.tenant-current { min-width: 280px; justify-content: flex-start; gap: 10px; padding: 8px 12px; }
+.tenant-label { font-size: .72rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.tenant-name { font-weight: 700; }
+.tenant-domain { color: var(--muted); font-weight: 400; font-size: .85rem; margin-right: auto; }
+.tenant-menu { position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; width: min(440px, 92vw); background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,.18); padding: 10px; }
+.tenant-menu input[type=search] { width: 100%; }
+.tenant-options { max-height: 360px; overflow: auto; display: flex; flex-direction: column; gap: 2px; }
+.tenant-options button { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; border: 0; background: none; text-align: left; padding: 7px 10px; white-space: normal; }
+.tenant-options button.selected { background: var(--accent-soft); }
+.dot-warn { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--warn); margin-left: 6px; vertical-align: middle; }
+.nav .section.partner, .nav .section.customer { display: flex; align-items: center; gap: 6px; }
+.nav .section .context-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.nav .section.customer .context-dot { background: var(--accent); }
+.nav .section.partner .context-dot { background: var(--warn); }
+.nav .section-sub { margin: -2px 10px 4px; font-size: .8rem; color: var(--ink); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 16px; }
+.perm-group { margin: 10px 0 4px; font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 8px; cursor: pointer; }
+.choice.selected { border-color: var(--accent); background: var(--accent-soft); }
+.choice input { width: auto; margin-top: 3px; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin-bottom: 16px; }
+.tabs button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 8px 14px; }
+.tabs button.selected { border-bottom-color: var(--accent); color: var(--accent); font-weight: 600; }

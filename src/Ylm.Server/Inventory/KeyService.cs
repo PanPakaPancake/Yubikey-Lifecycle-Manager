@@ -24,7 +24,7 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
     {
         var active = key.Registrations.Where(r => r.RemovedAt is null).ToList();
         if (active.Count == 0) return;
-        var tenant = await db.Tenants.FirstAsync(t => t.Id == key.TenantId, ct);
+        var tenant = await db.Tenants.FirstAsync(t => t.Id == key.TenantId, ct); // keys with registrations always belong to a tenant
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
         foreach (var reg in active)
         {
@@ -47,10 +47,50 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
         await db.SaveChangesAsync(ct);
     }
 
-    public async Task RetireAsync(YubiKey key, string? note, AuditActor actor, CancellationToken ct = default)
+    public async Task RetireAsync(YubiKey key, string? note, AuditActor actor, bool toPartnerStock = false, CancellationToken ct = default)
     {
         SetStatus(key, KeyStatus.Retired, note);
-        audit.Add(actor, AuditActions.KeyRetired, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { note });
+        audit.Add(actor, AuditActions.KeyRetired, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { note, toPartnerStock });
+        if (toPartnerStock) MoveToPartnerStock(key, actor, audit);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>
+    /// Trennt den Key vom Kunden-Tenant und legt ihn ins allgemeine Partnerlager.
+    /// Nur ohne aktive Registrierungen (also im Lager oder ausgemustert).
+    /// </summary>
+    public static void MoveToPartnerStock(YubiKey key, AuditActor actor, AuditService audit)
+    {
+        if (key.TenantId is null) return;
+        if (key.Status is not (KeyStatus.InStock or KeyStatus.Retired) || key.Registrations.Any(r => r.RemovedAt is null))
+            throw new DomainException("not_in_stock", "Nur Keys im Lager oder ausgemusterte Keys ohne aktive Registrierung können ins Partnerlager.");
+        var from = key.TenantId;
+        audit.Add(actor, AuditActions.KeyMovedToPartnerStock, from, key.Id, key.SerialNumber?.ToString(), new { fromTenantId = from });
+        key.TenantId = null;
+        key.Tenant = null;
+        key.ProfileId = null;
+        key.UpdatedAt = DateTimeOffset.UtcNow;
+    }
+
+    public async Task MoveToPartnerStockAsync(YubiKey key, AuditActor actor, CancellationToken ct = default)
+    {
+        if (key.SerialNumber is { } serial && await db.Keys.AnyAsync(k => k.Id != key.Id && k.TenantId == null && k.SerialNumber == serial, ct))
+            throw ApiException.Conflict("serial_exists", $"Im Partnerlager gibt es bereits einen Key mit der Seriennummer {serial}.");
+        MoveToPartnerStock(key, actor, audit);
+        await db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Weist einen Key aus dem Partnerlager einem Kunden-Tenant zu; dort liegt er dann bereit im Lager.</summary>
+    public async Task AssignToTenantAsync(YubiKey key, Guid tenantId, AuditActor actor, CancellationToken ct = default)
+    {
+        if (key.TenantId is not null) throw ApiException.Conflict("not_partner_stock", "Der Key ist bereits einem Tenant zugeordnet.");
+        if (key.Status != KeyStatus.InStock) throw ApiException.Conflict("not_in_stock", "Nur Keys im Lager können einem Tenant zugewiesen werden.");
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId && t.Status == TenantStatus.Active, ct) ?? throw ApiException.NotFound("Tenant");
+        if (key.SerialNumber is { } serial && await db.Keys.AnyAsync(k => k.TenantId == tenantId && k.SerialNumber == serial, ct))
+            throw ApiException.Conflict("serial_exists", $"Im Tenant „{tenant.DisplayName}“ ist die Seriennummer {serial} schon erfasst (evtl. ausgemustert).");
+        key.TenantId = tenantId;
+        key.UpdatedAt = DateTimeOffset.UtcNow;
+        audit.Add(actor, AuditActions.KeyAssignedToTenant, tenantId, key.Id, key.SerialNumber?.ToString(), new { from = "partner_stock" });
         await db.SaveChangesAsync(ct);
     }
 
@@ -61,19 +101,22 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
             .OrderByDescending(k => k.UpdatedAt).FirstOrDefaultAsync(ct);
 
     /// <summary>Fields of a tenant after inheritance: global fields (with the tenant's changes) and the tenant's own fields.</summary>
-    public async Task<IReadOnlyList<ResolvedCustomField>> ResolveFieldsAsync(Guid tenantId, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ResolvedCustomField>> ResolveFieldsAsync(Guid? tenantId, CancellationToken ct = default)
     {
-        var defs = await db.CustomFields.AsNoTracking().Where(f => f.TenantId == null || f.TenantId == tenantId).ToListAsync(ct);
-        var overrides = await db.CustomFieldOverrides.AsNoTracking().Where(o => o.TenantId == tenantId).ToDictionaryAsync(o => o.FieldId, o => o.ToSpec(), ct);
+        // Partnerlager (tenantId null): nur die globalen Felder, ohne Tenant-Änderungen.
+        var defs = await db.CustomFields.AsNoTracking().Where(f => f.TenantId == null || (tenantId != null && f.TenantId == tenantId)).ToListAsync(ct);
+        Dictionary<Guid, CustomFieldOverrideSpec> overrides = tenantId is null
+            ? new()
+            : await db.CustomFieldOverrides.AsNoTracking().Where(o => o.TenantId == tenantId).ToDictionaryAsync(o => o.FieldId, o => o.ToSpec(), ct);
         return CustomFieldInheritance.Resolve(defs.Where(f => f.TenantId == null).Select(f => f.ToDef()), overrides, defs.Where(f => f.TenantId != null).Select(f => f.ToDef()));
     }
 
     /// <summary>Active field specs of a tenant (disabled global fields left out).</summary>
-    public async Task<IReadOnlyList<CustomFieldSpec>> FieldSpecsAsync(Guid tenantId, CancellationToken ct = default) =>
+    public async Task<IReadOnlyList<CustomFieldSpec>> FieldSpecsAsync(Guid? tenantId, CancellationToken ct = default) =>
         (await ResolveFieldsAsync(tenantId, ct)).Where(f => f.IsActive).Select(f => f.Spec).ToList();
 
     /// <param name="existing">Current values of the key. Values of fields that are not active (e.g. disabled for the tenant) are kept.</param>
-    public async Task<Dictionary<string, string?>> ValidateFieldsAsync(Guid tenantId, Dictionary<string, string?>? values,
+    public async Task<Dictionary<string, string?>> ValidateFieldsAsync(Guid? tenantId, Dictionary<string, string?>? values,
         IReadOnlyDictionary<string, string?>? existing = null, CancellationToken ct = default)
     {
         var specs = await FieldSpecsAsync(tenantId, ct);

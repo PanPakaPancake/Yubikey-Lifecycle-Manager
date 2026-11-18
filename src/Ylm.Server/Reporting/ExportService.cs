@@ -9,7 +9,7 @@ public sealed class ExportService(YlmDbContext db)
     public async Task<byte[]> KeysCsvAsync(IReadOnlyList<Guid> tenantIds, CancellationToken ct = default)
     {
         var keys = await db.Keys.AsNoTracking().Include(k => k.Tenant).Include(k => k.Registrations)
-            .Where(k => tenantIds.Contains(k.TenantId)).OrderBy(k => k.Tenant!.DisplayName).ThenBy(k => k.SerialNumber).ToListAsync(ct);
+            .Where(k => k.TenantId != null && tenantIds.Contains(k.TenantId.Value)).OrderBy(k => k.Tenant!.DisplayName).ThenBy(k => k.SerialNumber).ToListAsync(ct);
         // Global fields first, then the tenants' own fields.
         var fieldKeys = (await db.CustomFields.AsNoTracking().Where(f => f.TenantId == null || tenantIds.Contains(f.TenantId.Value))
                 .OrderBy(f => f.TenantId != null).ThenBy(f => f.SortOrder).Select(f => f.Key).ToListAsync(ct))
