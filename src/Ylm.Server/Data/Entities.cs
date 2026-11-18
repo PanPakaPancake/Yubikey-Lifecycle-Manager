@@ -90,18 +90,6 @@ public sealed class CustomRole
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
-/// <summary>Selbst definierte Rolle aus einzelnen Berechtigungen.</summary>
-public sealed class CustomRole
-{
-    public Guid Id { get; set; } = Guid.NewGuid();
-    public string Name { get; set; } = "";
-    public string? Description { get; set; }
-    /// <summary>Bitmaske aus <see cref="Ylm.Core.Permission"/>.</summary>
-    public long Permissions { get; set; }
-    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
-    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
-}
-
 public sealed class PlatformUserTenant
 {
     public Guid PlatformUserId { get; set; }
