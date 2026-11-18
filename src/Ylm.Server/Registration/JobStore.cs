@@ -9,7 +9,8 @@ public sealed class OperationJob
 {
     public Guid Id { get; } = Guid.NewGuid();
     public required Guid UserId { get; init; }
-    public required Guid TenantId { get; init; }
+    /// <summary>Null bei Keys im Partnerlager.</summary>
+    public required Guid? TenantId { get; init; }
     public required string Kind { get; init; }
     public JobState State { get; set; } = JobState.Running;
     public string Step { get; set; } = "Wird gestartet …";

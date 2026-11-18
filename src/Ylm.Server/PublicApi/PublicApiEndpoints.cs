@@ -71,7 +71,7 @@ public static class PublicApiEndpoints
         g.MapGet("/keys", async (ClaimsPrincipal p, YlmDbContext db, string? tenant, string? status, string? serial, string? upn, string? tag, int? page, int? pageSize) =>
         {
             var tenantIds = await ScopeAsync(p, db, tenant);
-            var q = db.Keys.AsNoTracking().Include(k => k.Registrations).Include(k => k.Tenant).Where(k => tenantIds.Contains(k.TenantId));
+            var q = db.Keys.AsNoTracking().Include(k => k.Registrations).Include(k => k.Tenant).Where(k => k.TenantId != null && tenantIds.Contains(k.TenantId.Value));
             if (Enum.TryParse<KeyStatus>(status, true, out var st)) q = q.Where(k => k.Status == st);
             if (int.TryParse(serial, out var s)) q = q.Where(k => k.SerialNumber == s);
             if (!string.IsNullOrWhiteSpace(upn)) q = q.Where(k => k.Registrations.Any(r => r.RemovedAt == null && r.UserPrincipalName.ToLower() == upn.ToLower()));
@@ -86,7 +86,7 @@ public static class PublicApiEndpoints
         g.MapGet("/keys/{id:guid}", async Task<Microsoft.AspNetCore.Http.HttpResults.Results<Microsoft.AspNetCore.Http.HttpResults.Ok<ApiKeyDto>, Microsoft.AspNetCore.Http.HttpResults.NotFound>> (Guid id, ClaimsPrincipal p, YlmDbContext db) =>
         {
             var allowed = Allowed(p);
-            var key = await db.Keys.AsNoTracking().Include(k => k.Registrations).Include(k => k.Tenant).FirstOrDefaultAsync(k => k.Id == id && allowed.Contains(k.TenantId));
+            var key = await db.Keys.AsNoTracking().Include(k => k.Registrations).Include(k => k.Tenant).FirstOrDefaultAsync(k => k.Id == id && k.TenantId != null && allowed.Contains(k.TenantId.Value));
             return key is null ? TypedResults.NotFound() : TypedResults.Ok(Map(key));
         }).WithSummary("Einen Key abrufen");
 
@@ -94,7 +94,7 @@ public static class PublicApiEndpoints
         {
             var tenantIds = await ScopeAsync(p, db, tenant);
             var keys = await db.Keys.AsNoTracking().Include(k => k.Registrations).Include(k => k.Tenant)
-                .Where(k => tenantIds.Contains(k.TenantId) && k.Registrations.Any(r => r.RemovedAt == null && r.UserPrincipalName.ToLower() == upn.ToLower())).ToListAsync();
+                .Where(k => k.TenantId != null && tenantIds.Contains(k.TenantId.Value) && k.Registrations.Any(r => r.RemovedAt == null && r.UserPrincipalName.ToLower() == upn.ToLower())).ToListAsync();
             return TypedResults.Ok(keys.Select(Map).ToList());
         }).WithSummary("Aktive Keys einer Person").WithDescription(tenantHint.Trim());
 

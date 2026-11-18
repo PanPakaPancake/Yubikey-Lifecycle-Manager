@@ -236,6 +236,36 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("custom_field_overrides", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.CustomRole", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<long>("Permissions")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("custom_roles", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.GroupProfileAssignment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -412,6 +442,9 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<Guid?>("CustomRoleId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasColumnType("text");
@@ -433,6 +466,8 @@ namespace Ylm.Server.Data.Migrations
                         .HasColumnType("text");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("CustomRoleId");
 
                     b.HasIndex("EntraObjectId")
                         .IsUnique();
@@ -649,13 +684,18 @@ namespace Ylm.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("text[]");
 
-                    b.Property<Guid>("TenantId")
+                    b.Property<Guid?>("TenantId")
                         .HasColumnType("uuid");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("SerialNumber")
+                        .IsUnique()
+                        .HasDatabaseName("IX_keys_partner_serial")
+                        .HasFilter("\"TenantId\" IS NULL AND \"SerialNumber\" IS NOT NULL");
 
                     b.HasIndex("TenantId", "SerialNumber")
                         .IsUnique()
@@ -726,6 +766,16 @@ namespace Ylm.Server.Data.Migrations
                     b.Navigation("Key");
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.PlatformUser", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.CustomRole", "CustomRole")
+                        .WithMany()
+                        .HasForeignKey("CustomRoleId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("CustomRole");
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.PlatformUserTenant", b =>
                 {
                     b.HasOne("Ylm.Server.Data.PlatformUser", null)
@@ -754,8 +804,7 @@ namespace Ylm.Server.Data.Migrations
                     b.HasOne("Ylm.Server.Data.Tenant", "Tenant")
                         .WithMany()
                         .HasForeignKey("TenantId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Cascade);
 
                     b.Navigation("Tenant");
                 });

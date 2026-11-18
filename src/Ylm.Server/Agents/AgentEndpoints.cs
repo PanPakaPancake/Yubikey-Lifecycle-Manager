@@ -49,7 +49,7 @@ public static class AgentEndpoints
         g.MapPost("/pairing-codes", async (CurrentUser cu, YlmDbContext db) =>
         {
             var user = await cu.GetAsync();
-            if ((RolePermissions.For(user.Role) & AgentPermissions) == 0) throw ApiException.Forbidden("Ihre Rolle benötigt keinen Agent.");
+            if ((CurrentUser.Effective(user) & AgentPermissions) == 0) throw ApiException.Forbidden("Ihre Rolle benötigt keinen Agent.");
             var code = TokenHashing.NewPairingCode();
             var expires = DateTimeOffset.UtcNow.AddMinutes(10);
             db.PairingCodes.Add(new PairingCode { CodeHash = TokenHashing.Hash(TokenHashing.NormalizePairingCode(code)), PlatformUserId = user.Id, ExpiresAt = expires });

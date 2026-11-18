@@ -32,6 +32,11 @@ public static class AuditActions
     public const string KeyLocked = "key.locked";
     public const string KeyReset = "key.reset";
     public const string KeyRetired = "key.retired";
+    public const string KeyMovedToPartnerStock = "key.moved_to_partner_stock";
+    public const string KeyAssignedToTenant = "key.assigned_to_tenant";
+    public const string RoleCreated = "role.created";
+    public const string RoleUpdated = "role.updated";
+    public const string RoleDeleted = "role.deleted";
     public const string ProfileCreated = "profile.created";
     public const string ProfileUpdated = "profile.updated";
     public const string ProfileDeleted = "profile.deleted";

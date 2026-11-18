@@ -145,7 +145,8 @@ public sealed class RegistrationService(
 
             // 2. Inventar prüfen
             var existing = key.SerialNumber is { } serial ? await keys.FindBySerialAsync(serial, ct) : null;
-            if (existing is not null && existing.TenantId != tenantId)
+            // Keys aus dem Partnerlager (TenantId null) werden bei der Registrierung dem Tenant zugewiesen.
+            if (existing is not null && existing.TenantId is { } otherTenant && otherTenant != tenantId)
                 throw ApiException.Conflict("other_tenant", $"Dieser Key ist im Inventar des Tenants „{existing.Tenant?.DisplayName}“ erfasst.");
             var activeRegs = existing?.Registrations.Where(r => r.RemovedAt is null).ToList() ?? [];
             if (activeRegs.Count > 0 && !reset)
@@ -217,6 +218,11 @@ public sealed class RegistrationService(
             else
             {
                 if (inv.Status is KeyStatus.Active or KeyStatus.Locked) KeyService.SetStatus(inv, KeyStatus.InStock, "Werksreset");
+                if (inv.TenantId is null)
+                {
+                    inv.TenantId = tenantId;
+                    audit.Add(actor, AuditActions.KeyAssignedToTenant, tenantId, inv.Id, inv.SerialNumber?.ToString(), new { from = "partner_stock", context = "registration" });
+                }
             }
             inv.SerialNumber = key.SerialNumber;
             inv.FirmwareVersion = key.FirmwareVersion;
@@ -297,7 +303,7 @@ public sealed class RegistrationService(
     }
 
     /// <summary>Zurücksetzen: removes passkeys in Entra, resets FIDO2 on the key, back to stock.</summary>
-    public OperationJob StartReset(YubiKey key, PlatformUser actor, Guid agentId, JobStore jobs, IServiceScopeFactory scopes)
+    public OperationJob StartReset(YubiKey key, PlatformUser actor, Guid agentId, bool toPartnerStock, JobStore jobs, IServiceScopeFactory scopes)
     {
         var job = jobs.Add(new OperationJob { UserId = actor.Id, TenantId = key.TenantId, Kind = "reset", TotalSteps = 3, KeyId = key.Id });
         var keyId = key.Id;
@@ -305,12 +311,12 @@ public sealed class RegistrationService(
         {
             using var scope = scopes.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<RegistrationService>();
-            await svc.RunResetAsync(job, keyId, actor.Id, agentId);
+            await svc.RunResetAsync(job, keyId, actor.Id, agentId, toPartnerStock);
         });
         return job;
     }
 
-    internal async Task RunResetAsync(OperationJob job, Guid keyId, Guid actorId, Guid agentId)
+    internal async Task RunResetAsync(OperationJob job, Guid keyId, Guid actorId, Guid agentId, bool toPartnerStock = false)
     {
         ConnectedAgent? agent = null;
         try
@@ -334,9 +340,10 @@ public sealed class RegistrationService(
             KeyService.SetStatus(key, KeyStatus.InStock, "Zurückgesetzt");
             key.PinChangeForced = null;
             key.ProfileId = null;
-            audit.Add(actor, AuditActions.KeyReset, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { agent = agent.MachineName });
+            audit.Add(actor, AuditActions.KeyReset, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { agent = agent.MachineName, toPartnerStock });
+            if (toPartnerStock) KeyService.MoveToPartnerStock(key, actor, audit);
             await db.SaveChangesAsync();
-            job.Step = "Key zurückgesetzt und wieder im Lager";
+            job.Step = toPartnerStock ? "Key zurückgesetzt und im Partnerlager" : "Key zurückgesetzt und im Tenant-Lager bereit";
             job.Prompt = null;
             job.State = JobState.Succeeded;
             agents.Progress(agent, new AgentProgress("Key zurückgesetzt", "Der Key ist wieder im Lager.", 3, 3, Done: true));

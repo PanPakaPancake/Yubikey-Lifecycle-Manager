@@ -13,6 +13,7 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
 
     public DbSet<InstallationSettings> Installation => Set<InstallationSettings>();
     public DbSet<PlatformUser> PlatformUsers => Set<PlatformUser>();
+    public DbSet<CustomRole> CustomRoles => Set<CustomRole>();
     public DbSet<PlatformUserTenant> PlatformUserTenants => Set<PlatformUserTenant>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
     public DbSet<YubiKey> Keys => Set<YubiKey>();
@@ -41,6 +42,13 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.HasIndex(x => x.EntraObjectId).IsUnique();
             e.HasIndex(x => x.Upn).IsUnique();
             e.HasMany(x => x.TenantAssignments).WithOne().HasForeignKey(x => x.PlatformUserId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.CustomRole).WithMany().HasForeignKey(x => x.CustomRoleId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        b.Entity<CustomRole>(e =>
+        {
+            e.ToTable("custom_roles");
+            e.HasIndex(x => x.Name).IsUnique();
         });
 
         b.Entity<PlatformUserTenant>(e =>
@@ -65,6 +73,8 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.ToTable("keys");
             e.HasIndex(x => new { x.TenantId, x.SerialNumber }).IsUnique().HasFilter("\"SerialNumber\" IS NOT NULL");
             e.HasIndex(x => new { x.TenantId, x.Status });
+            // Partnerlager (TenantId null): eine Seriennummer höchstens einmal.
+            e.HasIndex(x => x.SerialNumber).IsUnique().HasFilter("\"TenantId\" IS NULL AND \"SerialNumber\" IS NOT NULL").HasDatabaseName("IX_keys_partner_serial");
             e.Property(x => x.CustomFields).HasColumnType("jsonb").HasConversion(
                 v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null),
                 v => JsonSerializer.Deserialize<Dictionary<string, string?>>(v, (JsonSerializerOptions?)null) ?? new Dictionary<string, string?>(),
@@ -72,7 +82,7 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
                     (a, b) => JsonSerializer.Serialize(a, (JsonSerializerOptions?)null) == JsonSerializer.Serialize(b, (JsonSerializerOptions?)null),
                     v => JsonSerializer.Serialize(v, (JsonSerializerOptions?)null).GetHashCode(),
                     v => new Dictionary<string, string?>(v)));
-            e.HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne(x => x.Tenant).WithMany().HasForeignKey(x => x.TenantId).IsRequired(false).OnDelete(DeleteBehavior.Cascade);
             e.HasMany(x => x.Registrations).WithOne(x => x.Key).HasForeignKey(x => x.KeyId).OnDelete(DeleteBehavior.Cascade);
         });
 

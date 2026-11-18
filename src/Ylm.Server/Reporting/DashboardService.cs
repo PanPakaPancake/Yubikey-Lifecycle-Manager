@@ -28,7 +28,7 @@ public sealed class DashboardService(YlmDbContext db)
 {
     public async Task<Dashboard> BuildAsync(IReadOnlyList<Guid> tenantIds, DateTimeOffset? from = null, CancellationToken ct = default)
     {
-        var keys = await db.Keys.AsNoTracking().Where(k => tenantIds.Contains(k.TenantId))
+        var keys = await db.Keys.AsNoTracking().Where(k => k.TenantId != null && tenantIds.Contains(k.TenantId.Value))
             .Select(k => new { k.TenantId, k.Status, k.FirmwareVersion, k.SerialNumber }).ToListAsync(ct);
         var regs = await db.Registrations.AsNoTracking().Where(r => tenantIds.Contains(r.TenantId))
             .Select(r => new { r.TenantId, r.EntraUserId, r.RegisteredAt, r.RemovedAt, r.Source }).ToListAsync(ct);
