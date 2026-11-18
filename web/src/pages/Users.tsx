@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api, fmtDate, type PlatformUser, type Role, type Tenant } from '../api';
+import { api, fmtDate, loginKindLabel, type LoginKind, type PlatformUser, type Role, type Tenant, type UserPasskey } from '../api';
 import { useAuth } from '../auth';
 import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
 
@@ -16,6 +16,7 @@ export default function UsersPage() {
   const roles = useApi<RolesResponse>('/api/roles');
   const [editing, setEditing] = useState<Partial<PlatformUser> | null>(null);
   const [editingRole, setEditingRole] = useState<Partial<CustomRole> | null>(null);
+  const [link, setLink] = useState<{ user: string; url: string; expiresAt: string } | null>(null);
 
   return (
     <>
@@ -33,15 +34,16 @@ export default function UsersPage() {
         {data && (
           <div className="card table-wrap" style={{ padding: 0 }}>
             <table>
-              <thead><tr><th>Person</th><th>Rolle</th><th>Zuständig für</th><th>Letzte Anmeldung</th><th>Status</th><th /></tr></thead>
+              <thead><tr><th>Person</th><th>Anmeldung</th><th>Rolle</th><th>Zuständig für</th><th>Letzte Anmeldung</th><th>Status</th><th /></tr></thead>
               <tbody>
                 {data.map((u) => (
                   <tr key={u.id}>
                     <td>{u.displayName}<div className="small muted">{u.upn}</div></td>
+                    <td className="small"><LoginState u={u} /></td>
                     <td>{u.role === 'Custom' ? <>{u.customRoleName ?? 'Eigene Rolle'} <Badge>eigene</Badge></> : u.role}</td>
                     <td>{u.allTenants ? 'Alle Tenants' : u.tenantIds.map((id) => tenants?.find((t) => t.id === id)?.displayName ?? '…').join(', ') || 'keine'}</td>
                     <td className="small">{u.lastLoginAt ? fmtDate(u.lastLoginAt) : u.linked ? '–' : <span className="muted">noch nie</span>}</td>
-                    <td>{u.isActive ? <Badge tone="ok">aktiv</Badge> : <Badge>deaktiviert</Badge>}</td>
+                    <td>{!u.isActive ? <Badge>deaktiviert</Badge> : u.lockedUntil ? <Badge tone="error">gesperrt bis {fmtDate(u.lockedUntil)}</Badge> : <Badge tone="ok">aktiv</Badge>}</td>
                     <td><button className="link" onClick={() => setEditing(u)}>Bearbeiten</button></td>
                   </tr>
                 ))}
@@ -52,7 +54,15 @@ export default function UsersPage() {
       </>}
       {tab === 'roles' && <RolesTab roles={roles.data} error={roles.error} onEdit={setEditingRole} />}
       {editing && <UserModal user={editing} self={editing.id === me.user?.id} tenants={tenants ?? []} roles={roles.data}
-        onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); roles.reload(); }} />}
+        onClose={() => setEditing(null)} onSaved={(l) => { setEditing(null); reload(); roles.reload(); if (l) setLink(l); }} />}
+      {link && <Modal title="Einrichtungslink" onClose={() => setLink(null)} footer={<button className="primary" onClick={() => setLink(null)}>Fertig</button>}>
+        <p>Schicken Sie diesen Link an <strong>{link.user}</strong>. Damit richtet die Person ihren Zugang selbst ein. Der Link gilt einmal, bis {fmtDate(link.expiresAt)}.</p>
+        <div className="setup-link">
+          <input readOnly value={link.url} onFocus={(e) => e.target.select()} />
+          <button onClick={() => void navigator.clipboard?.writeText(link.url)}>Kopieren</button>
+        </div>
+        <Info>Der Link wird nur jetzt angezeigt. Bei Bedarf erzeugen Sie unter „Bearbeiten“ einen neuen.</Info>
+      </Modal>}
       {editingRole && roles.data && <RoleModal role={editingRole} catalog={roles.data.catalog}
         onClose={() => setEditingRole(null)} onSaved={() => { setEditingRole(null); roles.reload(); reload(); }} />}
     </>
@@ -142,7 +152,25 @@ function RoleModal({ role, catalog, onClose, onSaved }: { role: Partial<CustomRo
   );
 }
 
-function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Partial<PlatformUser>; self: boolean; tenants: Tenant[]; roles?: RolesResponse; onClose: () => void; onSaved: () => void }) {
+type SetupLink = { user: string; url: string; expiresAt: string };
+
+function LoginState({ u }: { u: PlatformUser }) {
+  const kind = loginKindLabel[u.loginKind] ?? u.loginKind;
+  if (u.loginKind === 'Entra') return <>{kind}</>;
+  const ready = u.loginKind === 'Local' ? u.passkeyCount > 0 : u.emergencyReady;
+  return <>{kind}<div>{ready
+    ? <span className="muted">{u.loginKind === 'Local' ? `${u.passkeyCount} Passkey${u.passkeyCount === 1 ? '' : 's'}` : 'eingerichtet'}</span>
+    : u.setupPending ? <Badge tone="warn">Einrichtung offen</Badge> : <Badge tone="error">nicht eingerichtet</Badge>}</div></>;
+}
+
+const kinds: { kind: LoginKind; text: string }[] = [
+  { kind: 'Entra', text: 'Konto aus dem Heim-Tenant, Anmeldung über Microsoft mit YubiKey.' },
+  { kind: 'Local', text: 'Konto nur auf der Plattform, Anmeldung mit Passkey bzw. YubiKey. Einrichtung per Einmal-Link.' },
+  { kind: 'Emergency', text: 'Notfallzugang mit Passwort und Authenticator-Code, falls Entra oder Passkeys ausfallen.' },
+];
+
+function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Partial<PlatformUser>; self: boolean; tenants: Tenant[]; roles?: RolesResponse; onClose: () => void; onSaved: (link?: SetupLink) => void }) {
+  const [loginKind, setLoginKind] = useState<LoginKind>(user.loginKind ?? 'Entra');
   const [upn, setUpn] = useState(user.upn ?? '');
   const [displayName, setDisplayName] = useState(user.displayName ?? '');
   const [role, setRole] = useState<Role>(user.role ?? 'Operator');
@@ -154,14 +182,39 @@ function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Par
   const isNew = !user.id;
   const save = () => run(async () => {
     const body = { upn, displayName: displayName || null, role, customRoleId: role === 'Custom' ? customRoleId : null, allTenants, tenantIds: allTenants ? [] : tenantIds, isActive };
-    if (isNew) await api.post('/api/users', body); else await api.put('/api/users/' + user.id, body);
+    if (isNew) {
+      const created = await api.post<PlatformUser>('/api/users', { ...body, loginKind });
+      if (loginKind !== 'Entra') {
+        const l = await api.post<{ url: string; expiresAt: string }>(`/api/users/${created.id}/setup-link`);
+        onSaved({ user: created.displayName, ...l });
+        return;
+      }
+    } else await api.put('/api/users/' + user.id, body);
     onSaved();
+  });
+  const newLink = () => run(async () => {
+    const msg = user.loginKind === 'Emergency'
+      ? 'Neuen Einrichtungslink erzeugen? Passwort und Authenticator des Notfallkontos werden dabei zurückgesetzt.'
+      : 'Neuen Einrichtungslink erzeugen? Bestehende Passkeys bleiben gültig, mit dem Link kommt ein weiterer dazu.';
+    if (!window.confirm(msg)) return;
+    const l = await api.post<{ url: string; expiresAt: string }>(`/api/users/${user.id}/setup-link`);
+    onSaved({ user: user.displayName ?? '', ...l });
   });
   const pick = (r: Role, id: string | null = null) => { setRole(r); setCustomRoleId(id); };
   return (
     <Modal title={isNew ? 'Benutzer hinzufügen' : 'Benutzer bearbeiten'} onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={!upn || busy || (role === 'Custom' && !customRoleId)} onClick={save}>Speichern</button></>}>
+      {isNew && (
+        <Field label="Anmeldung">
+          {kinds.map((k) => (
+            <label key={k.kind} className={'choice' + (loginKind === k.kind ? ' selected' : '')}>
+              <input type="radio" checked={loginKind === k.kind} onChange={() => setLoginKind(k.kind)} />
+              <span><strong>{loginKindLabel[k.kind]}</strong><br /><span className="small muted">{k.text}</span></span>
+            </label>
+          ))}
+        </Field>
+      )}
       <div className="grid cols-2">
-        <Field label="UPN" hint="Konto aus dem Heim-Tenant der Installation"><input value={upn} disabled={!isNew} onChange={(e) => setUpn(e.target.value)} placeholder="name@contoso.com" /></Field>
+        <Field label={loginKind === 'Entra' ? 'UPN' : 'Anmeldename'} hint={loginKind === 'Entra' ? 'Konto aus dem Heim-Tenant der Installation' : 'z. B. die E-Mail-Adresse der Person'}><input value={upn} disabled={!isNew} onChange={(e) => setUpn(e.target.value)} placeholder="name@contoso.com" /></Field>
         <Field label="Anzeigename"><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
       </div>
       <Field label="Rolle">
@@ -190,8 +243,33 @@ function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Par
         </div>
       )}
       <label className="check"><input type="checkbox" checked={isActive} disabled={self} onChange={(e) => setIsActive(e.target.checked)} /> Aktiv</label>
+      {!isNew && user.loginKind && user.loginKind !== 'Entra' && <UserCredentials user={user as PlatformUser} busy={busy} onNewLink={newLink} />}
       {self && <Info>Sie bearbeiten Ihr eigenes Konto. Der letzte aktive Owner kann nicht herabgestuft werden.</Info>}
       <ErrorBox error={error} />
     </Modal>
+  );
+}
+
+function UserCredentials({ user, busy, onNewLink }: { user: PlatformUser; busy: boolean; onNewLink: () => void }) {
+  const { data, reload } = useApi<UserPasskey[]>(user.loginKind === 'Local' ? `/api/users/${user.id}/passkeys` : null);
+  const { error, run } = useAction();
+  const remove = (p: UserPasskey) => run(async () => {
+    if (!window.confirm(`Passkey „${p.name}“ von ${user.displayName} entfernen?`)) return;
+    await api.del(`/api/users/${user.id}/passkeys/${p.id}`);
+    reload();
+  });
+  return (
+    <div className="mt">
+      <div className="perm-group">Zugang ({loginKindLabel[user.loginKind]})</div>
+      {user.loginKind === 'Local' && (data?.length
+        ? <table><tbody>{data.map((p) => (
+            <tr key={p.id}><td>{p.name}</td><td className="small muted">{p.lastUsedAt ? 'zuletzt ' + fmtDate(p.lastUsedAt) : 'noch nicht verwendet'}</td>
+              <td><button className="link" onClick={() => remove(p)}>Entfernen</button></td></tr>))}</tbody></table>
+        : <p className="muted small">Noch kein Passkey eingerichtet.</p>)}
+      {user.loginKind === 'Emergency' && <p className="muted small">{user.emergencyReady ? 'Passwort und Authenticator sind eingerichtet.' : 'Noch nicht eingerichtet.'}</p>}
+      {user.setupPending && <p className="small"><Badge tone="warn">Einrichtungslink offen</Badge> gültig bis {fmtDate(user.setupTokenExpiresAt!)}</p>}
+      <button disabled={busy} onClick={onNewLink}>{user.loginKind === 'Local' ? 'Link für weiteren Passkey erzeugen' : 'Zurücksetzen und neuen Link erzeugen'}</button>
+      <ErrorBox error={error} />
+    </div>
   );
 }

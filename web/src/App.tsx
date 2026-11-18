@@ -5,6 +5,8 @@ import { AuthContext } from './auth';
 import { Spinner } from './ui';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
+import AccountSetupPage from './pages/AccountSetup';
+import AccountPage from './pages/Account';
 import DashboardPage from './pages/Dashboard';
 import KeysPage from './pages/Keys';
 import KeyDetailPage from './pages/KeyDetail';
@@ -43,6 +45,7 @@ export default function App() {
   if (!me) return <div className="center-page"><Spinner label="Wird geladen …" /></div>;
 
   if (location.pathname.startsWith('/setup')) return <SetupPage />;
+  if (location.pathname.startsWith('/account-setup')) return <AccountSetupPage />;
   if (!me.authenticated) {
     if (!me.setupComplete && location.pathname !== '/login') return <Navigate to="/setup" replace />;
     return <AuthContext.Provider value={{ me, reload }}><LoginPage setupComplete={me.setupComplete} /></AuthContext.Provider>;
@@ -94,7 +97,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           {(can('RegisterKeys') || can('ManageInventory')) && <NavLink to="/agents">Mein Agent</NavLink>}
         </nav>
         <div className="sidebar-foot">
-          <div><strong>{me.user?.displayName}</strong></div>
+          <div><NavLink to="/account" className="account-link"><strong>{me.user?.displayName}</strong></NavLink></div>
           <div className="muted small">{me.user?.role === 'Custom' ? me.user?.customRoleName : roleLabel[me.user?.role ?? ''] ?? me.user?.role}</div>
           <button className="link small" onClick={logout}>Abmelden</button>
         </div>
@@ -122,6 +125,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/agents" element={<AgentsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/platform" element={<PlatformPage />} />
+          <Route path="/account" element={<AccountPage />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="*" element={<p>Seite nicht gefunden.</p>} />
         </Routes>

@@ -65,6 +65,8 @@ builder.Services.AddSingleton<PinLetterStore>();
 builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<PlatformSignIn>();
+builder.Services.AddScoped<LocalAuthService>();
+builder.Services.AddMemoryCache();
 builder.Services.AddScoped<SetupService>();
 builder.Services.AddSingleton<IEntraBootstrap, EntraBootstrap>();
 builder.Services.AddSingleton<SetupSignInStore>();
@@ -164,6 +166,7 @@ app.UseMiddleware<CsrfHeaderMiddleware>();
 
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapAuth(app.Environment, ylm);
+app.MapLocalAuth();
 app.MapSetup();
 app.MapUsers();
 app.MapRoles();

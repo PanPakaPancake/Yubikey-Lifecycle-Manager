@@ -124,6 +124,7 @@ public sealed class PlatformSignIn(YlmDbContext db, AuditService audit, IOptions
             return await DenyAsync("wrong_tenant", upn, "Anmeldung nur mit Konten aus dem Heim-Tenant der Installation.");
         }
         if (!Guid.TryParse(oidValue, out var oid)) return await DenyAsync("invalid_token", upn, "Token ohne Objekt-ID.");
+        if (!settings.EntraSsoEnabled) return await DenyAsync("sso_disabled", upn, "Die Anmeldung mit Entra ist abgeschaltet. Bitte mit Passkey anmelden.");
 
         if (options.Value.RequirePhishingResistantSignIn)
         {
@@ -135,8 +136,8 @@ public sealed class PlatformSignIn(YlmDbContext db, AuditService audit, IOptions
             }
         }
 
-        var user = await db.PlatformUsers.FirstOrDefaultAsync(u => u.EntraObjectId == oid)
-                   ?? await db.PlatformUsers.FirstOrDefaultAsync(u => u.EntraObjectId == null && u.Upn.ToLower() == upn.ToLower());
+        var user = await db.PlatformUsers.FirstOrDefaultAsync(u => u.EntraObjectId == oid && u.LoginKind == UserLoginKind.Entra)
+                   ?? await db.PlatformUsers.FirstOrDefaultAsync(u => u.EntraObjectId == null && u.LoginKind == UserLoginKind.Entra && u.Upn.ToLower() == upn.ToLower());
 
         if (user is null && !await db.PlatformUsers.AnyAsync() && settings.BootstrapOwnerUpn is { } bootstrap
             && string.Equals(bootstrap, upn, StringComparison.OrdinalIgnoreCase))
@@ -153,7 +154,7 @@ public sealed class PlatformSignIn(YlmDbContext db, AuditService audit, IOptions
         user.DisplayName = name;
         user.Upn = upn;
         user.LastLoginAt = DateTimeOffset.UtcNow;
-        audit.Add(AuditService.User(user), AuditActions.Login);
+        audit.Add(AuditService.User(user), AuditActions.Login, details: new { method = "entra" });
         await db.SaveChangesAsync();
         return BuildPrincipal(user, AuthSchemes.Entra);
     }

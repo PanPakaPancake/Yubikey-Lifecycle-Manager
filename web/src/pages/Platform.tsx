@@ -27,6 +27,7 @@ export default function PlatformPage() {
           <dt>Gruppe</dt><dd>Profil pro Entra-Gruppe: Der Registrierungs-Assistent schlägt es für Mitglieder vor. Einstellbar im jeweiligen Tenant.</dd>
         </dl>
       </Card>
+      {can('ManageSettings') && <LoginSettingsCard />}
       <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
       {can('ManageApiKeys') && <ApiKeysCard />}
     </>
@@ -201,5 +202,28 @@ function ScopeModal({ keyRow, tenants, canAll, onClose, onSaved }: { keyRow: Api
       <ScopeEditor allTenants={all} setAllTenants={setAll} tenantIds={ids} setTenantIds={setIds} tenants={tenants} canAll={canAll} />
       <ErrorBox error={error} />
     </Modal>
+  );
+}
+
+function LoginSettingsCard() {
+  const { data, reload } = useApi<{ entraSsoEnabled: boolean; entraConfigured: boolean }>('/api/platform/login');
+  const { busy, error, run } = useAction();
+  const toggle = (on: boolean) => run(async () => { await api.put('/api/platform/login', { entraSsoEnabled: on }); reload(); });
+  return (
+    <Card title="Anmeldung an der Plattform">
+      <dl className="explain">
+        <dt>Entra-SSO</dt><dd>Konten aus dem Heim-Tenant melden sich über Microsoft an (passwortlos mit YubiKey).</dd>
+        <dt>Lokale Konten</dt><dd>Anmeldung mit Passkey direkt an der Plattform, unabhängig von Entra. Immer verfügbar.</dd>
+        <dt>Notfallkonten</dt><dd>Passwort plus Authenticator-Code, für den Fall, dass Entra oder Passkeys ausfallen.</dd>
+      </dl>
+      {data && (
+        <label className="check">
+          <input type="checkbox" checked={data.entraSsoEnabled} disabled={busy || !data.entraConfigured} onChange={(e) => toggle(e.target.checked)} />
+          Anmeldung mit Entra-SSO erlauben {!data.entraConfigured && <span className="muted small">(keine App-Registrierung eingerichtet)</span>}
+        </label>
+      )}
+      <p className="small muted">Lokale Konten und Notfallkonten legen Sie unter <Link to="/users">Benutzer &amp; Rollen</Link> an. Entra-SSO lässt sich nur abschalten, wenn ein Owner ein eingerichtetes lokales Konto hat.</p>
+      <ErrorBox error={error} />
+    </Card>
   );
 }

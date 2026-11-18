@@ -28,7 +28,7 @@ public sealed class CurrentUser(IHttpContextAccessor http, YlmDbContext db)
         var principal = http.HttpContext?.User;
         var idValue = principal?.FindFirstValue(YlmClaims.UserId);
         if (idValue is null || !Guid.TryParse(idValue, out var id)) return null;
-        _user = await db.PlatformUsers.Include(u => u.TenantAssignments).Include(u => u.CustomRole).FirstOrDefaultAsync(u => u.Id == id && u.IsActive);
+        _user = await db.PlatformUsers.Include(u => u.TenantAssignments).Include(u => u.CustomRole).Include(u => u.Passkeys).FirstOrDefaultAsync(u => u.Id == id && u.IsActive);
         return _user;
     }
 
