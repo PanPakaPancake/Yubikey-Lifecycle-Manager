@@ -27,6 +27,8 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
     public DbSet<Agent> Agents => Set<Agent>();
     public DbSet<PairingCode> PairingCodes => Set<PairingCode>();
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
+    public DbSet<RegistrationBatch> Batches => Set<RegistrationBatch>();
+    public DbSet<RegistrationBatchItem> BatchItems => Set<RegistrationBatchItem>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -131,6 +133,20 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.HasIndex(x => new { x.TenantId, x.GroupId }).IsUnique();
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<RegistrationProfile>().WithMany().HasForeignKey(x => x.ProfileId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<RegistrationBatch>(e =>
+        {
+            e.ToTable("registration_batches");
+            e.HasIndex(x => new { x.TenantId, x.CreatedAt });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+            e.HasMany(x => x.Items).WithOne().HasForeignKey(x => x.BatchId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<RegistrationBatchItem>(e =>
+        {
+            e.ToTable("registration_batch_items");
+            e.HasIndex(x => new { x.BatchId, x.Position });
         });
 
         b.Entity<AuditEntry>(e =>

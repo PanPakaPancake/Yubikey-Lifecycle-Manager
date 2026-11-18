@@ -91,9 +91,9 @@ public sealed class RegistrationService(
     }
 
     /// <summary>Starts the registration as a background job and returns it for progress polling.</summary>
-    public OperationJob Start(Guid tenantId, PlatformUser actor, RegistrationRequest req, JobStore jobs, IServiceScopeFactory scopes)
+    public OperationJob Start(Guid tenantId, PlatformUser actor, RegistrationRequest req, JobStore jobs, IServiceScopeFactory scopes, Guid? batchItemId = null, Guid? jobId = null)
     {
-        var job = jobs.Add(new OperationJob { UserId = actor.Id, TenantId = tenantId, Kind = "registration", TotalSteps = 7 });
+        var job = jobs.Add(new OperationJob { Id = jobId ?? Guid.NewGuid(), UserId = actor.Id, TenantId = tenantId, Kind = "registration", TotalSteps = 7, BatchItemId = batchItemId });
         _ = Task.Run(async () =>
         {
             using var scope = scopes.CreateScope();
@@ -260,12 +260,15 @@ public sealed class RegistrationService(
             });
             await db.SaveChangesAsync(ct);
             job.KeyId = inv.Id;
+            job.SerialNumber = key.SerialNumber;
+            job.PinChangeForced = forced;
 
             var settings = await db.Installation.AsNoTracking().FirstAsync(ct);
             var pdf = PinLetterPdf.Create(new PinLetterData(
                 settings.OrganizationName, tenant.DisplayName, user.DisplayName ?? user.UserPrincipalName, user.UserPrincipalName, pin,
                 key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now));
-            job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief {user.UserPrincipalName} {key.SerialNumber}.pdf");
+            job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief {user.UserPrincipalName} {key.SerialNumber}.pdf",
+                job.BatchItemId is null ? null : PinLetterStore.BatchLifetime);
             job.Step = "Registrierung abgeschlossen";
             job.Prompt = "Key abziehen und zusammen mit dem PIN-Brief übergeben.";
             job.State = JobState.Succeeded;
@@ -282,7 +285,7 @@ public sealed class RegistrationService(
             };
             if (ex is not ApiException) logger.LogError(ex, "Registration failed at {Stage}", stage);
             if (stage is "credential" or "graph" or "force_pin_change" or "save")
-                message += " Auf dem Key ist bereits eine PIN gesetzt; für einen neuen Versuch den Wizard mit Werksreset starten.";
+                message += " Auf dem Key ist bereits eine PIN gesetzt; für einen neuen Versuch mit Werksreset registrieren.";
             job.State = JobState.Failed;
             job.Error = message;
             job.ErrorCode = code;
@@ -298,6 +301,11 @@ public sealed class RegistrationService(
         finally
         {
             job.FinishedAt = DateTimeOffset.UtcNow;
+            if (job.BatchItemId is { } itemId)
+            {
+                try { await BatchService.FinishItemAsync(db, audit, itemId, job, actorUser); }
+                catch (Exception batchEx) { logger.LogError(batchEx, "Could not update batch item {Item}", itemId); }
+            }
             if (agent is not null) agent.BusyWith = null;
         }
     }

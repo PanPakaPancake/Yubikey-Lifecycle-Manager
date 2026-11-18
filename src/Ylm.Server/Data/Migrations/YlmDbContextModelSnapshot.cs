@@ -529,6 +529,122 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("platform_user_tenants", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationBatch", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("CreatedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CreatedByName")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("DefaultProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Source")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
+                    b.ToTable("registration_batches", (string)null);
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationBatchItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("BatchId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CompletedByName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Department")
+                        .HasColumnType("text");
+
+                    b.Property<string>("EntraUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Error")
+                        .HasColumnType("text");
+
+                    b.Property<string>("ErrorCode")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("ExpectedSerialNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("JobId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("KeyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<bool?>("PinChangeForced")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("PinLetterId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("ProfileGroupName")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("SerialNumber")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("UserDisplayName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserPrincipalName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BatchId", "Position");
+
+                    b.ToTable("registration_batch_items", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.RegistrationProfile", b =>
                 {
                     b.Property<Guid>("Id")
@@ -870,6 +986,24 @@ namespace Ylm.Server.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationBatch", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationBatchItem", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.RegistrationBatch", null)
+                        .WithMany("Items")
+                        .HasForeignKey("BatchId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.RegistrationProfile", b =>
                 {
                     b.HasOne("Ylm.Server.Data.Tenant", null)
@@ -904,6 +1038,11 @@ namespace Ylm.Server.Data.Migrations
                     b.Navigation("Passkeys");
 
                     b.Navigation("TenantAssignments");
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationBatch", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Ylm.Server.Data.YubiKey", b =>

@@ -42,6 +42,8 @@ Ein reiner Browser kann die Registrierung on Behalf nicht durchführen. Die Begr
 
 **V1 umgesetzt (Version 0.1.0)**: Einrichtung, Tenant-On-/Offboarding mit Prüfungen und „Jetzt beheben“, Rollen und Zuständigkeiten, Audit-Log mit Hash-Kette, Entra-Sync, Inventar (Lager, Lebenszyklus, Zusatzfelder, Tags, CSV-Import, Wareneingang per Einstecken), Profile mit Firmware-Prüfung, Einzel-Wizard, PIN-PDF, Dashboard mit CSV/PDF-Export, Lese-API.
 
+**V1.1 in Arbeit**: Stapelregistrierung (Liste aus Entra-Gruppe, CSV oder Suche; Keys der Reihe nach einstecken, optional feste Seriennummer pro Person; alle PIN-Briefe als ein PDF).
+
 Automatisch getestet sind die Fachlogik und der komplette Ablauf im Backend mit simuliertem YubiKey und simuliertem Microsoft Graph.
 
 **Noch nicht getestet:**

@@ -461,6 +461,24 @@ Plattform → Keys → den registrierten Key öffnen → **Zurücksetzen und ins
 | Beim Berühren-Schritt 90 Sekunden nichts tun | Saubere Fehlermeldung (Zeitüberschreitung), kein Hängenbleiben; Wizard bietet „Zurück zur Prüfung“ |
 | Tray beenden und Dienst neu starten: `Restart-Service YubikeyLifecycleManagerAgent` | Agent ist nach kurzer Zeit wieder „Verbunden“ |
 
+### 5.11 Stapelregistrierung (ab V1.1, zwei oder mehr Keys)
+
+Vorbereitung: eine kleine Entra-Gruppe mit zwei bis drei Testpersonen, die noch keinen Key haben, und ebenso viele Keys im Werkszustand.
+
+1. Plattform → **Stapelregistrierung** → **Neuer Stapel** → Reiter **Entra-Gruppe** → Gruppe suchen und wählen.
+2. Liste prüfen: Personen mit vorhandenem Key sind abgewählt. Optional bei einer Person eine **feste Seriennummer** eintragen (dann bekommt nur genau dieser Key die Person).
+3. **Stapel anlegen** → **Abarbeiten starten**. Ersten Key einstecken.
+4. Passt der Key ohne Rückfrage (Werkszustand, Profil erfüllt), startet die Registrierung automatisch; sonst erscheint die Prüfung wie im Einzel-Wizard.
+5. Nach jedem Key: abziehen, nächsten einstecken. Den Key mit fester Seriennummer gerne außer der Reihe einstecken.
+6. Am Ende **Alle PIN-Briefe** herunterladen: ein PDF mit einer Seite pro Person.
+
+**Erwartet:**
+
+- Jeder Key landet bei der nächsten offenen Person, der feste Key bei „seiner“ Person.
+- Derselbe Key ein zweites Mal eingesteckt: Hinweis „bereits registriert, bitte abziehen“.
+- Nach der letzten Person steht der Stapel auf **Abgeschlossen**; im Audit-Log stehen `batch.created`, je Person `key.registered` und `batch.completed`.
+- Optional als CSV statt Gruppe: Datei mit Kopfzeile `UPN;Seriennummer;Profil`. Unbekannte Personen und falsche Seriennummern werden mit Zeilennummer gemeldet.
+
 ---
 
 ## 6. Anmeldung nur mit YubiKey (Abschlusstest)
@@ -557,6 +575,7 @@ YubiKey 2:         Modell ________  FW ______  SN ________
 [ ] 5.8  (FW < 5.7) Hinweis, manuelle Bestätigung, Brief "PIN selbst ändern"
 [ ] 5.9  Zurücksetzen entfernt Passkey und setzt Key zurück
 [ ] 5.10 Negativtests
+[ ] 5.11 Stapelregistrierung
 [ ] 6    Anmeldung nur mit YubiKey erzwungen
 
 Abweichungen:
