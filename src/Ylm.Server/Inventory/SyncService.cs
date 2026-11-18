@@ -110,7 +110,7 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
                 }
             }
 
-            tenant.TargetUserCount = await graph.CountUsersAsync(tenant.TargetGroupId, ct) ?? tenant.TargetUserCount;
+            tenant.TargetUserCount = await TargetAudience.CountAsync(graph, tenant.TargetIncludeGroups, tenant.TargetExcludeGroups, ct) ?? tenant.TargetUserCount;
             tenant.LastSyncAt = now;
             tenant.LastSyncSucceeded = true;
             tenant.LastSyncMessage = $"{users} Personen mit Passkey geprüft, {imported} neu, {removed} entfernt.";
@@ -182,7 +182,9 @@ public sealed class BackgroundJobs(IServiceScopeFactory scopes, IOptions<YlmOpti
             await db.Keys.Where(k => k.TenantId == t.Id).ExecuteDeleteAsync(ct);
             await db.Profiles.Where(p => p.TenantId == t.Id).ExecuteDeleteAsync(ct);
             await db.CustomFields.Where(f => f.TenantId == t.Id).ExecuteDeleteAsync(ct);
-            await db.ApiKeys.Where(k => k.TenantId == t.Id).ExecuteDeleteAsync(ct);
+            await db.CustomFieldOverrides.Where(o => o.TenantId == t.Id).ExecuteDeleteAsync(ct);
+            await db.GroupProfiles.Where(a => a.TenantId == t.Id).ExecuteDeleteAsync(ct);
+            await db.Database.ExecuteSqlRawAsync("UPDATE api_keys SET \"TenantIds\" = array_remove(\"TenantIds\", {0})", [t.Id], ct);
             t.DataDeletionDueAt = null;
             audit.Add(AuditService.System, AuditActions.TenantDataDeleted, t.Id, target: t.DisplayName);
             await db.SaveChangesAsync(ct);

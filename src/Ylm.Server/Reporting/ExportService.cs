@@ -10,8 +10,10 @@ public sealed class ExportService(YlmDbContext db)
     {
         var keys = await db.Keys.AsNoTracking().Include(k => k.Tenant).Include(k => k.Registrations)
             .Where(k => tenantIds.Contains(k.TenantId)).OrderBy(k => k.Tenant!.DisplayName).ThenBy(k => k.SerialNumber).ToListAsync(ct);
-        var fieldKeys = await db.CustomFields.AsNoTracking().Where(f => tenantIds.Contains(f.TenantId)).OrderBy(f => f.SortOrder)
-            .Select(f => f.Key).Distinct().ToListAsync(ct);
+        // Global fields first, then the tenants' own fields.
+        var fieldKeys = (await db.CustomFields.AsNoTracking().Where(f => f.TenantId == null || tenantIds.Contains(f.TenantId.Value))
+                .OrderBy(f => f.TenantId != null).ThenBy(f => f.SortOrder).Select(f => f.Key).ToListAsync(ct))
+            .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         string[] header = ["Tenant", "Seriennummer", "Modell", "Firmware", "Status", "Sperrgrund", "Quelle", "Personen", "Registriert am", "PIN-Wechsel erzwungen", "Tags", "Notiz", "Warnungen", .. fieldKeys];
         var rows = keys.Select(k =>
         {

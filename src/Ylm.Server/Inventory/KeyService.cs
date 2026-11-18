@@ -60,16 +60,30 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
             .Where(k => k.SerialNumber == serial && k.Status != KeyStatus.Retired)
             .OrderByDescending(k => k.UpdatedAt).FirstOrDefaultAsync(ct);
 
-    public async Task<IReadOnlyList<CustomFieldSpec>> FieldSpecsAsync(Guid tenantId, CancellationToken ct = default) =>
-        (await db.CustomFields.Where(f => f.TenantId == tenantId).OrderBy(f => f.SortOrder).ToListAsync(ct)).Select(f => f.ToSpec()).ToList();
+    /// <summary>Fields of a tenant after inheritance: global fields (with the tenant's changes) and the tenant's own fields.</summary>
+    public async Task<IReadOnlyList<ResolvedCustomField>> ResolveFieldsAsync(Guid tenantId, CancellationToken ct = default)
+    {
+        var defs = await db.CustomFields.AsNoTracking().Where(f => f.TenantId == null || f.TenantId == tenantId).ToListAsync(ct);
+        var overrides = await db.CustomFieldOverrides.AsNoTracking().Where(o => o.TenantId == tenantId).ToDictionaryAsync(o => o.FieldId, o => o.ToSpec(), ct);
+        return CustomFieldInheritance.Resolve(defs.Where(f => f.TenantId == null).Select(f => f.ToDef()), overrides, defs.Where(f => f.TenantId != null).Select(f => f.ToDef()));
+    }
 
-    public async Task<Dictionary<string, string?>> ValidateFieldsAsync(Guid tenantId, Dictionary<string, string?>? values, CancellationToken ct = default)
+    /// <summary>Active field specs of a tenant (disabled global fields left out).</summary>
+    public async Task<IReadOnlyList<CustomFieldSpec>> FieldSpecsAsync(Guid tenantId, CancellationToken ct = default) =>
+        (await ResolveFieldsAsync(tenantId, ct)).Where(f => f.IsActive).Select(f => f.Spec).ToList();
+
+    /// <param name="existing">Current values of the key. Values of fields that are not active (e.g. disabled for the tenant) are kept.</param>
+    public async Task<Dictionary<string, string?>> ValidateFieldsAsync(Guid tenantId, Dictionary<string, string?>? values,
+        IReadOnlyDictionary<string, string?>? existing = null, CancellationToken ct = default)
     {
         var specs = await FieldSpecsAsync(tenantId, ct);
         var v = values ?? [];
         var errors = CustomFieldValidator.Validate(specs, v);
         if (errors.Count > 0) throw ApiException.BadRequest("invalid_fields", string.Join(" ", errors), errors);
-        return v.Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+        var result = v.Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
             .ToDictionary(kv => specs.First(s => s.Key.Equals(kv.Key, StringComparison.OrdinalIgnoreCase)).Key, kv => kv.Value?.Trim());
+        foreach (var (key, value) in existing ?? new Dictionary<string, string?>())
+            if (!specs.Any(s => s.Key.Equals(key, StringComparison.OrdinalIgnoreCase)) && !result.ContainsKey(key)) result[key] = value;
+        return result;
     }
 }

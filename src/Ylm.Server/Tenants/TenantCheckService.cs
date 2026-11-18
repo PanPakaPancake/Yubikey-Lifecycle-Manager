@@ -58,7 +58,7 @@ public sealed class TenantCheckService(YlmDbContext db, IGraphClientFactory grap
         await RefreshOrganizationAsync(tenant, graph, missing, ct);
 
         var policy = await graph.GetFido2PolicyAsync(ct);
-        results.AddRange(Fido2PolicyAnalyzer.Analyze(policy, YubiKeyAaguids, tenant.TargetGroupId));
+        results.AddRange(Fido2PolicyAnalyzer.Analyze(policy, YubiKeyAaguids, tenant.TargetIncludeGroups));
         if (missing.Contains("Policy.ReadWrite.AuthenticationMethod", StringComparer.OrdinalIgnoreCase))
             results = results.Select(r => r with { CanFix = false }).ToList();
 
@@ -96,7 +96,7 @@ public sealed class TenantCheckService(YlmDbContext db, IGraphClientFactory grap
     {
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
         var before = await graph.GetFido2PolicyAsync(ct);
-        var after = Fido2PolicyAnalyzer.Fix(before, YubiKeyAaguids, tenant.TargetGroupId, checkIds);
+        var after = Fido2PolicyAnalyzer.Fix(before, YubiKeyAaguids, tenant.TargetIncludeGroups, checkIds);
         if (after != before)
         {
             await graph.UpdateFido2PolicyAsync(after, ct);
