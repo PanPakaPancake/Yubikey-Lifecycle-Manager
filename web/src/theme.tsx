@@ -14,9 +14,16 @@ function read(): Theme {
 
 export function applyStoredTheme() {
   const t = read();
-  if (t === 'system') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', t);
+  const root = document.documentElement;
+  if (t === 'system') root.removeAttribute('data-theme');
+  else root.setAttribute('data-theme', t);
+  // data-dark: tatsächlich dunkel (gewählt oder vom System), damit Designvorschläge nur eine Regel pro Dunkel-Stil brauchen.
+  const dark = t === 'dark' || (t === 'system' && !!window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+  root.toggleAttribute('data-dark', dark);
 }
+
+// Systemwechsel (z. B. Windows schaltet abends auf dunkel) sofort übernehmen.
+window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyStoredTheme());
 
 const next: Record<Theme, Theme> = { system: 'light', light: 'dark', dark: 'system' };
 const label: Record<Theme, string> = { system: 'Wie System', light: 'Hell', dark: 'Dunkel' };

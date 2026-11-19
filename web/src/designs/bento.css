@@ -136,3 +136,117 @@
 [data-design="bento"] .pick { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
 [data-design="bento"] .pick button { border: 0; border-radius: 20px; background: var(--surface-2); padding: 16px; transition: transform .35s var(--spring), box-shadow .2s; }
 [data-design="bento"] .pick button:hover:not(:disabled) { transform: translateY(-3px) rotate(-.5deg); box-shadow: var(--shadow); background: var(--surface); }
+
+/* ==========================================================================
+   Bento · Dunkel im Stil des Kontrollraums (Timo, 2026-11-19): Nachtblau mit Raster, Leuchtkanten,
+   Werte in Monospace, die Bereichsfarben als Neon. data-dark setzt theme.tsx.
+   ========================================================================== */
+:root[data-design="bento"][data-dark] {
+  --bg: #050912; --surface: #0b111e; --surface-2: #101828; --ink: #e3eeff; --muted: #7d8ba6; --line: #1b2640;
+  --accent: #a78bfa; --accent-2: #22d3ee; --accent-ink: #0b0618; --accent-soft: rgba(167, 139, 250, .14);
+  --ok: #34d399; --ok-soft: rgba(52, 211, 153, .12); --warn: #fbbf24; --warn-soft: rgba(251, 191, 36, .12); --error: #fb7185; --error-soft: rgba(251, 113, 133, .13);
+  --c-violet: #a78bfa; --c-green: #34d399; --c-blue: #22d3ee; --c-amber: #fbbf24; --c-pink: #f472b6; --c-red: #fb7185; --c-teal: #2dd4bf; --c-slate: #94a3b8;
+  --shadow: 0 0 0 1px rgba(34, 211, 238, .05), 0 12px 30px -14px rgba(0, 0, 0, .9);
+  --mono: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace;
+  color-scheme: dark;
+}
+[data-design="bento"][data-dark] body {
+  background:
+    radial-gradient(900px 500px at 80% -200px, rgba(139, 92, 246, .24), transparent 70%),
+    radial-gradient(700px 400px at 10% 110%, rgba(34, 211, 238, .12), transparent 70%),
+    linear-gradient(rgba(148, 163, 184, .05) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(148, 163, 184, .05) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--bg);
+  background-attachment: fixed;
+}
+[data-design="bento"][data-dark] :is(.card-head h2, th, .kpi .label, .nav .section, .action-items h2) { font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em; font-size: .74rem; font-weight: 600; color: var(--muted); }
+[data-design="bento"][data-dark] .page-header p { font-family: var(--mono); font-size: .8rem; }
+
+/* Seitenleiste: dunkle Kachel mit Leuchtrand, aktive Icons glühen in ihrer Farbe */
+[data-design="bento"][data-dark] .shell.sidebar-dark .sidebar { --sb-bg: rgba(11, 17, 30, .88); --sb-hover: rgba(148, 163, 184, .06); --sb-active-bg: rgba(148, 163, 184, .08); box-shadow: 0 0 0 1px rgba(34, 211, 238, .12), 0 20px 50px -20px rgba(0, 0, 0, .9); backdrop-filter: blur(14px); }
+[data-design="bento"][data-dark] .nav a .icon { background: color-mix(in srgb, var(--c) 14%, transparent); }
+[data-design="bento"][data-dark] .nav a.active .icon { color: #050912 !important; box-shadow: 0 0 18px -2px var(--c); }
+[data-design="bento"][data-dark] .brand-mark { background: #0f172a; box-shadow: 0 0 0 1px rgba(34, 211, 238, .35), 0 0 22px -6px rgba(34, 211, 238, .6); }
+[data-design="bento"][data-dark] .topbar { background: rgba(5, 9, 18, .7); }
+
+/* Einstieg: Lagebild mit Scan-Linie */
+[data-design="bento"][data-dark] .dash-hero { color: var(--ink); border: 1px solid rgba(167, 139, 250, .3);
+  background: radial-gradient(300px 220px at 85% 90%, rgba(251, 191, 36, .16), transparent 70%), radial-gradient(420px 260px at 0% 0%, rgba(167, 139, 250, .28), transparent 70%), linear-gradient(135deg, #0e1426, #0b111e);
+  box-shadow: 0 0 34px -10px rgba(167, 139, 250, .55); }
+[data-design="bento"][data-dark] .dash-hero::after { content: ""; position: absolute; top: 0; bottom: 0; width: 140px; left: -160px; background: linear-gradient(90deg, transparent, rgba(34, 211, 238, .14), transparent); animation: kr-scan 5s ease-in-out infinite; pointer-events: none; }
+[data-design="bento"][data-dark] .dash-eyebrow { background: rgba(52, 211, 153, .1); color: var(--ok); font-family: var(--mono); text-transform: uppercase; letter-spacing: .12em; font-size: .72rem; display: inline-flex; align-items: center; gap: 8px; }
+[data-design="bento"][data-dark] .dash-eyebrow::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); animation: kr-live 1.6s ease-out infinite; }
+[data-design="bento"][data-dark] .dash-hero-title b { background: linear-gradient(90deg, #c4b5fd, #22d3ee); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 0 14px rgba(34, 211, 238, .35)); }
+[data-design="bento"][data-dark] .dash-hero-sub { color: var(--muted); }
+[data-design="bento"][data-dark] .dash-hero-meter { background: rgba(148, 163, 184, .12); }
+[data-design="bento"][data-dark] .dash-hero-meter > span { background: linear-gradient(90deg, #a78bfa, #22d3ee); box-shadow: 0 0 14px rgba(34, 211, 238, .7); }
+[data-design="bento"][data-dark] .dash-hero-art .pk-float { filter: drop-shadow(0 0 26px rgba(167, 139, 250, .45)); }
+
+/* Kennzahl-Kacheln als Neon: dunkler Grund, Farbe im Rand, Leuchten und Wert */
+[data-design="bento"][data-dark] .kpi { background: radial-gradient(140% 120% at 100% 0%, color-mix(in srgb, var(--c) 30%, transparent), transparent 60%), linear-gradient(160deg, #0f1729, #0a0f1b);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); box-shadow: 0 0 30px -12px var(--c), inset 0 1px 0 rgba(255, 255, 255, .04); animation: bento-pop .6s var(--spring) both; }
+[data-design="bento"][data-dark] .kpi-coverage { --c: #a78bfa; } [data-design="bento"][data-dark] .kpi-active { --c: #34d399; }
+[data-design="bento"][data-dark] .kpi-stock { --c: #22d3ee; } [data-design="bento"][data-dark] .kpi-firmware { --c: #fbbf24; }
+[data-design="bento"][data-dark] .kpi .label { color: color-mix(in srgb, var(--c) 70%, #cbd5e1); }
+[data-design="bento"][data-dark] .kpi .sub { color: var(--muted); }
+[data-design="bento"][data-dark] .kpi .value, [data-design="bento"][data-dark] .kpi .value.tone-text-warn { font-variant-numeric: tabular-nums; font-weight: 750; color: #f8fafc; text-shadow: 0 0 22px color-mix(in srgb, var(--c) 75%, transparent); }
+[data-design="bento"][data-dark] .kpi-ico { color: var(--c); opacity: .3; }
+[data-design="bento"][data-dark] .kpi-link:hover { border: 1px solid var(--c); box-shadow: 0 0 40px -8px var(--c); }
+[data-design="bento"][data-dark] .kpi .donut circle:first-child { stroke: rgba(148, 163, 184, .15); }
+[data-design="bento"][data-dark] .kpi .donut circle:not(:first-child) { stroke: var(--c); filter: drop-shadow(0 0 6px var(--c)); }
+
+/* Karten mit Leuchtkante oben */
+[data-design="bento"][data-dark] .card:not(.kpi) { background: linear-gradient(180deg, rgba(16, 24, 40, .92), rgba(11, 17, 30, .92)); border: 1px solid var(--line); position: relative; }
+[data-design="bento"][data-dark] .card:not(.kpi)::before { content: ""; position: absolute; left: 24px; right: 24px; top: -1px; height: 1px; background: linear-gradient(90deg, transparent, #22d3ee, #a78bfa, transparent); opacity: .7; }
+[data-design="bento"][data-dark] .action-items { background: linear-gradient(180deg, rgba(251, 191, 36, .06), rgba(11, 17, 30, .92) 60%); border: 1px solid rgba(251, 191, 36, .25); }
+[data-design="bento"][data-dark] .action-items li { background: rgba(148, 163, 184, .05); }
+[data-design="bento"][data-dark] .ai-icon { color: #0b111e; }
+[data-design="bento"][data-dark] .ai-icon.tone-warn, [data-design="bento"][data-dark] .ai-icon.tone-error { animation: kr-blink 2.4s ease-in-out infinite; }
+[data-design="bento"][data-dark] .bar .fill { background: linear-gradient(180deg, #22d3ee, #a78bfa); box-shadow: 0 0 16px -2px rgba(34, 211, 238, .55); }
+[data-design="bento"][data-dark] .bar .n { color: #67e8f9; font-family: var(--mono); }
+[data-design="bento"][data-dark] .donut svg { filter: drop-shadow(0 0 10px rgba(34, 211, 238, .2)); }
+
+/* Tabellen, Bedienelemente */
+[data-design="bento"][data-dark] td a.mono, [data-design="bento"][data-dark] td.mono { color: #67e8f9; }
+[data-design="bento"][data-dark] tbody tr:hover td { background: rgba(34, 211, 238, .05); }
+[data-design="bento"][data-dark] .badge { border: 1px solid currentColor; background: transparent; }
+[data-design="bento"][data-dark] input, [data-design="bento"][data-dark] select { background: #070c17; }
+[data-design="bento"][data-dark] button.primary, [data-design="bento"][data-dark] .btn.primary { background: linear-gradient(135deg, #8b5cf6, #22d3ee); color: #050912; box-shadow: 0 0 24px -6px rgba(139, 92, 246, .7); }
+[data-design="bento"][data-dark] .view-tabs { background: #0b111e; box-shadow: 0 0 0 1px var(--line); }
+[data-design="bento"][data-dark] .view-tabs button.on { background: rgba(52, 211, 153, .14); color: var(--c-green); box-shadow: inset 0 0 0 1px rgba(52, 211, 153, .4), 0 0 18px -6px var(--c-green); }
+[data-design="bento"][data-dark] .view-tabs button.on .count { background: rgba(52, 211, 153, .2); color: var(--c-green); }
+[data-design="bento"][data-dark] .assign-kpis .card .kpi-icon { background: rgba(148, 163, 184, .08) !important; }
+[data-design="bento"][data-dark] .step { background: #0b111e; box-shadow: 0 0 0 1px var(--line); font-family: var(--mono); font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+[data-design="bento"][data-dark] .step.current { background: rgba(251, 191, 36, .14); color: var(--c-amber); box-shadow: inset 0 0 0 1px rgba(251, 191, 36, .5), 0 0 20px -6px var(--c-amber); }
+[data-design="bento"][data-dark] .step.current .step-no { background: var(--c-amber); color: #050912; }
+[data-design="bento"][data-dark] .step.done { background: rgba(52, 211, 153, .1); color: var(--c-green); }
+[data-design="bento"][data-dark] .pick button { background: #0d1424; box-shadow: 0 0 0 1px var(--line); }
+[data-design="bento"][data-dark] .pick button:hover:not(:disabled) { background: #101a2e; box-shadow: 0 0 0 1px rgba(34, 211, 238, .45), 0 0 22px -8px #22d3ee; }
+[data-design="bento"][data-dark] .mobilebar { background: rgba(5, 9, 18, .85); }
+
+/* Passkeys erklärt im Bento-Stil */
+[data-design="bento"] .pk-section { border: 0; border-radius: 26px; box-shadow: var(--shadow); }
+[data-design="bento"] .pk-card { border: 0; border-radius: 20px; transition: transform .35s var(--spring), box-shadow .2s; }
+[data-design="bento"] .pk-card:hover { transform: translateY(-4px) rotate(-.4deg); }
+[data-design="bento"] .pk-cards .pk-card:nth-child(4n+1) .pk-card-icon { background: color-mix(in srgb, var(--c-violet) 16%, transparent); color: var(--c-violet); }
+[data-design="bento"] .pk-cards .pk-card:nth-child(4n+2) .pk-card-icon { background: color-mix(in srgb, var(--c-green) 16%, transparent); color: var(--c-green); }
+[data-design="bento"] .pk-cards .pk-card:nth-child(4n+3) .pk-card-icon { background: color-mix(in srgb, var(--c-blue) 16%, transparent); color: var(--c-blue); }
+[data-design="bento"] .pk-cards .pk-card:nth-child(4n+4) .pk-card-icon { background: color-mix(in srgb, var(--c-amber) 16%, transparent); color: var(--c-amber); }
+[data-design="bento"] .pk-toc a { border: 0; border-radius: 16px; box-shadow: var(--shadow); transition: transform .35s var(--spring), box-shadow .2s; }
+[data-design="bento"] .pk-toc a:hover { transform: translateY(-3px) scale(1.02); }
+[data-design="bento"] .pk-num.big { background: linear-gradient(135deg, var(--c-violet), var(--c-pink)); color: #fff; }
+[data-design="bento"] .pk-tabs { border: 0; background: var(--surface); box-shadow: var(--shadow); }
+[data-design="bento"] .pk-tabs button.active { background: var(--c-blue); color: #fff; }
+[data-design="bento"][data-dark] .pk-section { background: linear-gradient(180deg, rgba(16, 24, 40, .92), rgba(11, 17, 30, .92)); border: 1px solid var(--line); position: relative; }
+[data-design="bento"][data-dark] .pk-section::before { content: ""; position: absolute; left: 28px; right: 28px; top: -1px; height: 1px; background: linear-gradient(90deg, transparent, #22d3ee, #a78bfa, transparent); opacity: .7; }
+[data-design="bento"][data-dark] .pk-card, [data-design="bento"][data-dark] .pk-toc a, [data-design="bento"][data-dark] .pk-pair-side { background: #0d1424; box-shadow: 0 0 0 1px var(--line); }
+[data-design="bento"][data-dark] .pk-toc a:hover { box-shadow: 0 0 0 1px rgba(34, 211, 238, .45), 0 0 22px -8px #22d3ee; }
+[data-design="bento"][data-dark] .pk-num.big { box-shadow: 0 0 18px -2px rgba(167, 139, 250, .8); }
+[data-design="bento"][data-dark] .pk-tabs { background: #0b111e; box-shadow: 0 0 0 1px var(--line); }
+[data-design="bento"][data-dark] .pk-tabs button.active { background: rgba(34, 211, 238, .14); color: #22d3ee; box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .45), 0 0 18px -6px #22d3ee; }
+[data-design="bento"][data-dark] .pk-flow { background: linear-gradient(180deg, #0d1424, #0b111e); }
+[data-design="bento"][data-dark] .pk-eyebrow { font-family: var(--mono); background: rgba(34, 211, 238, .1); color: #22d3ee; }
+[data-design="bento"][data-dark] .pk-hero h1 { text-shadow: 0 0 30px rgba(167, 139, 250, .25); }
+
+/* Einstieg auf der Übersicht: Abkürzungen */
+[data-design="bento"] .dash-hero-links { display: flex; gap: 8px; flex-wrap: wrap; position: relative; z-index: 1; margin-top: 4px; }

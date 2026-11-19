@@ -152,6 +152,10 @@ function DashHero({ data }: { data: DashboardData }) {
         </p>
         <p className="dash-hero-sub">{todo ? `${todo} Punkte brauchen heute Ihre Aufmerksamkeit.` : 'Alles in Ordnung, kein Handlungsbedarf.'} {data.inStock} Keys liegen bereit.</p>
         <div className="dash-hero-meter"><span style={{ width: Math.min(100, data.coveragePercent ?? 0) + '%' }} /></div>
+        <div className="dash-hero-links">
+          <Link to="/register" className="hero-chip"><Icon name="keyPlus" size={15} />Key registrieren</Link>
+          <Link to="/passkey" className="hero-chip"><Icon name="info" size={15} />Passkeys erklärt</Link>
+        </div>
       </div>
       <div className="dash-hero-art"><span className="pk-float"><KeyArt size={190} glow /></span></div>
     </section>

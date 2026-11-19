@@ -40,3 +40,46 @@
   [data-design] .dash-hero { grid-template-columns: 1fr !important; padding: 20px !important; min-height: 0 !important; }
   [data-design] .dash-hero-art { display: none !important; }
 }
+
+/* ==========================================================================
+   Logo „YubiKey LC Manager“ (logo.tsx), in allen Designs
+   ========================================================================== */
+.ylm-logo { display: inline-grid; place-items: center; flex: none; filter: drop-shadow(0 4px 14px rgba(34, 211, 238, .25)); }
+.ylm-logo svg { overflow: visible; }
+.ylm-logo-orbit, .ylm-logo-sparkle, .ylm-logo-key, .ylm-logo-glow { transform-box: view-box; transform-origin: 24px 24px; }
+.ylm-logo-orbit { animation: ylm-orbit 9s linear infinite; }
+.ylm-logo-sparkle { animation: ylm-orbit 3.2s cubic-bezier(.45, .05, .55, .95) infinite; }
+.ylm-logo-sparkle circle { filter: drop-shadow(0 0 3px #22d3ee); }
+.ylm-logo-key { transform: rotate(-24deg); transition: transform .5s cubic-bezier(.34, 1.56, .64, 1); }
+.ylm-logo-disc { animation: ylm-disc 2.4s ease-in-out infinite; }
+.ylm-logo-glow { transform-origin: 24.5px 24px; opacity: 0; animation: ylm-ring 2.4s ease-out infinite; }
+@keyframes ylm-orbit { to { transform: rotate(360deg); } }
+@keyframes ylm-disc { 0%, 100% { fill-opacity: 1; } 50% { fill-opacity: .7; } }
+@keyframes ylm-ring { 0%, 40% { opacity: 0; transform: scale(.7); } 50% { opacity: .9; } 100% { opacity: 0; transform: scale(1.9); } }
+.brand:hover .ylm-logo-orbit { animation-duration: 1.6s; }
+.brand:hover .ylm-logo-key { transform: rotate(0deg) scale(1.08); }
+.brand:hover .ylm-logo-glow { animation-duration: .9s; }
+/* Einmaliges Aufleuchten beim Laden */
+.ylm-logo { animation: ylm-in .9s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes ylm-in { from { opacity: 0; transform: scale(.6) rotate(-90deg); } to { opacity: 1; transform: none; } }
+
+.ylm-wordmark { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+.ylm-wordmark-eyebrow { font-family: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace; font-size: .64rem; letter-spacing: .22em; text-transform: uppercase; color: #22d3ee; font-weight: 600; }
+.ylm-wordmark-name { font-size: 1.12rem; font-weight: 800; letter-spacing: -0.02em; }
+.ylm-wordmark-name b { font-weight: 800; background: linear-gradient(90deg, #a78bfa, #22d3ee 60%, #34d399); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: ylm-sheen 6s ease-in-out infinite alternate; }
+@keyframes ylm-sheen { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+.ylm-wordmark small { margin-top: 3px; font-size: .74rem; font-weight: 500; color: var(--sb-muted, var(--muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:root:not([data-dark]) .ylm-wordmark-eyebrow { color: #0891b2; }
+:root:not([data-dark]) .ylm-wordmark-name b { background-image: linear-gradient(90deg, #7c3aed, #0891b2 60%, #059669); }
+.shell.sidebar-dark .ylm-wordmark-eyebrow { color: #22d3ee; }
+.shell.sidebar-dark .ylm-wordmark-name b { background-image: linear-gradient(90deg, #a78bfa, #22d3ee 60%, #34d399); }
+[data-design="leitfaden"] .shell .ylm-wordmark-eyebrow, [data-design="magazin"] .shell .ylm-wordmark-eyebrow, [data-design="bento"]:not([data-dark]) .shell .ylm-wordmark-eyebrow { color: #0891b2; }
+[data-design="leitfaden"] .shell .ylm-wordmark-name b, [data-design="magazin"] .shell .ylm-wordmark-name b, [data-design="bento"]:not([data-dark]) .shell .ylm-wordmark-name b { background-image: linear-gradient(90deg, #7c3aed, #0891b2 60%, #059669); }
+.mobilebar .ylm-wordmark-name { font-size: 1rem; }
+@media (prefers-reduced-motion: reduce) { .ylm-logo, .ylm-logo *, .ylm-wordmark-name b { animation: none !important; } }
+.dash-hero-links { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.hero-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: .85rem; font-weight: 600; color: var(--ink); background: color-mix(in srgb, var(--surface) 70%, transparent); border: 1px solid var(--line); transition: transform .25s cubic-bezier(.34, 1.56, .64, 1), border-color .2s, box-shadow .2s; }
+.hero-chip .icon { color: var(--accent); }
+.hero-chip:hover { text-decoration: none; transform: translateY(-2px); border-color: var(--accent); }
+[data-dark] .hero-chip:hover { box-shadow: 0 0 18px -6px var(--accent); }
+[data-design="bento"]:not([data-dark]) .hero-chip { background: rgba(255, 255, 255, .75); border-color: transparent; color: #1e1b2e; }

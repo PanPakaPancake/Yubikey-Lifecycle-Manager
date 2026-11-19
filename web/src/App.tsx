@@ -5,7 +5,7 @@ import { AuthContext } from './auth';
 import { Empty, PageHeader, Spinner, useApi } from './ui';
 import { Icon, type IconName } from './icons';
 import { ThemeToggle } from './theme';
-import { BrandMark } from './brand';
+import { LogoMark, Wordmark } from './logo';
 import { DesignPicker, useDesign } from './design';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
@@ -60,8 +60,11 @@ export default function App() {
   useEffect(() => { void reload(); }, [reload]);
 
   // Öffentliche Infoseiten für Endnutzer (Link im PIN-Brief): ohne Anmeldung, ohne Navigation der Plattform.
-  if (location.pathname === '/passkey' || location.pathname.startsWith('/passkey/')) return <PasskeyInfoPage authenticated={!!me?.authenticated} />;
+  // Angemeldet läuft sie im App-Rahmen mit Menü; ?oeffentlich=1 zeigt sie so, wie Endbenutzer sie sehen.
+  const passkeyPath = location.pathname === '/passkey' || location.pathname.startsWith('/passkey/');
+  const publicPasskey = passkeyPath && (!me?.authenticated || new URLSearchParams(location.search).has('oeffentlich'));
   if (!me) return <div className="center-page"><Spinner label="Wird geladen …" /></div>;
+  if (publicPasskey) return <PasskeyInfoPage authenticated={me.authenticated} />;
 
   if (location.pathname.startsWith('/setup')) return <SetupPage />;
   if (location.pathname.startsWith('/account-setup')) return <AccountSetupPage />;
@@ -104,13 +107,13 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
     <div className={'shell ' + SidebarStyle + (menuOpen ? ' menu-open' : '')}>
       <header className="mobilebar">
         <button type="button" className="icon-btn" aria-label="Menü öffnen" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" size={22} /></button>
-        <span className="mobilebar-title">Lifecycle Manager</span>
+        <span className="mobilebar-title"><LogoMark size={28} /><Wordmark /></span>
       </header>
       <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />
       <aside className="sidebar">
         <div className="brand">
-          <BrandMark />
-          <div>Lifecycle Manager<small>{me.organizationName || 'YubiKeys'}</small></div>
+          <LogoMark />
+          <Wordmark sub={me.organizationName || undefined} />
           <button type="button" className="icon-btn sidebar-close" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}><Icon name="x" size={20} /></button>
         </div>
         <nav className="nav">
@@ -194,6 +197,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/users" element={<UsersPage />} />
           <Route path="/platform" element={<PlatformPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/passkey/*" element={<PasskeyInfoPage authenticated embedded />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Empty>Seite nicht gefunden. <Link to="/">Zur Übersicht</Link></Empty>} />
         </Routes>
