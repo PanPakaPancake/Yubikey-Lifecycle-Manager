@@ -84,6 +84,28 @@ export function usePolling(fn: () => void, ms: number, active = true) {
   }, [ms, active]);
 }
 
+/** Zählt eine Zahl beim Erscheinen kurz hoch. Text wie „76 %“ behält seine Einheit. */
+export function CountUp({ value, duration = 700 }: { value: ReactNode; duration?: number }) {
+  const m = typeof value === 'number' ? [String(value), String(value), ''] : typeof value === 'string' ? /^(\d+)(\D.*)?$/.exec(value) : null;
+  const target = m ? Number(m[1]) : 0;
+  const [shown, setShown] = useState(() => (m && !reducedMotion() ? 0 : target));
+  useEffect(() => {
+    if (!m || reducedMotion() || target === 0) { setShown(target); return; }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / duration);
+      setShown(Math.round(target * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [target]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!m) return <>{value}</>;
+  return <>{shown}{m[2] ?? ''}</>;
+}
+const reducedMotion = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: ReactNode; actions?: ReactNode }) {
   return (
     <header className="page-header">

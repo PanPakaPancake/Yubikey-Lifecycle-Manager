@@ -62,7 +62,7 @@ Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images
 
 **V2 umgesetzt**: ToDo-Liste (von Hand oder per `POST /api/v1/todos` aus dem Ticketsystem, wird mit der Registrierung erledigt), Vier-Augen-Freigabe für Breakglass (pro Tenant), signierte Webhooks mit Wiederholungen, Mail-Berichte per SMTP mit PDF/CSV. NinjaRMM bekommt Ereignisse über die Webhooks (keine eigene Anbindung, Entscheidung 2026-11-19).
 
-**Wer hat welchen Key**: Übersicht pro Tenant oder über alle Tenants, nach Person oder nach Key, mit Verwahrern geteilter Keys und Auffälligkeiten; Export als Excel, CSV und PDF; in der Lese-API unter `GET /api/v1/assignments`.
+**Inventar mit „Wer hat welchen Key“**: alle Keys oder nach Person, pro Tenant oder über alle Tenants, mit Verwahrern geteilter Keys und Auffälligkeiten; Export als Excel, CSV und PDF; in der Lese-API unter `GET /api/v1/assignments`.
 
 **Whitelabeling**: PIN-Briefe, Berichte und PDF-Exporte mit eigenem Firmennamen, Logo, Farbe, Kontakt und Fußzeile; Vorgabe in den globalen Einstellungen, pro Tenant einzeln überschreibbar.
 

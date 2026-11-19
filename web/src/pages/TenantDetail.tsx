@@ -5,6 +5,7 @@ import { useCan } from '../auth';
 import { Badge, Card, download, ErrorBox, Field, GroupChips, GroupSearch, Info, Modal, OriginBadge, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { useToast } from '../feedback';
 import { BrandingCard } from './Branding';
+import { TenantProfilesCard } from './Profiles';
 
 const statusText = { Ok: 'In Ordnung', Warning: 'Hinweis', Failed: 'Fehlt' } as const;
 
@@ -88,6 +89,7 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
         </div>
       )}
 
+      {active && <TenantProfilesCard tenantId={t.id} editable={can('ManageProfiles')} />}
       {active && <GroupProfilesCard tenantId={t.id} editable={can('ManageProfiles')} />}
       {active && <FieldsCard tenantId={t.id} editable={can('ManageProfiles')} />}
       {active && <BrandingCard tenantId={t.id} editable={!!can('ManageTenants')} />}

@@ -1,47 +1,102 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { api, type Profile } from '../api';
 import { useCan } from '../auth';
 import { useTenant } from '../tenant';
-import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, TenantSelect, useAction, useApi } from '../ui';
+import { Badge, Card, Empty, ErrorBox, Field, Info, Modal, OriginBadge, PageHeader, Spinner, TenantSelect, useAction, useApi } from '../ui';
 
 const knownModels = ['YubiKey 5 NFC', 'YubiKey 5C NFC', 'YubiKey 5C', 'YubiKey 5 Nano', 'YubiKey 5C Nano', 'YubiKey 5Ci', 'YubiKey Bio', 'YubiKey C Bio', 'Security Key NFC', 'Security Key C NFC'];
 
+/**
+ * Partnerebene: Profile für alle Tenants (werden an jeden Tenant vererbt) und ein Überblick
+ * über die eigenen Profile der Tenants. Pro Tenant pflegt man eigene Profile in den Tenant-Einstellungen.
+ */
 export default function ProfilesPage() {
   const can = useCan();
-  const { tenantId, tenant, tenants } = useTenant();
-  const { data, error, loading, reload } = useApi<Profile[]>('/api/profiles' + (tenantId ? '?tenantId=' + tenantId : ''), [tenantId]);
+  const { tenants } = useTenant();
+  const { data, error, loading, reload } = useApi<Profile[]>('/api/profiles', []);
   const [editing, setEditing] = useState<Partial<Profile> | null>(null);
-  const tenantName = (id?: string) => (id ? tenants?.find((t) => t.id === id)?.displayName ?? 'Tenant' : 'Alle Tenants');
+  const global = data?.filter((p) => !p.tenantId) ?? [];
+  const byTenant = (tenants ?? []).map((t) => ({ t, list: data?.filter((p) => p.tenantId === t.id) ?? [] })).filter((x) => x.list.length > 0);
 
   return (
     <>
-      <PageHeader title="Registrierungsprofile" subtitle={tenant ? `Profile für ${tenant.displayName}: globale Profile und eigene des Tenants.` : 'Alle Profile. Wählen Sie oben einen Tenant, um nur seine Profile zu sehen.'} actions={can('ManageProfiles') && <button className="primary" onClick={() => setEditing({ tenantId: tenantId || undefined })}>Profil anlegen</button>} />
+      <PageHeader title="Registrierungsprofile" subtitle="Profile hier gelten für alle Tenants. Ein Tenant kann eigene Profile ergänzen und ein eigenes Standardprofil wählen."
+        actions={can('ManageProfiles') && <button className="primary" onClick={() => setEditing({})}>Profil für alle Tenants anlegen</button>} />
       <ErrorBox error={error} />
       {loading && !data && <Spinner />}
+      {data && global.length === 0 && <Empty>Noch kein Profil für alle Tenants.</Empty>}
       <div className="grid cols-2">
-        {data?.map((p) => (
-          <Card key={p.id} title={<>{p.name} {p.isDefault && <Badge tone="info">Standard</Badge>}</>} actions={can('ManageProfiles') && <button onClick={() => setEditing(p)}>Bearbeiten</button>}>
-            {p.description && <p className="muted">{p.description}</p>}
-            <table>
-              <tbody>
-                <tr><th>Gültig für</th><td>{tenantName(p.tenantId)}</td></tr>
-                <tr><th>PIN</th><td>{p.pinStrategy === 'Random' ? `Zufällig, ${p.pinLength} Ziffern` : 'Feste Standard-PIN'}</td></tr>
-                <tr><th>PIN-Wechsel erzwingen</th><td>{p.forcePinChange ? 'Ja (ab Firmware 5.7)' : 'Nein'}</td></tr>
-                <tr><th>Werksreset vorher</th><td>{p.factoryResetBeforeRegistration ? 'Ja' : 'Nein'}</td></tr>
-                <tr><th>Anzeigename</th><td className="mono small">{p.displayNameTemplate}</td></tr>
-                <tr><th>Erlaubte Modelle</th><td>{p.allowedModels.length ? p.allowedModels.join(', ') : 'alle'}</td></tr>
-                <tr><th>Mindest-Firmware</th><td>{p.minimumFirmware ?? '–'}</td></tr>
-              </tbody>
-            </table>
-          </Card>
-        ))}
+        {global.map((p) => <ProfileCard key={p.id} p={p} origin={<Badge>An alle Tenants vererbt</Badge>} onEdit={can('ManageProfiles') ? () => setEditing(p) : undefined} />)}
       </div>
+      {byTenant.length > 0 && <>
+        <h2 className="section-title">Eigene Profile der Tenants</h2>
+        <div className="grid cols-2">
+          {byTenant.flatMap(({ t, list }) => list.map((p) => (
+            <ProfileCard key={p.id} p={p} origin={<Badge tone="info">Nur {t.displayName}</Badge>} onEdit={can('ManageProfiles') ? () => setEditing(p) : undefined} />
+          )))}
+        </div>
+      </>}
       {editing && <ProfileModal profile={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
     </>
   );
 }
 
-function ProfileModal({ profile, onClose, onSaved }: { profile: Partial<Profile>; onClose: () => void; onSaved: () => void }) {
+/** Tenant-Einstellungen: geerbte Profile des Partners und eigene Profile des Tenants. */
+export function TenantProfilesCard({ tenantId, editable }: { tenantId: string; editable: boolean }) {
+  const { data, error, reload } = useApi<Profile[]>('/api/profiles?tenantId=' + tenantId, [tenantId]);
+  const [editing, setEditing] = useState<Partial<Profile> | null>(null);
+  const own = data?.filter((p) => p.tenantId === tenantId) ?? [];
+  const inherited = data?.filter((p) => !p.tenantId) ?? [];
+  const effectiveDefault = (own.find((p) => p.isDefault) ?? inherited.find((p) => p.isDefault) ?? data?.[0])?.id;
+  const row = (p: Profile, isOwn: boolean) => (
+    <tr key={p.id}>
+      <td><strong>{p.name}</strong>{p.id === effectiveDefault && <> <Badge tone="info">Standard hier</Badge></>}{p.description && <div className="small muted">{p.description}</div>}</td>
+      <td className="small">{p.pinStrategy === 'Random' ? `Zufällig, ${p.pinLength} Ziffern` : 'Feste PIN'}{p.forcePinChange ? ', Wechsel erzwungen' : ''}</td>
+      <td>{isOwn ? <OriginBadge origin="Tenant" /> : <OriginBadge origin="Global" />}</td>
+      <td className="num">{isOwn && editable && <button className="small" onClick={() => setEditing(p)}>Bearbeiten</button>}</td>
+    </tr>
+  );
+  return (
+    <Card title="Registrierungsprofile" className="mt" actions={editable && <button onClick={() => setEditing({ tenantId })}>Eigenes Profil anlegen</button>}>
+      <p className="muted small" style={{ marginTop: 0 }}>
+        Profile der Partnerebene gelten automatisch auch hier; ändern lassen sie sich unter <Link to="/profiles">Partner → Profile</Link>.
+        Ein eigenes Profil mit „Als Standard verwenden“ ersetzt hier das Standardprofil des Partners.
+      </p>
+      <ErrorBox error={error} />
+      {!data ? <Spinner /> : (
+        <div className="table-wrap">
+          <table>
+            <thead><tr><th>Profil</th><th>PIN</th><th>Herkunft</th><th /></tr></thead>
+            <tbody>{own.map((p) => row(p, true))}{inherited.map((p) => row(p, false))}</tbody>
+          </table>
+        </div>
+      )}
+      {editing && <ProfileModal profile={editing} fixedTenant onClose={() => setEditing(null)} onSaved={() => { setEditing(null); reload(); }} />}
+    </Card>
+  );
+}
+
+function ProfileCard({ p, origin, onEdit }: { p: Profile; origin: ReactNode; onEdit?: () => void }) {
+  return (
+    <Card title={<>{p.name} {p.isDefault && <Badge tone="info">Standard</Badge>}</>} actions={onEdit && <button onClick={onEdit}>Bearbeiten</button>}>
+      <div className="profile-origin">{origin}</div>
+      {p.description && <p className="muted">{p.description}</p>}
+      <table>
+        <tbody>
+          <tr><th>PIN</th><td>{p.pinStrategy === 'Random' ? `Zufällig, ${p.pinLength} Ziffern` : 'Feste Standard-PIN'}</td></tr>
+          <tr><th>PIN-Wechsel erzwingen</th><td>{p.forcePinChange ? 'Ja (ab Firmware 5.7)' : 'Nein'}</td></tr>
+          <tr><th>Werksreset vorher</th><td>{p.factoryResetBeforeRegistration ? 'Ja' : 'Nein'}</td></tr>
+          <tr><th>Anzeigename</th><td className="mono small">{p.displayNameTemplate}</td></tr>
+          <tr><th>Erlaubte Modelle</th><td>{p.allowedModels.length ? p.allowedModels.join(', ') : 'alle'}</td></tr>
+          <tr><th>Mindest-Firmware</th><td>{p.minimumFirmware ?? '–'}</td></tr>
+        </tbody>
+      </table>
+    </Card>
+  );
+}
+
+function ProfileModal({ profile, fixedTenant, onClose, onSaved }: { profile: Partial<Profile>; fixedTenant?: boolean; onClose: () => void; onSaved: () => void }) {
   const [p, setP] = useState({
     tenantId: profile.tenantId ?? '',
     name: profile.name ?? '',
@@ -59,6 +114,8 @@ function ProfileModal({ profile, onClose, onSaved }: { profile: Partial<Profile>
   const set = <K extends keyof typeof p>(k: K, v: (typeof p)[K]) => setP((s) => ({ ...s, [k]: v }));
   const { busy, error, run } = useAction();
   const isNew = !profile.id;
+  const { tenants } = useTenant();
+  const tenantName = (id: string) => tenants?.find((t) => t.id === id)?.displayName ?? 'Tenant';
 
   const save = () => run(async () => {
     const body = { ...p, tenantId: p.tenantId || null, minimumFirmware: p.minimumFirmware || null, fixedPin: p.pinStrategy === 'Fixed' && p.fixedPin ? p.fixedPin : null, description: p.description || null };
@@ -75,7 +132,9 @@ function ProfileModal({ profile, onClose, onSaved }: { profile: Partial<Profile>
     </>}>
       <div className="grid cols-2">
         <Field label="Name"><input value={p.name} onChange={(e) => set('name', e.target.value)} /></Field>
-        <Field label="Gültig für"><TenantSelect value={p.tenantId} onChange={(v) => set('tenantId', v)} /></Field>
+        <Field label="Gültig für" hint={isNew ? undefined : 'Lässt sich nach dem Anlegen nicht mehr ändern.'}>
+          {fixedTenant || !isNew ? <input value={p.tenantId ? tenantName(p.tenantId) : 'Alle Tenants (vererbt)'} disabled /> : <TenantSelect value={p.tenantId} onChange={(v) => set('tenantId', v)} />}
+        </Field>
       </div>
       <Field label="Beschreibung"><input value={p.description} onChange={(e) => set('description', e.target.value)} /></Field>
       <div className="grid cols-2">
@@ -92,7 +151,7 @@ function ProfileModal({ profile, onClose, onSaved }: { profile: Partial<Profile>
       {p.pinStrategy === 'Fixed' && !p.forcePinChange && <Info tone="warn">Eine feste PIN ohne erzwungenen Wechsel ist unsicher.</Info>}
       <label className="check"><input type="checkbox" checked={p.forcePinChange} onChange={(e) => set('forcePinChange', e.target.checked)} /> PIN-Wechsel bei der ersten Verwendung erzwingen (ab Firmware 5.7)</label>
       <label className="check"><input type="checkbox" checked={p.factoryResetBeforeRegistration} onChange={(e) => set('factoryResetBeforeRegistration', e.target.checked)} /> FIDO-Werksreset vor jeder Registrierung</label>
-      <label className="check"><input type="checkbox" checked={p.isDefault} onChange={(e) => set('isDefault', e.target.checked)} /> Als Standardprofil verwenden</label>
+      <label className="check"><input type="checkbox" checked={p.isDefault} onChange={(e) => set('isDefault', e.target.checked)} /> {p.tenantId ? 'Als Standardprofil dieses Tenants verwenden (ersetzt hier das des Partners)' : 'Als Standardprofil für alle Tenants verwenden'}</label>
       <Field label="Anzeigename in Entra" hint="Platzhalter: {Seriennummer}, {Modell}, {UPN}, {Datum}">
         <input value={p.displayNameTemplate} onChange={(e) => set('displayNameTemplate', e.target.value)} />
       </Field>
