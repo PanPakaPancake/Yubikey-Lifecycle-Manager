@@ -415,3 +415,27 @@ public class CustomFieldInheritanceTests
         Assert.Empty(CustomFieldInheritance.Apply(g.Spec, new(false, null, null, ["x"])).Options);
     }
 }
+
+public sealed class AuthMethodCatalogTests
+{
+    [Theory]
+    [InlineData(new[] { "password", "passKeyDeviceBound", "mobilePhone" }, RolloutStage.SecurityKey)]
+    [InlineData(new[] { "password", "fido2" }, RolloutStage.SecurityKey)]
+    [InlineData(new[] { "password", "passKeyDeviceBoundAuthenticator" }, RolloutStage.OtherPasskey)]
+    [InlineData(new[] { "windowsHelloForBusiness", "microsoftAuthenticatorPush" }, RolloutStage.OtherPasskey)]
+    [InlineData(new[] { "password", "microsoftAuthenticatorPush" }, RolloutStage.ClassicMfa)]
+    [InlineData(new[] { "password", "email", "temporaryAccessPass" }, RolloutStage.NoMfa)]
+    [InlineData(new string[0], RolloutStage.NoMfa)]
+    public void Stage_follows_strongest_method(string[] methods, RolloutStage expected) =>
+        Assert.Equal(expected, AuthMethodCatalog.StageOf(methods));
+
+    [Fact]
+    public void Phone_types_map_to_report_names()
+    {
+        Assert.Equal("mobilePhone", AuthMethodCatalog.ReportNameFor("phone", "mobile"));
+        Assert.Equal("officePhone", AuthMethodCatalog.ReportNameFor("phone", "office"));
+        Assert.False(AuthMethodCatalog.IsRemovable("password"));
+        Assert.False(AuthMethodCatalog.IsRemovable("fido2"));
+        Assert.True(AuthMethodCatalog.IsRemovable("phone"));
+    }
+}

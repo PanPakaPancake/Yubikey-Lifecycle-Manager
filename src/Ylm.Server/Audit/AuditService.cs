@@ -80,6 +80,9 @@ public static class AuditActions
     public const string ReportScheduleChanged = "report_schedule.changed";
     public const string ReportSent = "report.sent";
     public const string ReportFailed = "report.failed";
+    public const string AuthMethodRemoved = "authmethod.removed";
+    public const string TapCreated = "authmethod.tap_created";
+    public const string TapPolicyEnabled = "tenant.tap_policy_enabled";
 }
 
 public sealed record AuditActor(ActorType Type, Guid? Id, string? Name);

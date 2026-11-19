@@ -30,6 +30,7 @@ import TodosPage from './pages/Todos';
 import IdentifyPage from './pages/Identify';
 import IntegrationsPage from './pages/Integrations';
 import PasskeyInfoPage from './pages/PasskeyInfo';
+import RolloutPage from './pages/Rollout';
 import { isRegisterPath } from './register';
 import { ChooseTenant, TenantProvider, TenantSwitcher, useTenant } from './tenant';
 
@@ -114,6 +115,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
+          {can('ReadReports') && item('/rollout', 'target', 'Passkey-Rollout')}
           {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" />Registrieren</NavLink>}
           {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
           {fourEyes && item('/approvals', 'shield', 'Freigaben')}
@@ -158,6 +160,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/keys" element={<KeysPage />} />
+          <Route path="/rollout" element={<RolloutPage />} />
           <Route path="/assignments" element={<ToPeopleView />} />
           <Route path="/keys/identify" element={<IdentifyPage />} />
           <Route path="/keys/:id" element={<KeyDetailPage />} />

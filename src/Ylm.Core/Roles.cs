@@ -32,6 +32,10 @@ public enum Permission : long
     ManagePartnerStock = 1 << 14,
     /// <summary>Vier-Augen: Breakglass-Registrierungen anderer Admins freigeben.</summary>
     ApproveRegistrations = 1 << 15,
+    /// <summary>Passkey-Rollout: befristete Zugriffspässe (TAP) für Benutzer erzeugen.</summary>
+    IssueTemporaryAccessPass = 1 << 16,
+    /// <summary>Passkey-Rollout: andere Anmeldemethoden (SMS, Authenticator, OTP …) von Benutzern entfernen.</summary>
+    RemoveAuthMethods = 1 << 17,
 }
 
 /// <summary>Beschreibung einer Berechtigung für die Rollenverwaltung.</summary>
@@ -49,7 +53,8 @@ public static class RolePermissions
         PlatformRole.Helpdesk => Permission.ReadInventory | Permission.ReadReports | Permission.LockKeys,
         // Operator: Keys registrieren, sperren, zurücksetzen; Lager pflegen; synchronisieren.
         PlatformRole.Operator => Read | Permission.LockKeys | Permission.RegisterKeys | Permission.ResetKeys
-                                 | Permission.ManageInventory | Permission.RetireKeys | Permission.ManagePartnerStock | Permission.SyncTenants,
+                                 | Permission.ManageInventory | Permission.RetireKeys | Permission.ManagePartnerStock | Permission.SyncTenants
+                                 | Permission.IssueTemporaryAccessPass | Permission.RemoveAuthMethods,
         // Owner: alles, inkl. Tenants, Profile, Rollen.
         PlatformRole.Owner => (Permission)~0L,
         _ => Permission.None,
@@ -83,6 +88,8 @@ public static class RolePermissions
         new(Permission.RetireKeys, "Keys", "Keys ausmustern", "Key endgültig ausmustern.", false),
         new(Permission.ManageInventory, "Lager", "Tenant-Lager pflegen", "Wareneingang, Import, Tags, Zusatzfelder und Notizen im Tenant.", false),
         new(Permission.ApproveRegistrations, "Keys", "Breakglass freigeben", "Vier-Augen-Freigabe: Breakglass-Registrierungen anderer Admins freigeben oder ablehnen.", false),
+        new(Permission.IssueTemporaryAccessPass, "Anmeldemethoden", "TAP erzeugen", "Passkey-Rollout: befristeten Zugriffspass (TAP) für Benutzer erzeugen. Der Code wird nur einmal angezeigt.", false),
+        new(Permission.RemoveAuthMethods, "Anmeldemethoden", "Methoden entfernen", "Passkey-Rollout: andere Anmeldemethoden wie SMS, Authenticator oder OTP von Benutzern entfernen.", false),
         new(Permission.ManagePartnerStock, "Lager", "Partnerlager verwalten", "Keys im Partnerlager sehen, ins Partnerlager geben und Tenants zuweisen.", false),
         new(Permission.SyncTenants, "Tenants", "Synchronisieren", "Entra-Sync und Tenant-Prüfung anstoßen.", false),
         new(Permission.ManageTenants, "Tenants", "Tenants verwalten", "Tenants anbinden, Einstellungen, „Jetzt beheben“, Offboarding.", false),
