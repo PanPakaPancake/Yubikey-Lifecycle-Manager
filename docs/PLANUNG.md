@@ -173,7 +173,7 @@ Quelle zur Firmware: [YubiKey 5.7 Firmware Specifics](https://docs.yubico.com/ha
 - **Bewusst nicht vorgesehen:** Statusänderungen über die API (z. B. Key sperren).
 - **Später:**
   - Webhooks für Ereignisse (Key registriert, gesperrt, …)
-  - Integration **NinjaRMM**
+  - NinjaRMM über die Webhooks (Entscheidung 19.11.2026: keine eigene Anbindung)
   - ToDo-Liste: Ein Ticketsystem kann Nutzer, die einen Key bekommen sollen, in eine Registrierungs-Warteschlange pushen. Das ist die einzige schreibende API-Funktion.
 
 ## 9. Roadmap
@@ -196,7 +196,7 @@ Quelle zur Firmware: [YubiKey 5.7 Firmware Specifics](https://docs.yubico.com/ha
 
 ### V2
 - Mail-Berichte, Webhooks
-- NinjaRMM-Integration
+- NinjaRMM über Webhooks
 - ToDo-Liste aus dem Ticketsystem
 - Vier-Augen-Freigabe pro Tenant
 

@@ -44,8 +44,6 @@ public static class TenantEndpoints
         t.OffboardedAt,
         t.DataDeletionDueAt,
         t.RequireBreakglassApproval,
-        t.NinjaOrganizationId,
-        t.NinjaOrganizationName,
     };
 
     private static List<GroupRef> NormalizeGroups(IEnumerable<GroupRef> groups)

@@ -36,7 +36,6 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
     public DbSet<IntegrationState> IntegrationState => Set<IntegrationState>();
     public DbSet<SmtpSettings> Smtp => Set<SmtpSettings>();
     public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
-    public DbSet<NinjaSettings> Ninja => Set<NinjaSettings>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -224,13 +223,6 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
         });
 
         b.Entity<ReportSchedule>(e => e.ToTable("report_schedules"));
-
-        b.Entity<NinjaSettings>(e =>
-        {
-            e.ToTable("ninja_settings");
-            e.Property(x => x.Id).ValueGeneratedNever();
-            e.Property(x => x.FieldMap).HasColumnType("jsonb").HasConversion(JsonConverter<Dictionary<string, string>>(), JsonComparer<Dictionary<string, string>>());
-        });
     }
 
     private static ValueConverter<T, string> JsonConverter<T>() where T : new() => new(

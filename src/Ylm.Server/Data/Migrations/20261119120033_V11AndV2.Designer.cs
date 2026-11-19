@@ -13,7 +13,7 @@ using Ylm.Server.Data;
 namespace Ylm.Server.Data.Migrations
 {
     [DbContext(typeof(YlmDbContext))]
-    [Migration("20261119113939_V11AndV2")]
+    [Migration("20261119120033_V11AndV2")]
     partial class V11AndV2
     {
         /// <inheritdoc />
@@ -423,45 +423,6 @@ namespace Ylm.Server.Data.Migrations
                     b.HasIndex("TenantId", "UserPrincipalName");
 
                     b.ToTable("key_registrations", (string)null);
-                });
-
-            modelBuilder.Entity("Ylm.Server.Data.NinjaSettings", b =>
-                {
-                    b.Property<int>("Id")
-                        .HasColumnType("integer");
-
-                    b.Property<string>("BaseUrl")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("ClientId")
-                        .HasColumnType("text");
-
-                    b.Property<string>("ClientSecretProtected")
-                        .HasColumnType("text");
-
-                    b.Property<bool>("Enabled")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("FieldMap")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<int>("IntervalMinutes")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTimeOffset?>("LastRunAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("LastRunMessage")
-                        .HasColumnType("text");
-
-                    b.Property<bool?>("LastRunSucceeded")
-                        .HasColumnType("boolean");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("ninja_settings", (string)null);
                 });
 
             modelBuilder.Entity("Ylm.Server.Data.PairingCode", b =>
@@ -1043,12 +1004,6 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<bool?>("LastSyncSucceeded")
                         .HasColumnType("boolean");
-
-                    b.Property<long?>("NinjaOrganizationId")
-                        .HasColumnType("bigint");
-
-                    b.Property<string>("NinjaOrganizationName")
-                        .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("OffboardedAt")
                         .HasColumnType("timestamp with time zone");

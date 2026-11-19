@@ -88,7 +88,7 @@ public static class RolePermissions
         new(Permission.ManageTenants, "Tenants", "Tenants verwalten", "Tenants anbinden, Einstellungen, „Jetzt beheben“, Offboarding.", false),
         new(Permission.ManageProfiles, "Tenants", "Profile verwalten", "Registrierungsprofile und Zusatzfelder.", false),
         new(Permission.ManageUsers, "Partner", "Benutzer und Rollen", "Benutzer anlegen, Rollen vergeben und eigene Rollen definieren.", true),
-        new(Permission.ManageApiKeys, "Partner", "API und Integrationen", "Globale API-Schlüssel, Webhooks, Mail-Berichte und NinjaOne.", true),
+        new(Permission.ManageApiKeys, "Partner", "API und Integrationen", "Globale API-Schlüssel, Webhooks und Mail-Berichte.", true),
         new(Permission.ManageSettings, "Partner", "Plattform-Einstellungen", "Einstellungen der Installation.", true),
     ];
 

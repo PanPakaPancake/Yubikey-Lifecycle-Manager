@@ -9,7 +9,7 @@ using Ylm.Server.Security;
 
 namespace Ylm.Server.Integrations;
 
-/// <summary>Partnerebene → Integrationen: Webhooks, Mail-Berichte, NinjaOne (V2). Nur mit „API und Integrationen“ (Owner).</summary>
+/// <summary>Partnerebene → Integrationen: Webhooks und Mail-Berichte (V2). Nur mit „API und Integrationen“ (Owner).</summary>
 public static class IntegrationEndpoints
 {
     public sealed record WebhookRequest(string Name, string Url, List<string>? Events, bool AllTenants, List<Guid>? TenantIds, bool IsActive = true);
@@ -17,8 +17,6 @@ public static class IntegrationEndpoints
     public sealed record TestMailRequest(string To);
     public sealed record ScheduleRequest(string Name, List<string> Recipients, bool AllTenants, List<Guid>? TenantIds, ReportFrequency Frequency, int DayOfWeek, int DayOfMonth, int Hour,
         string? TimeZone, bool IncludeCsv, bool IsActive = true);
-    public sealed record NinjaRequest(bool Enabled, string BaseUrl, string? ClientId, string? ClientSecret, int IntervalMinutes, Dictionary<string, string>? FieldMap);
-    public sealed record NinjaMappingRequest(long? OrganizationId, string? OrganizationName);
 
     private static object WebhookDto(WebhookSubscription w) => new
     {
@@ -264,73 +262,10 @@ public static class IntegrationEndpoints
             return Results.Ok(ScheduleDto(s));
         });
 
-        // ---------- NinjaOne ----------
-        g.MapGet("/ninja", async (CurrentUser cu, NinjaService ninja, YlmDbContext db) =>
-        {
-            await cu.RequireAsync(Permission.ManageApiKeys);
-            var s = await ninja.SettingsAsync();
-            var tenants = await db.Tenants.Where(t => t.Status == TenantStatus.Active).OrderBy(t => t.DisplayName)
-                .Select(t => new { t.Id, t.DisplayName, t.NinjaOrganizationId, t.NinjaOrganizationName }).ToListAsync();
-            return Results.Ok(new
-            {
-                s.Enabled, s.BaseUrl, s.ClientId, HasSecret = s.ClientSecretProtected != null, s.IntervalMinutes, s.FieldMap, s.LastRunAt, s.LastRunSucceeded, s.LastRunMessage,
-                Metrics = NinjaService.Metrics, Regions = NinjaService.Regions, Tenants = tenants,
-            });
-        });
-
-        g.MapPut("/ninja", async (NinjaRequest body, CurrentUser cu, NinjaService ninja, YlmDbContext db, AuditService audit) =>
-        {
-            var user = await cu.RequireAsync(Permission.ManageApiKeys);
-            var s = await ninja.SettingsAsync();
-            if (!Uri.TryCreate(body.BaseUrl?.Trim(), UriKind.Absolute, out var u) || u.Scheme != Uri.UriSchemeHttps)
-                throw ApiException.BadRequest("invalid", "Bitte die NinjaOne-Adresse mit https:// angeben, z. B. https://eu.ninjarmm.com.");
-            if (body.IntervalMinutes is < 15 or > 1440) throw ApiException.BadRequest("invalid", "Das Intervall muss zwischen 15 und 1440 Minuten liegen.");
-            s.BaseUrl = u.GetLeftPart(UriPartial.Authority);
-            s.ClientId = string.IsNullOrWhiteSpace(body.ClientId) ? null : body.ClientId.Trim();
-            if (!string.IsNullOrEmpty(body.ClientSecret)) s.ClientSecretProtected = ninja.Protect(body.ClientSecret.Trim());
-            s.IntervalMinutes = body.IntervalMinutes;
-            if (body.FieldMap is not null)
-                s.FieldMap = NinjaService.Metrics.ToDictionary(m => m.Id, m => body.FieldMap.TryGetValue(m.Id, out var f) ? (f ?? "").Trim() : "");
-            s.Enabled = body.Enabled;
-            NinjaService.ForgetToken();
-            audit.Add(AuditService.User(user), AuditActions.NinjaChanged, details: new { s.Enabled, s.BaseUrl, s.ClientId, secretChanged = !string.IsNullOrEmpty(body.ClientSecret), s.IntervalMinutes, s.FieldMap });
-            await db.SaveChangesAsync();
-            return Results.NoContent();
-        });
-
-        g.MapGet("/ninja/organizations", async (CurrentUser cu, NinjaService ninja) =>
-        {
-            await cu.RequireAsync(Permission.ManageApiKeys);
-            return Results.Ok(await ninja.OrganizationsAsync());
-        });
-
-        g.MapPut("/ninja/tenants/{tenantId:guid}", async (Guid tenantId, NinjaMappingRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
-        {
-            var user = await cu.RequireAsync(Permission.ManageApiKeys);
-            var t = await db.Tenants.FindAsync(tenantId) ?? throw ApiException.NotFound("Tenant");
-            t.NinjaOrganizationId = body.OrganizationId;
-            t.NinjaOrganizationName = body.OrganizationId is null ? null : body.OrganizationName?.Trim();
-            audit.Add(AuditService.User(user), AuditActions.NinjaChanged, t.Id, target: t.DisplayName, details: new { organizationId = t.NinjaOrganizationId, organization = t.NinjaOrganizationName });
-            await db.SaveChangesAsync();
-            return Results.NoContent();
-        });
-
-        g.MapGet("/ninja/preview/{tenantId:guid}", async (Guid tenantId, CurrentUser cu, YlmDbContext db, NinjaService ninja) =>
-        {
-            await cu.RequireAsync(Permission.ManageApiKeys);
-            var t = await db.Tenants.FindAsync(tenantId) ?? throw ApiException.NotFound("Tenant");
-            return Results.Ok(await ninja.ValuesAsync(t));
-        });
-
-        g.MapPost("/ninja/push", async (Guid? tenantId, CurrentUser cu, NinjaService ninja) =>
-        {
-            await cu.RequireAsync(Permission.ManageApiKeys);
-            return Results.Ok(await ninja.PushAsync(tenantId));
-        });
     }
 }
 
-/// <summary>Webhooks every few seconds, due mail reports and NinjaOne pushes every minute.</summary>
+/// <summary>Webhooks every few seconds, due mail reports every minute.</summary>
 public sealed class IntegrationJobs(IServiceScopeFactory scopes, IOptions<YlmOptions> options, ILogger<IntegrationJobs> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -364,9 +299,7 @@ public sealed class IntegrationJobs(IServiceScopeFactory scopes, IOptions<YlmOpt
 
     public async Task RunScheduledAsync(CancellationToken ct)
     {
-        using (var scope = scopes.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<ReportMailService>().RunDueAsync(ct);
-        using (var scope = scopes.CreateScope())
-            await scope.ServiceProvider.GetRequiredService<NinjaService>().RunDueAsync(ct);
+        using var scope = scopes.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<ReportMailService>().RunDueAsync(ct);
     }
 }

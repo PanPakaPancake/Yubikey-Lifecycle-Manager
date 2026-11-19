@@ -122,7 +122,7 @@ Unter „Integrationen“ (Partnerebene, Recht „API und Integrationen“):
 
 - **Webhooks**: JSON per `POST` bei ausgewählten Ereignissen, signiert mit `X-YLM-Signature: sha256=HMAC-SHA256(Geheimnis, X-YLM-Timestamp + "." + Body)`. Fehlschläge werden bis zu fünfmal wiederholt (1 min bis 6 h). Der Server braucht ausgehenden Zugriff auf die Ziel-URLs.
 - **Mail-Berichte**: SMTP-Server eintragen (Passwort wird verschlüsselt gespeichert), dann Berichte täglich, wöchentlich oder monatlich mit Dashboard-PDF und optional Keys-CSV.
-- **NinjaOne**: API-App mit Client Credentials (Scopes Monitoring, Management), Organisations-Custom-Fields anlegen, Tenants Organisationen zuordnen. Die Plattform schreibt die Kennzahlen im eingestellten Intervall.
+- **NinjaRMM**: keine eigene Anbindung; Ereignisse gehen über einen Webhook an NinjaOne bzw. an ein Zwischensystem, das sie dort verarbeitet.
 
 ## 6. Entwicklung
 

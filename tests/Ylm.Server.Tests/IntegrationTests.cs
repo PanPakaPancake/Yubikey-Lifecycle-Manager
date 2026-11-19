@@ -12,7 +12,7 @@ using Ylm.Server.Integrations;
 
 namespace Ylm.Server.Tests;
 
-/// <summary>V2: ToDo-Liste über die API, Webhooks, Mail-Berichte, NinjaOne.</summary>
+/// <summary>V2: ToDo-Liste über die API, Webhooks, Mail-Berichte.</summary>
 public sealed class IntegrationTests : IAsyncLifetime
 {
     private readonly TestApp _app = new();
@@ -22,7 +22,6 @@ public sealed class IntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        NinjaService.ForgetToken();
         _graph = new FakeGraph();
         _graph.Users.Add(new GraphUser("u-anna", "anna@contoso.com", "Anna Beispiel", "anna@contoso.com", "Vertrieb", true));
         _graph.Users.Add(new GraphUser("u-ben", "ben@contoso.com", "Ben Muster", "ben@contoso.com", "IT", true));
@@ -244,51 +243,4 @@ public sealed class IntegrationTests : IAsyncLifetime
 
     private static DateTimeOffset ReportMailService_NextRun(ReportSchedule s, DateTimeOffset after) => ReportMailService.NextRun(s, after);
 
-    [Fact]
-    public async Task Ninja_pushes_metrics_into_organization_fields()
-    {
-        _app.Http.Respond = (req, body) => req.RequestUri!.AbsolutePath switch
-        {
-            "/ws/oauth/token" => new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new { access_token = "tok-1", expires_in = 3600 }) },
-            "/v2/organizations" => new HttpResponseMessage(HttpStatusCode.OK) { Content = JsonContent.Create(new[] { new { id = 7L, name = "Contoso" }, new { id = 8L, name = "Fabrikam" } }) },
-            _ => new HttpResponseMessage(HttpStatusCode.NoContent),
-        };
-        Assert.Equal(HttpStatusCode.NoContent, (await _owner.PutAsJsonAsync("/api/integrations/ninja", new
-        {
-            enabled = true, baseUrl = "https://eu.ninjarmm.com", clientId = "cid", clientSecret = "csecret", intervalMinutes = 60,
-            fieldMap = new Dictionary<string, string> { ["summary"] = "ylmSummary", ["keysActive"] = "ylmKeysActive", ["coveragePercent"] = "" },
-        })).StatusCode);
-        var orgs = await Json(await _owner.GetAsync("/api/integrations/ninja/organizations"));
-        Assert.Equal(2, orgs.GetArrayLength());
-        Assert.True(_app.Http.Calls.TryDequeue(out var tokenCall));
-        Assert.Contains("client_secret=csecret", tokenCall.Body);
-        Assert.True(_app.Http.Calls.TryDequeue(out var orgCall));
-        Assert.Equal("Bearer tok-1", orgCall.Headers["Authorization"]);
-
-        Assert.Equal(HttpStatusCode.NoContent, (await _owner.PutAsJsonAsync($"/api/integrations/ninja/tenants/{_tenantId}", new { organizationId = 7, organizationName = "Contoso" })).StatusCode);
-        await _app.WithDbAsync(async db =>
-        {
-            db.Keys.Add(new YubiKey { TenantId = _tenantId, SerialNumber = 1, Status = KeyStatus.InStock, Source = KeySource.Import });
-            await db.SaveChangesAsync();
-        });
-        var result = await Json(await _owner.PostAsync("/api/integrations/ninja/push", null));
-        Assert.Equal(1, result.GetProperty("succeeded").GetInt32());
-        var patch = _app.Http.Calls.Last();
-        Assert.Equal(HttpMethod.Patch, patch.Method);
-        Assert.Equal("/v2/organization/7/custom-fields", patch.Uri.AbsolutePath);
-        using var body = JsonDocument.Parse(patch.Body);
-        Assert.Equal(0, body.RootElement.GetProperty("ylmKeysActive").GetInt32());
-        Assert.Contains("1 im Lager", body.RootElement.GetProperty("ylmSummary").GetString());
-        Assert.False(body.RootElement.TryGetProperty("ylmCoveragePercent", out _));
-
-        var settings = await Json(await _owner.GetAsync("/api/integrations/ninja"));
-        Assert.True(settings.GetProperty("lastRunSucceeded").GetBoolean());
-        Assert.False(settings.TryGetProperty("clientSecret", out _));
-
-        // Falsche Zugangsdaten werden verständlich gemeldet.
-        NinjaService.ForgetToken();
-        _app.Http.Respond = (_, _) => new HttpResponseMessage(HttpStatusCode.Unauthorized);
-        var failed = await Json(await _owner.PostAsync("/api/integrations/ninja/push", null));
-        Assert.Contains("Anmeldung bei NinjaOne fehlgeschlagen", failed.GetProperty("errors")[0].GetString());
-    }
 }

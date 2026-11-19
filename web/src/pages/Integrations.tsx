@@ -1,13 +1,13 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api, fmtDate, type Tenant } from '../api';
 import { Badge, Card, Empty, ErrorBox, Field, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { useConfirm, useToast } from '../feedback';
 import { ScopeEditor } from './Platform';
 
-type Tab = 'webhooks' | 'mail' | 'ninja';
+type Tab = 'webhooks' | 'mail';
 
-/** Partnerebene → Integrationen (V2): Webhooks, Mail-Berichte und NinjaOne. */
+/** Partnerebene → Integrationen (V2): Webhooks und Mail-Berichte. */
 export default function IntegrationsPage() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as Tab) || 'webhooks';
@@ -18,11 +18,9 @@ export default function IntegrationsPage() {
       <div className="tabs" role="tablist">
         <button className={tab === 'webhooks' ? 'selected' : ''} onClick={() => set('webhooks')}>Webhooks</button>
         <button className={tab === 'mail' ? 'selected' : ''} onClick={() => set('mail')}>Mail-Berichte</button>
-        <button className={tab === 'ninja' ? 'selected' : ''} onClick={() => set('ninja')}>NinjaOne</button>
       </div>
       {tab === 'webhooks' && <Webhooks />}
       {tab === 'mail' && <MailReports />}
-      {tab === 'ninja' && <Ninja />}
     </>
   );
 }
@@ -324,137 +322,5 @@ function ScheduleModal({ schedule, onClose, onSaved }: { schedule?: Schedule; on
       <label className="check"><input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)} /> Aktiv</label>
       <ErrorBox error={error} />
     </Modal>
-  );
-}
-
-// ---------------- NinjaOne ----------------
-
-interface NinjaState {
-  enabled: boolean; baseUrl: string; clientId?: string | null; hasSecret: boolean; intervalMinutes: number; fieldMap: Record<string, string>;
-  lastRunAt?: string | null; lastRunSucceeded?: boolean | null; lastRunMessage?: string | null;
-  metrics: { id: string; label: string; defaultField: string; kind: string }[]; regions: string[];
-  tenants: { id: string; displayName: string; ninjaOrganizationId?: number | null; ninjaOrganizationName?: string | null }[];
-}
-
-function Ninja() {
-  const { data, error, reload } = useApi<NinjaState>('/api/integrations/ninja');
-  if (error) return <ErrorBox error={error} />;
-  if (!data) return <Spinner />;
-  return (
-    <>
-      <NinjaSettingsCard state={data} onSaved={reload} />
-      <NinjaMappingCard state={data} onChanged={reload} />
-    </>
-  );
-}
-
-function NinjaSettingsCard({ state, onSaved }: { state: NinjaState; onSaved: () => void }) {
-  const [enabled, setEnabled] = useState(state.enabled);
-  const [baseUrl, setBaseUrl] = useState(state.baseUrl);
-  const [clientId, setClientId] = useState(state.clientId ?? '');
-  const [secret, setSecret] = useState('');
-  const [interval, setIntervalMinutes] = useState(state.intervalMinutes);
-  const [fieldMap, setFieldMap] = useState<Record<string, string>>(state.fieldMap);
-  const { busy, error, run } = useAction();
-  const toast = useToast();
-  const save = () => run(async () => {
-    await api.put('/api/integrations/ninja', { enabled, baseUrl, clientId, clientSecret: secret || null, intervalMinutes: interval, fieldMap });
-    setSecret('');
-    toast.ok('NinjaOne-Einstellungen gespeichert.');
-    onSaved();
-  });
-  return (
-    <Card title="NinjaOne-Anbindung" actions={state.lastRunAt ? (state.lastRunSucceeded ? <Badge tone="ok">zuletzt ok</Badge> : <Badge tone="error">Fehler</Badge>) : undefined}>
-      <p className="small muted" style={{ marginTop: 0 }}>
-        Die Plattform schreibt die Kennzahlen jedes zugeordneten Tenants in Organisationsfelder in NinjaOne. Dafür in NinjaOne unter Administration → Apps → API eine
-        App mit dem Grant „Client Credentials“ und den Scopes Monitoring und Management anlegen, und unter Administration → Geräte → Rollenfelder bzw. Globale Felder die
-        Organisationsfelder mit den API-Namen unten anlegen (Schreibrecht für die API).
-      </p>
-      {state.lastRunMessage && <Info tone={state.lastRunSucceeded ? 'ok' : 'warn'}>{fmtDate(state.lastRunAt)}: {state.lastRunMessage}</Info>}
-      <div className="grid cols-2">
-        <Field label="Region">
-          <select value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}>
-            {[...new Set([...state.regions, baseUrl])].map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
-        </Field>
-        <Field label="Intervall" hint="Wie oft die Werte übertragen werden">
-          <select value={interval} onChange={(e) => setIntervalMinutes(Number(e.target.value))}>
-            <option value={15}>alle 15 Minuten</option><option value={60}>stündlich</option><option value={240}>alle 4 Stunden</option><option value={1440}>täglich</option>
-          </select>
-        </Field>
-        <Field label="Client-ID"><input value={clientId} onChange={(e) => setClientId(e.target.value)} autoComplete="off" /></Field>
-        <Field label="Client-Secret" hint={state.hasSecret ? 'Gespeichert. Leer lassen, um es zu behalten.' : undefined}><input type="password" value={secret} onChange={(e) => setSecret(e.target.value)} autoComplete="new-password" /></Field>
-      </div>
-      <div className="field-group">
-        <span className="field-label">Felder in NinjaOne (API-Name; leer = nicht übertragen)</span>
-        <table>
-          <tbody>
-            {state.metrics.map((m) => (
-              <tr key={m.id}>
-                <td>{m.label} <span className="small muted">({m.kind === 'text' ? 'Text' : 'Zahl'})</span></td>
-                <td><input value={fieldMap[m.id] ?? ''} onChange={(e) => setFieldMap((f) => ({ ...f, [m.id]: e.target.value }))} placeholder={m.defaultField} className="mono" /></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      <label className="check"><input type="checkbox" checked={enabled} onChange={(e) => setEnabled(e.target.checked)} /> Regelmäßig übertragen</label>
-      <div className="actions"><button className="primary" disabled={busy} onClick={save}>Speichern</button></div>
-      <ErrorBox error={error} />
-    </Card>
-  );
-}
-
-function NinjaMappingCard({ state, onChanged }: { state: NinjaState; onChanged: () => void }) {
-  const [orgs, setOrgs] = useState<{ id: number; name: string }[]>();
-  const { busy, error, run } = useAction();
-  const toast = useToast();
-  const [preview, setPreview] = useState<{ tenant: string; values: Record<string, unknown> }>();
-  const ready = !!state.clientId && state.hasSecret;
-  const load = () => run(async () => setOrgs(await api.get('/api/integrations/ninja/organizations')));
-  useEffect(() => { if (ready) load(); }, [ready]); // eslint-disable-line react-hooks/exhaustive-deps
-  const map = (tenantId: string, orgId: string) => run(async () => {
-    const org = orgs?.find((o) => String(o.id) === orgId);
-    await api.put(`/api/integrations/ninja/tenants/${tenantId}`, { organizationId: org ? org.id : null, organizationName: org?.name ?? null });
-    onChanged();
-  });
-  const push = (tenantId?: string) => run(async () => {
-    const r = await api.post<{ tenants: number; succeeded: number; errors: string[] }>('/api/integrations/ninja/push' + (tenantId ? `?tenantId=${tenantId}` : ''));
-    if (r.errors.length === 0) toast.ok(`${r.succeeded} Tenant(s) an NinjaOne übertragen.`); else toast.error(r.errors.join(' '));
-    onChanged();
-  });
-  const show = (t: NinjaState['tenants'][number]) => run(async () => setPreview({ tenant: t.displayName, values: await api.get(`/api/integrations/ninja/preview/${t.id}`) }));
-  return (
-    <Card title="Tenants zuordnen" className="mt" actions={<><button disabled={!ready || busy} onClick={load}>Organisationen laden</button><button className="primary" disabled={!ready || busy} onClick={() => push()}>Jetzt übertragen</button></>}>
-      {!ready && <Info>Zuerst Client-ID und Secret speichern.</Info>}
-      <ErrorBox error={error} />
-      <table>
-        <thead><tr><th>Tenant</th><th>NinjaOne-Organisation</th><th /></tr></thead>
-        <tbody>
-          {state.tenants.map((t) => (
-            <tr key={t.id}>
-              <td>{t.displayName}</td>
-              <td>
-                {orgs ? (
-                  <select value={t.ninjaOrganizationId ?? ''} onChange={(e) => map(t.id, e.target.value)}>
-                    <option value="">– nicht übertragen –</option>
-                    {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
-                  </select>
-                ) : (t.ninjaOrganizationName ?? <span className="muted">nicht zugeordnet</span>)}
-              </td>
-              <td className="actions">
-                <button className="small ghost" onClick={() => show(t)}>Werte ansehen</button>
-                {t.ninjaOrganizationId && <button className="small" disabled={busy} onClick={() => push(t.id)}>Übertragen</button>}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {preview && (
-        <Modal title={`Werte für ${preview.tenant}`} onClose={() => setPreview(undefined)} footer={<button onClick={() => setPreview(undefined)}>Schließen</button>}>
-          <table><tbody>{state.metrics.map((m) => <tr key={m.id}><th>{m.label}</th><td>{String(preview.values[m.id] ?? '–')}</td><td className="mono small muted">{state.fieldMap[m.id] || '–'}</td></tr>)}</tbody></table>
-        </Modal>
-      )}
-    </Card>
   );
 }

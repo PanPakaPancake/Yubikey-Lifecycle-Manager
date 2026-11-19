@@ -85,7 +85,7 @@ export interface Tenant {
   consentedAt?: string; consentedBy?: string; targetIncludeGroups: GroupRef[]; targetExcludeGroups: GroupRef[]; syncIntervalMinutes: number;
   lastSyncAt?: string; lastSyncSucceeded?: boolean; lastSyncMessage?: string; targetUserCount?: number; lastCheckAt?: string;
   checks: TenantCheck[]; offboardedAt?: string; dataDeletionDueAt?: string;
-  requireBreakglassApproval: boolean; ninjaOrganizationId?: number | null; ninjaOrganizationName?: string | null;
+  requireBreakglassApproval: boolean;
 }
 
 export interface Registration {

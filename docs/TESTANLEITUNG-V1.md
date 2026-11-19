@@ -561,16 +561,6 @@ Alles unter **Integrationen** (Partnerebene, Recht „API und Integrationen“).
 
 **Erwartet:** Mail mit Kennzahlen im Text und dem Dashboard-PDF im Anhang (plus Keys-CSV, wenn gewählt). „nächster Versand“ stimmt mit der eingestellten Uhrzeit (Zeitzone Europe/Berlin) überein.
 
-### 6.3 NinjaOne
-
-Vorbereitung in NinjaOne: unter Administration → Apps → API eine Client-App mit Grant **Client Credentials** und den Scopes **Monitoring** und **Management** anlegen. Unter Administration → Geräte → Organisations-Felder Custom Fields anlegen, z. B. `ylmSummary` (Text), `ylmKeysActive`, `ylmCoveragePercent` (Zahl). Die Plattform zeigt die vollständige Liste der Felder.
-
-1. Reiter **NinjaOne** → Region, Client-ID, Secret, Kennzahlen und Feldnamen → **Speichern**.
-2. **Organisationen laden** (prüft zugleich die Anmeldung) → jedem Tenant eine Ninja-Organisation zuordnen.
-3. **Jetzt übertragen**.
-
-**Erwartet:** In der Ninja-Organisation stehen die Werte in den Custom Fields; danach alle eingestellten Minuten automatisch. Fehler (z. B. fehlendes Feld) stehen in der Statuszeile und im Audit-Log als `ninja.push_failed`.
-
 ---
 
 ## 7. Anmeldung nur mit YubiKey (Abschlusstest)
@@ -674,7 +664,6 @@ YubiKey 2:         Modell ________  FW ______  SN ________
 [ ] 5.15 ToDo-Liste (Oberfläche und API)
 [ ] 6.1  Webhooks mit Signatur
 [ ] 6.2  Mail-Bericht mit PDF
-[ ] 6.3  NinjaOne-Kennzahlen
 [ ] 7    Anmeldung nur mit YubiKey erzwungen
 
 Abweichungen:

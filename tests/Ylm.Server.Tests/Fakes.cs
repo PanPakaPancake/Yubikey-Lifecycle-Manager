@@ -5,7 +5,7 @@ using Ylm.Server.Integrations;
 
 namespace Ylm.Server.Tests;
 
-/// <summary>Captures outgoing HTTP calls (webhooks, NinjaOne) and answers with a configurable response.</summary>
+/// <summary>Captures outgoing HTTP calls (webhooks) and answers with a configurable response.</summary>
 public sealed class FakeHttpHandler : HttpMessageHandler
 {
     public sealed record Call(HttpMethod Method, Uri Uri, IReadOnlyDictionary<string, string> Headers, string Body);

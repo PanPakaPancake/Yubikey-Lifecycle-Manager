@@ -12,18 +12,6 @@ namespace Ylm.Server.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<long>(
-                name: "NinjaOrganizationId",
-                table: "tenants",
-                type: "bigint",
-                nullable: true);
-
-            migrationBuilder.AddColumn<string>(
-                name: "NinjaOrganizationName",
-                table: "tenants",
-                type: "text",
-                nullable: true);
-
             migrationBuilder.AddColumn<bool>(
                 name: "RequireBreakglassApproval",
                 table: "tenants",
@@ -67,26 +55,6 @@ namespace Ylm.Server.Data.Migrations
                 constraints: table =>
                 {
                     table.PrimaryKey("PK_integration_state", x => x.Id);
-                });
-
-            migrationBuilder.CreateTable(
-                name: "ninja_settings",
-                columns: table => new
-                {
-                    Id = table.Column<int>(type: "integer", nullable: false),
-                    Enabled = table.Column<bool>(type: "boolean", nullable: false),
-                    BaseUrl = table.Column<string>(type: "text", nullable: false),
-                    ClientId = table.Column<string>(type: "text", nullable: true),
-                    ClientSecretProtected = table.Column<string>(type: "text", nullable: true),
-                    IntervalMinutes = table.Column<int>(type: "integer", nullable: false),
-                    FieldMap = table.Column<string>(type: "jsonb", nullable: false),
-                    LastRunAt = table.Column<DateTimeOffset>(type: "timestamp with time zone", nullable: true),
-                    LastRunSucceeded = table.Column<bool>(type: "boolean", nullable: true),
-                    LastRunMessage = table.Column<string>(type: "text", nullable: true)
-                },
-                constraints: table =>
-                {
-                    table.PrimaryKey("PK_ninja_settings", x => x.Id);
                 });
 
             migrationBuilder.CreateTable(
@@ -289,9 +257,6 @@ namespace Ylm.Server.Data.Migrations
                 name: "integration_state");
 
             migrationBuilder.DropTable(
-                name: "ninja_settings");
-
-            migrationBuilder.DropTable(
                 name: "registration_approvals");
 
             migrationBuilder.DropTable(
@@ -308,14 +273,6 @@ namespace Ylm.Server.Data.Migrations
 
             migrationBuilder.DropTable(
                 name: "webhooks");
-
-            migrationBuilder.DropColumn(
-                name: "NinjaOrganizationId",
-                table: "tenants");
-
-            migrationBuilder.DropColumn(
-                name: "NinjaOrganizationName",
-                table: "tenants");
 
             migrationBuilder.DropColumn(
                 name: "RequireBreakglassApproval",

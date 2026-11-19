@@ -80,7 +80,6 @@ builder.Services.AddScoped<BatchService>();
 builder.Services.AddScoped<SharedKeyService>();
 builder.Services.AddScoped<Ylm.Server.Integrations.WebhookService>();
 builder.Services.AddScoped<Ylm.Server.Integrations.ReportMailService>();
-builder.Services.AddScoped<Ylm.Server.Integrations.NinjaService>();
 builder.Services.AddSingleton<Ylm.Server.Integrations.IMailSender, Ylm.Server.Integrations.SmtpMailSender>();
 builder.Services.AddHttpClient(Ylm.Server.Integrations.WebhookService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddSingleton<Ylm.Server.Integrations.IntegrationJobs>();

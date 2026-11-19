@@ -77,8 +77,6 @@ public static class AuditActions
     public const string ReportScheduleChanged = "report_schedule.changed";
     public const string ReportSent = "report.sent";
     public const string ReportFailed = "report.failed";
-    public const string NinjaChanged = "settings.ninja_changed";
-    public const string NinjaPushFailed = "ninja.push_failed";
 }
 
 public sealed record AuditActor(ActorType Type, Guid? Id, string? Name);

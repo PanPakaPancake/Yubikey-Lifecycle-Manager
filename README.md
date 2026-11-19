@@ -44,7 +44,7 @@ Ein reiner Browser kann die Registrierung on Behalf nicht durchführen. Die Begr
 
 **V1.1 umgesetzt**: Stapelregistrierung (Liste aus Entra-Gruppe, CSV oder Suche; Keys der Reihe nach einstecken, optional feste Seriennummer pro Person; alle PIN-Briefe als ein PDF), geteilter Key und Breakglass (mehrere Konten auf einem Key, Pflichtfeld Verwahrer, ein PIN-Brief an den Verwahrer), Nacherfassen selbst registrierter Keys per Einstecken.
 
-**V2 umgesetzt**: ToDo-Liste (von Hand oder per `POST /api/v1/todos` aus dem Ticketsystem, wird mit der Registrierung erledigt), Vier-Augen-Freigabe für Breakglass (pro Tenant), signierte Webhooks mit Wiederholungen, Mail-Berichte per SMTP mit PDF/CSV, NinjaOne (Kennzahlen pro Kunde in Custom Fields der Organisation).
+**V2 umgesetzt**: ToDo-Liste (von Hand oder per `POST /api/v1/todos` aus dem Ticketsystem, wird mit der Registrierung erledigt), Vier-Augen-Freigabe für Breakglass (pro Tenant), signierte Webhooks mit Wiederholungen, Mail-Berichte per SMTP mit PDF/CSV. NinjaRMM bekommt Ereignisse über die Webhooks (keine eigene Anbindung, Entscheidung 2026-11-19).
 
 Automatisch getestet sind die Fachlogik und der komplette Ablauf im Backend mit simuliertem YubiKey und simuliertem Microsoft Graph.
 

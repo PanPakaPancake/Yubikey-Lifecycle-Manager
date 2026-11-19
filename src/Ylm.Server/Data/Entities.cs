@@ -125,9 +125,6 @@ public sealed class Tenant
     public DateTimeOffset? DataDeletionDueAt { get; set; }
     /// <summary>Vier-Augen-Freigabe für Breakglass-Registrierungen (planning 6.3, standardmäßig aus).</summary>
     public bool RequireBreakglassApproval { get; set; }
-    /// <summary>Zugeordnete NinjaOne-Organisation (V2); dorthin werden die Kennzahlen des Tenants geschrieben.</summary>
-    public long? NinjaOrganizationId { get; set; }
-    public string? NinjaOrganizationName { get; set; }
 }
 
 public sealed class YubiKey
@@ -523,21 +520,4 @@ public sealed class ReportSchedule
     public DateTimeOffset? LastSentAt { get; set; }
     public bool? LastSucceeded { get; set; }
     public string? LastError { get; set; }
-}
-
-/// <summary>NinjaOne-Anbindung (V2): Kennzahlen pro Tenant in Organisationsfelder schreiben.</summary>
-public sealed class NinjaSettings
-{
-    public int Id { get; set; } = 1;
-    public bool Enabled { get; set; }
-    /// <summary>z. B. https://eu.ninjarmm.com</summary>
-    public string BaseUrl { get; set; } = "https://eu.ninjarmm.com";
-    public string? ClientId { get; set; }
-    public string? ClientSecretProtected { get; set; }
-    public int IntervalMinutes { get; set; } = 60;
-    /// <summary>Kennzahl → API-Name des Organisationsfelds in NinjaOne. Leerer Name = nicht schreiben.</summary>
-    public Dictionary<string, string> FieldMap { get; set; } = [];
-    public DateTimeOffset? LastRunAt { get; set; }
-    public bool? LastRunSucceeded { get; set; }
-    public string? LastRunMessage { get; set; }
 }

@@ -32,7 +32,7 @@ export default function PlatformPage() {
       {can('ManageSettings') && <LoginSettingsCard />}
       <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
       {can('ManageApiKeys') && <ApiKeysCard />}
-      {can('ManageApiKeys') && <Info>Webhooks, Mail-Berichte und NinjaOne stehen unter <Link to="/partner/integrations">Integrationen</Link>.</Info>}
+      {can('ManageApiKeys') && <Info>Webhooks und Mail-Berichte stehen unter <Link to="/partner/integrations">Integrationen</Link>.</Info>}
     </>
   );
 }
