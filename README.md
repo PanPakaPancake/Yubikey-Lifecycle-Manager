@@ -46,6 +46,8 @@ Ein reiner Browser kann die Registrierung on Behalf nicht durchführen. Die Begr
 
 **V2 umgesetzt**: ToDo-Liste (von Hand oder per `POST /api/v1/todos` aus dem Ticketsystem, wird mit der Registrierung erledigt), Vier-Augen-Freigabe für Breakglass (pro Tenant), signierte Webhooks mit Wiederholungen, Mail-Berichte per SMTP mit PDF/CSV. NinjaRMM bekommt Ereignisse über die Webhooks (keine eigene Anbindung, Entscheidung 2026-11-19).
 
+**Wer hat welchen Key**: Übersicht pro Tenant oder über alle Tenants, nach Person oder nach Key, mit Verwahrern geteilter Keys und Auffälligkeiten; Export als Excel, CSV und PDF; in der Lese-API unter `GET /api/v1/assignments`.
+
 Automatisch getestet sind die Fachlogik und der komplette Ablauf im Backend mit simuliertem YubiKey und simuliertem Microsoft Graph.
 
 **Noch nicht getestet:**

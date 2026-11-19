@@ -542,6 +542,14 @@ curl -X POST https://<plattform>/api/v1/todos -H "X-Api-Key: ylm_…" -H "Conten
 
 ---
 
+### 5.16 Wer hat welchen Key (Übersicht und Export)
+
+1. Links unter **Kunde** auf **Wer hat welchen Key** klicken. Oben im Umschalter erst einen Tenant wählen, danach **Alle Tenants**.
+2. Erwartung: alle ausgegebenen Keys mit Person, Seriennummer, Modell und Datum. Geteilte Keys und Breakglass zeigen den Verwahrer, unter **Nach Key** auch alle Konten darauf.
+3. Im Suchfeld eine Person, einen UPN oder eine Seriennummer tippen. Die Liste filtert beim Tippen; Konten auf geteilten Keys werden mitgefunden.
+4. Kachel **Auffälligkeiten** anklicken: es bleiben Keys ohne Konto, geteilte Keys ohne Verwahrer usw.
+5. **Excel**, **CSV** und **PDF** herunterladen. Erwartung: gleiche Auswahl wie in der Ansicht, Excel mit Filterzeile, PDF im Querformat.
+
 ## 6. Integrationen (ab V2)
 
 Alles unter **Integrationen** (Partnerebene, Recht „API und Integrationen“).

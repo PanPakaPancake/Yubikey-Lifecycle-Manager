@@ -11,6 +11,7 @@ import AccountSetupPage from './pages/AccountSetup';
 import AccountPage from './pages/Account';
 import DashboardPage from './pages/Dashboard';
 import KeysPage from './pages/Keys';
+import AssignmentsPage from './pages/Assignments';
 import KeyDetailPage from './pages/KeyDetail';
 import WizardPage from './pages/Wizard';
 import BatchesPage, { NewBatchPage } from './pages/Batches';
@@ -104,6 +105,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
+          {item('/assignments', 'users', 'Wer hat welchen Key')}
           {can('RegisterKeys') && item('/register', 'keyPlus', 'Key registrieren', true)}
           {can('RegisterKeys') && item('/register/shared', 'share', 'Geteilter Key')}
           {can('RegisterKeys') && item('/batches', 'layers', 'Stapelregistrierung')}
@@ -150,6 +152,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/keys" element={<KeysPage />} />
+          <Route path="/assignments" element={<AssignmentsPage />} />
           <Route path="/keys/identify" element={<IdentifyPage />} />
           <Route path="/keys/:id" element={<KeyDetailPage />} />
           <Route path="/register" element={<WizardPage />} />

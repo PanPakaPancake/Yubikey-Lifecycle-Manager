@@ -420,3 +420,48 @@ a.badge:hover { text-decoration: none; filter: brightness(.97); }
 .tenant-current > span[aria-hidden] { transition: transform .15s; }
 .tenant-current[aria-expanded="true"] > span[aria-hidden] { transform: rotate(180deg); }
 .tenant-menu { animation: modal-in .15s ease-out; }
+
+/* Wer hat welchen Key */
+.assign-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+.kpi-row { display: flex; gap: 12px; align-items: flex-start; text-align: left; font: inherit; width: 100%; }
+button.kpi-row { cursor: pointer; }
+.kpi-row .kpi-text { display: flex; flex-direction: column; min-width: 0; }
+.kpi-row .value { font-size: 1.6rem; line-height: 1.2; }
+.kpi-icon { flex: none; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 10px; background: var(--accent-soft); color: var(--accent); }
+.kpi-icon.tone-ok { background: var(--ok-soft); color: var(--ok); }
+.kpi-icon.tone-warn { background: var(--warn-soft); color: var(--warn); }
+.kpi-active { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent); }
+.usage-bar-wrap { margin: 14px 0 18px; }
+.usage-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: var(--surface-2); border: 1px solid var(--line); }
+.usage-bar > span { display: block; flex-basis: 0; transform-origin: left; animation: bar-grow .7s cubic-bezier(.2, .8, .2, 1) both; }
+.usage-bar > span + span { border-left: 2px solid var(--surface); }
+.seg-personal { background: var(--accent); }
+.seg-shared { background: #8a63d2; }
+.seg-breakglass { background: var(--error); }
+.usage-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 8px; font-size: .82rem; }
+.usage-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+@keyframes bar-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.segmented button { border: 0; border-radius: 0; background: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; color: var(--muted); }
+.segmented button + button { border-left: 1px solid var(--line); }
+.segmented button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.push-right { margin-left: auto; }
+.btn-group { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.btn-group-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .85rem; margin-right: 2px; }
+.person { display: flex; gap: 10px; align-items: center; }
+.avatar.sm { width: 30px; height: 30px; font-size: .75rem; flex: none; }
+.account-chips { display: flex; flex-wrap: wrap; max-width: 360px; }
+.hints { display: flex; flex-wrap: wrap; gap: 4px; }
+.assign-table tbody tr { animation: row-in .35s ease both; }
+@keyframes row-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
+@media (max-width: 900px) {
+  .assign-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .push-right { margin-left: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .usage-bar > span, .assign-table tbody tr { animation: none; }
+}
+@media (max-width: 600px) {
+  .segmented { max-width: 100%; overflow-x: auto; }
+  .segmented button { white-space: nowrap; padding: 6px 10px; }
+}

@@ -44,6 +44,36 @@ public static class ReportingEndpoints
             return Results.File(csv, "text/csv; charset=utf-8", $"registrierungen-{DateTime.Today:yyyy-MM-dd}.csv");
         });
 
+        // Wer hat gerade welchen Key? Gewählter Tenant oder alle zuständigen Tenants.
+        g.MapGet("/assignments", async (Guid? tenantId, string? q, string? usage, bool? issues, CurrentUser cu, AssignmentService assignments) =>
+        {
+            await cu.RequireAsync(Permission.ReadInventory);
+            return Results.Ok(await assignments.BuildAsync(await ScopeAsync(cu, tenantId), new AssignmentFilter(q, usage, issues == true)));
+        });
+
+        g.MapGet("/exports/assignments.{format}", async (string format, Guid? tenantId, string? q, string? usage, bool? issues, CurrentUser cu, AssignmentService assignments,
+            SetupService setup, AuditService audit, Data.YlmDbContext db) =>
+        {
+            format = format.ToLowerInvariant();
+            if (format is not ("csv" or "xlsx" or "pdf")) return Results.NotFound();
+            var user = await cu.RequireAsync(Permission.ReadReports);
+            var ids = await ScopeAsync(cu, tenantId);
+            var o = await assignments.BuildAsync(ids, new AssignmentFilter(q, usage, issues == true));
+            var includeTenant = tenantId is null;
+            await audit.WriteAsync(AuditService.User(user), AuditActions.ExportCreated, tenantId, details: new { kind = "assignments." + format, q, usage, issues });
+            var name = $"key-zuweisungen-{DateTime.Today:yyyy-MM-dd}";
+            if (format == "pdf")
+            {
+                var settings = await setup.GetSettingsAsync();
+                var scope = tenantId is { } t ? (await db.Tenants.FindAsync(t))?.DisplayName ?? "Tenant" : "Alle Tenants";
+                return Results.File(Pdf.AssignmentPdf.Create(settings.OrganizationName, scope, o, includeTenant), "application/pdf", name + ".pdf");
+            }
+            var (header, rows) = AssignmentService.Table(o, includeTenant);
+            return format == "csv"
+                ? Results.File(Csv.Write(header, rows.Select(r => (IReadOnlyList<string?>)r.Select(v => v?.ToString()).ToList())), "text/csv; charset=utf-8", name + ".csv")
+                : Results.File(Xlsx.Write("Key-Zuweisungen", header, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
+        });
+
         g.MapGet("/exports/dashboard.pdf", async (Guid? tenantId, CurrentUser cu, DashboardService dash, SetupService setup, AuditService audit, Data.YlmDbContext db) =>
         {
             var user = await cu.RequireAsync(Permission.ReadReports);
