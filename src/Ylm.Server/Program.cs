@@ -86,6 +86,7 @@ builder.Services.AddSingleton<Ylm.Server.Integrations.IntegrationJobs>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Ylm.Server.Integrations.IntegrationJobs>());
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ExportService>();
+builder.Services.AddScoped<AssignmentService>();
 builder.Services.AddHostedService<BackgroundJobs>();
 
 builder.Services.AddSingleton<IConfigureOptions<OpenIdConnectOptions>, EntraOidcOptionsSetup>();

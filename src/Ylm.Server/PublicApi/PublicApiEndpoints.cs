@@ -99,6 +99,12 @@ public static class PublicApiEndpoints
             return TypedResults.Ok(keys.Select(Map).ToList());
         }).WithSummary("Aktive Keys einer Person").WithDescription(tenantHint.Trim());
 
+        g.MapGet("/assignments", async (ClaimsPrincipal p, string? tenant, string? q, string? usage, YlmDbContext db, AssignmentService assignments) =>
+        {
+            var tenantIds = await ScopeAsync(p, db, tenant);
+            return TypedResults.Ok(await assignments.BuildAsync(tenantIds, new AssignmentFilter(q, usage)));
+        }).WithSummary("Wer hat welchen Key").WithDescription("Ausgegebene Keys mit Person bzw. Verwahrer und allen Konten darauf. Filter: q (Person, UPN, Seriennummer, Verwahrer), usage (Personal, Shared, Breakglass)." + tenantHint);
+
         g.MapGet("/summary", async (ClaimsPrincipal p, string? tenant, DashboardService dash, YlmDbContext db) =>
         {
             var tenantIds = await ScopeAsync(p, db, tenant);

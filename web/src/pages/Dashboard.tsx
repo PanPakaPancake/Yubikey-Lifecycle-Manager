@@ -49,7 +49,7 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
 
           <div className="grid cols-4">
             <Kpi label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
-              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`}>
+              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to={scope === 'all' ? undefined : '/assignments'}>
               {data.coveragePercent != null && <div className="meter"><span style={{ width: Math.min(100, data.coveragePercent) + '%' }} /></div>}
             </Kpi>
             <Kpi label="Keys aktiv" value={data.byStatus.Active ?? 0} sub={`${data.total} Keys gesamt`} to={keysLink('Active')} />
