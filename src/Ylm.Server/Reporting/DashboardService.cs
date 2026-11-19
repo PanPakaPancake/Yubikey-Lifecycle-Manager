@@ -21,7 +21,9 @@ public sealed record Dashboard(
     IReadOnlyList<FirmwareBucket> Firmware,
     int VulnerableKeys,
     int ForcePinChangeUnsupported,
-    IReadOnlyList<object> Tenants);
+    IReadOnlyList<object> Tenants,
+    int OpenTodos = 0,
+    int PendingApprovals = 0);
 
 /// <summary>Dashboard per tenant and for the whole organization (planning 7).</summary>
 public sealed class DashboardService(YlmDbContext db)
@@ -33,6 +35,8 @@ public sealed class DashboardService(YlmDbContext db)
         var regs = await db.Registrations.AsNoTracking().Where(r => tenantIds.Contains(r.TenantId))
             .Select(r => new { r.TenantId, r.EntraUserId, r.RegisteredAt, r.RemovedAt, r.Source }).ToListAsync(ct);
         var tenants = await db.Tenants.AsNoTracking().Where(t => tenantIds.Contains(t.Id)).OrderBy(t => t.DisplayName).ToListAsync(ct);
+        var openTodos = await db.Todos.CountAsync(t => tenantIds.Contains(t.TenantId) && t.Status == TodoStatus.Open, ct);
+        var pendingApprovals = await db.Approvals.CountAsync(a => tenantIds.Contains(a.TenantId) && a.Status == ApprovalStatus.Pending, ct);
 
         var byStatus = Enum.GetValues<KeyStatus>().ToDictionary(s => s.ToString(), s => keys.Count(k => k.Status == s));
         var activeKeys = keys.Where(k => k.Status == KeyStatus.Active).ToList();
@@ -80,6 +84,8 @@ public sealed class DashboardService(YlmDbContext db)
                 InStock = keys.Count(k => k.TenantId == t.Id && k.Status == KeyStatus.InStock),
                 UsersWithKey = regs.Where(r => r.TenantId == t.Id && r.RemovedAt == null).Select(r => r.EntraUserId).Distinct().Count(),
                 ChecksFailed = Tenants.TenantCheckService.ReadChecks(t).Count(c => c.Status == CheckStatus.Failed),
-            }).ToList());
+            }).ToList(),
+            openTodos,
+            pendingApprovals);
     }
 }

@@ -59,6 +59,24 @@ public static class AuditActions
     public const string BatchChanged = "batch.changed";
     public const string BatchCompleted = "batch.completed";
     public const string BatchCancelled = "batch.cancelled";
+    public const string KeyCustodianChanged = "key.custodian_changed";
+    public const string RegistrationRemoved = "registration.removed";
+    public const string KeyIdentified = "key.identified";
+    public const string ApprovalRequested = "approval.requested";
+    public const string ApprovalApproved = "approval.approved";
+    public const string ApprovalRejected = "approval.rejected";
+    public const string ApprovalCancelled = "approval.cancelled";
+    public const string ApprovalUsed = "approval.used";
+    public const string TodoCreated = "todo.created";
+    public const string TodoCompleted = "todo.completed";
+    public const string TodoCancelled = "todo.cancelled";
+    public const string WebhookCreated = "webhook.created";
+    public const string WebhookUpdated = "webhook.updated";
+    public const string WebhookDeleted = "webhook.deleted";
+    public const string SmtpChanged = "settings.smtp_changed";
+    public const string ReportScheduleChanged = "report_schedule.changed";
+    public const string ReportSent = "report.sent";
+    public const string ReportFailed = "report.failed";
 }
 
 public sealed record AuditActor(ActorType Type, Guid? Id, string? Name);

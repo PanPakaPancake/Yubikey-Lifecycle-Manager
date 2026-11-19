@@ -77,6 +77,13 @@ builder.Services.AddScoped<SyncService>();
 builder.Services.AddScoped<KeyService>();
 builder.Services.AddScoped<RegistrationService>();
 builder.Services.AddScoped<BatchService>();
+builder.Services.AddScoped<SharedKeyService>();
+builder.Services.AddScoped<Ylm.Server.Integrations.WebhookService>();
+builder.Services.AddScoped<Ylm.Server.Integrations.ReportMailService>();
+builder.Services.AddSingleton<Ylm.Server.Integrations.IMailSender, Ylm.Server.Integrations.SmtpMailSender>();
+builder.Services.AddHttpClient(Ylm.Server.Integrations.WebhookService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddSingleton<Ylm.Server.Integrations.IntegrationJobs>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Ylm.Server.Integrations.IntegrationJobs>());
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddHostedService<BackgroundJobs>();
@@ -133,9 +140,9 @@ builder.Services.AddOpenApi(PublicApiEndpoints.GroupName, o =>
     {
         doc.Info = new OpenApiInfo
         {
-            Title = "Yubikey Lifecycle Manager – Lese-API",
+            Title = "Yubikey Lifecycle Manager – API",
             Version = "v1",
-            Description = "Nur lesender Zugriff auf das YubiKey-Inventar eines Tenants. Authentifizierung mit API-Schlüssel im Header X-Api-Key.",
+            Description = "Lesender Zugriff auf das YubiKey-Inventar. Einzige Schreibfunktion: die ToDo-Liste (Personen, die einen Key bekommen sollen), nur mit ToDo-Schreibrecht am Schlüssel. Authentifizierung mit API-Schlüssel im Header X-Api-Key.",
         };
         doc.Components ??= new OpenApiComponents();
         doc.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
@@ -183,6 +190,10 @@ app.MapGroupProfiles();
 app.MapAgents();
 app.MapRegistration();
 app.MapBatches();
+app.MapSharedKeys();
+app.MapApprovals();
+app.MapTodos();
+Ylm.Server.Integrations.IntegrationEndpoints.MapIntegrations(app);
 app.MapReporting();
 app.MapAudit();
 app.MapPublicApi();

@@ -68,6 +68,9 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<bool>("AllTenants")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("AllowTodoWrite")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -337,6 +340,19 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("installation", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.IntegrationState", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("WebhookAuditCursor")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("integration_state", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.KeyRegistration", b =>
                 {
                     b.Property<Guid>("Id")
@@ -529,6 +545,74 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("platform_user_tenants", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationApproval", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Custodian")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("DecidedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DecidedByName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("DecisionNote")
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("EntraUserIds")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<Guid?>("KeyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("RequestedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("RequestedById")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequestedByName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Usage")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<List<string>>("UserPrincipalNames")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<DateTimeOffset?>("ValidUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.ToTable("registration_approvals", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.RegistrationBatch", b =>
                 {
                     b.Property<Guid>("Id")
@@ -703,6 +787,178 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("registration_profiles", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationTodo", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ApiKeyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CancelReason")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("CompletedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CompletedByName")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedByName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Department")
+                        .HasColumnType("text");
+
+                    b.Property<DateOnly?>("DueDate")
+                        .HasColumnType("date");
+
+                    b.Property<string>("EntraUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("KeyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("ProfileId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TicketId")
+                        .HasColumnType("text");
+
+                    b.Property<string>("TicketUrl")
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserDisplayName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("UserPrincipalName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "EntraUserId");
+
+                    b.HasIndex("TenantId", "Status");
+
+                    b.ToTable("registration_todos", (string)null);
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.ReportSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AllTenants")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.Property<int>("DayOfMonth")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Frequency")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Hour")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IncludeCsv")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("LastSentAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool?>("LastSucceeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("NextRunAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<List<string>>("Recipients")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.PrimitiveCollection<List<Guid>>("TenantIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("report_schedules", (string)null);
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.SmtpSettings", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("FromAddress")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FromName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Host")
+                        .HasColumnType("text");
+
+                    b.Property<string>("PasswordProtected")
+                        .HasColumnType("text");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Security")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Username")
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("smtp_settings", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -751,6 +1007,9 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<string>("PolicySnapshotJson")
                         .HasColumnType("jsonb");
+
+                    b.Property<bool>("RequireBreakglassApproval")
+                        .HasColumnType("boolean");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -820,6 +1079,108 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("user_passkeys", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.WebhookDelivery", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("AuditSequence")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTimeOffset?>("DeliveredAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<int?>("LastStatusCode")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid>("SubscriptionId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Status", "NextAttemptAt");
+
+                    b.HasIndex("SubscriptionId", "CreatedAt");
+
+                    b.ToTable("webhook_deliveries", (string)null);
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.WebhookSubscription", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("AllTenants")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("Events")
+                        .IsRequired()
+                        .HasColumnType("text[]");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("LastDeliveryAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool?>("LastDeliverySucceeded")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("LastError")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SecretProtected")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<Guid>>("TenantIds")
+                        .IsRequired()
+                        .HasColumnType("uuid[]");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("webhooks", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.YubiKey", b =>
                 {
                     b.Property<Guid>("Id")
@@ -832,6 +1193,9 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("Custodian")
+                        .HasColumnType("text");
+
                     b.Property<string>("CustomFields")
                         .IsRequired()
                         .HasColumnType("jsonb");
@@ -841,6 +1205,9 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<string>("FormFactor")
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("IdentifiedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsFips")
                         .HasColumnType("boolean");
@@ -884,6 +1251,9 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Usage")
+                        .HasColumnType("integer");
 
                     b.HasKey("Id");
 
@@ -986,6 +1356,15 @@ namespace Ylm.Server.Data.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationApproval", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.RegistrationBatch", b =>
                 {
                     b.HasOne("Ylm.Server.Data.Tenant", null)
@@ -1012,6 +1391,15 @@ namespace Ylm.Server.Data.Migrations
                         .OnDelete(DeleteBehavior.Cascade);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.RegistrationTodo", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.UserPasskey", b =>
                 {
                     b.HasOne("Ylm.Server.Data.PlatformUser", "PlatformUser")
@@ -1021,6 +1409,15 @@ namespace Ylm.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("PlatformUser");
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.WebhookDelivery", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.WebhookSubscription", null)
+                        .WithMany()
+                        .HasForeignKey("SubscriptionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Ylm.Server.Data.YubiKey", b =>

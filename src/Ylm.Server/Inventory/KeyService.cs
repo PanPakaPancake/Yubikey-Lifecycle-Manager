@@ -94,6 +94,68 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
         await db.SaveChangesAsync(ct);
     }
 
+    /// <summary>
+    /// Nacherfassen (planning 5.1): ein selbst registrierter Key (aus dem Entra-Sync, ohne Seriennummer) wird eingesteckt,
+    /// der Agent liest Seriennummer und Firmware aus und der Eintrag wird ergänzt. Gibt es die Seriennummer schon
+    /// (z. B. im Lager), werden die Registrierungen in diesen Eintrag übernommen.
+    /// </summary>
+    public async Task<YubiKey> IdentifyAsync(YubiKey placeholder, Contracts.KeyInfo info, string? custodian, bool ignoreModelMismatch, AuditActor actor, string agentName, CancellationToken ct = default)
+    {
+        if (placeholder.SerialNumber is not null) throw ApiException.Conflict("already_identified", "Der Key hat schon eine Seriennummer.");
+        if (placeholder.TenantId is null) throw ApiException.Conflict("partner_stock", "Nacherfassen gibt es nur für Keys eines Tenants.");
+        if (info.SerialNumber is not { } serial) throw ApiException.Conflict("no_serial", "Die Seriennummer des Keys ist nicht lesbar.");
+        if (!ignoreModelMismatch && placeholder.AaGuid is { } expected && info.AaGuid is { } actual && expected != actual)
+            throw ApiException.Conflict("model_mismatch",
+                $"Der eingesteckte Key ({info.Model ?? "unbekanntes Modell"}) ist ein anderes Modell als der Passkey in Entra ({placeholder.Model ?? expected.ToString()}). Wahrscheinlich ist es der falsche Key.");
+        var active = placeholder.Registrations.Where(r => r.RemovedAt == null).ToList();
+        var target = await FindBySerialAsync(serial, ct);
+        if (target is not null && target.Id == placeholder.Id) target = null;
+        if (target is not null)
+        {
+            if (target.TenantId is { } other && other != placeholder.TenantId)
+                throw ApiException.Conflict("other_tenant", $"Key {serial} ist im Inventar des Tenants „{target.Tenant?.DisplayName}“ erfasst.");
+            if (target.Status == KeyStatus.Locked)
+                throw ApiException.Conflict("locked", $"Key {serial} ist im Inventar als gesperrt erfasst. Bitte zuerst prüfen, ob er wieder genutzt werden darf.");
+            var others = target.Registrations.Where(r => r.RemovedAt == null && active.All(a => a.EntraUserId != r.EntraUserId)).ToList();
+            if (others.Count > 0 && target.Usage == KeyUsage.Personal)
+            {
+                if (string.IsNullOrWhiteSpace(custodian))
+                    throw ApiException.Conflict("custodian_required",
+                        $"Auf Key {serial} sind schon Konten registriert ({string.Join(", ", others.Select(r => r.UserPrincipalName))}). Er wird damit zum geteilten Key; bitte einen Verwahrer angeben.");
+                target.Usage = KeyUsage.Shared;
+                target.Custodian = custodian.Trim();
+            }
+            if (target.TenantId is null)
+            {
+                target.TenantId = placeholder.TenantId;
+                audit.Add(actor, AuditActions.KeyAssignedToTenant, target.TenantId, target.Id, serial.ToString(), new { from = "partner_stock", context = "identify" });
+            }
+            foreach (var r in placeholder.Registrations) r.KeyId = target.Id;
+            target.Tags = Tags.Normalize([.. target.Tags, .. placeholder.Tags]).ToList();
+            foreach (var (k, v) in placeholder.CustomFields) target.CustomFields.TryAdd(k, v);
+            if (!string.IsNullOrWhiteSpace(placeholder.Notes)) target.Notes = string.IsNullOrWhiteSpace(target.Notes) ? placeholder.Notes : target.Notes + "\n" + placeholder.Notes;
+            db.Keys.Remove(placeholder);
+        }
+        else target = placeholder;
+
+        target.SerialNumber = serial;
+        target.FirmwareVersion = info.FirmwareVersion;
+        target.Model = info.Model ?? target.Model;
+        target.FormFactor = info.FormFactor;
+        target.AaGuid = info.AaGuid ?? target.AaGuid;
+        target.IsFips = info.IsFips;
+        target.IdentifiedAt = DateTimeOffset.UtcNow;
+        if (active.Count > 0 && target.Status != KeyStatus.Active) SetStatus(target, KeyStatus.Active);
+        target.UpdatedAt = DateTimeOffset.UtcNow;
+        audit.Add(actor, AuditActions.KeyIdentified, target.TenantId, target.Id, serial.ToString(), new
+        {
+            info.Model, info.FirmwareVersion, agent = agentName, mergedFrom = target.Id != placeholder.Id ? placeholder.Id : (Guid?)null,
+            accounts = active.Select(r => r.UserPrincipalName),
+        });
+        await db.SaveChangesAsync(ct);
+        return target;
+    }
+
     /// <summary>Finds a key by serial across tenants; a serial can only live in one tenant's inventory.</summary>
     public async Task<YubiKey?> FindBySerialAsync(int serial, CancellationToken ct = default) =>
         await db.Keys.Include(k => k.Registrations).Include(k => k.Tenant)

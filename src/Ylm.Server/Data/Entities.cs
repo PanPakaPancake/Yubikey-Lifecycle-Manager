@@ -123,6 +123,8 @@ public sealed class Tenant
     public string? PolicySnapshotJson { get; set; }
     public DateTimeOffset? OffboardedAt { get; set; }
     public DateTimeOffset? DataDeletionDueAt { get; set; }
+    /// <summary>Vier-Augen-Freigabe für Breakglass-Registrierungen (planning 6.3, standardmäßig aus).</summary>
+    public bool RequireBreakglassApproval { get; set; }
 }
 
 public sealed class YubiKey
@@ -145,11 +147,28 @@ public sealed class YubiKey
     public string? Notes { get; set; }
     public Guid? ProfileId { get; set; }
     public bool? PinChangeForced { get; set; }
+    /// <summary>Regelfall ein Key pro Person; geteilte Keys und Breakglass-Keys tragen mehrere Konten (V1.1).</summary>
+    public KeyUsage Usage { get; set; } = KeyUsage.Personal;
+    /// <summary>Verwahrer eines geteilten Keys bzw. Breakglass-Keys, z. B. Abteilungsleiter. Pflicht bei Mehrfachnutzung.</summary>
+    public string? Custodian { get; set; }
+    /// <summary>Zeitpunkt des Nacherfassens (Seriennummer und Firmware eines selbst registrierten Keys per Agent ausgelesen).</summary>
+    public DateTimeOffset? IdentifiedAt { get; set; }
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset StatusChangedAt { get; set; } = DateTimeOffset.UtcNow;
     public List<KeyRegistration> Registrations { get; set; } = [];
     public Tenant? Tenant { get; set; }
+}
+
+/// <summary>Wie ein Key genutzt wird (planning 5.3 „Ein Key, mehrere Registrierungen“).</summary>
+public enum KeyUsage
+{
+    /// <summary>Ein Key, eine Person (Regelfall).</summary>
+    Personal = 0,
+    /// <summary>Geteilter Key, z. B. für mehrere Produktionsmitarbeiter, beim Verwahrer.</summary>
+    Shared = 1,
+    /// <summary>Notfallzugang (Breakglass-Konten); optional mit Vier-Augen-Freigabe pro Tenant.</summary>
+    Breakglass = 2,
 }
 
 public sealed class KeyRegistration
@@ -304,6 +323,8 @@ public sealed class ApiKey
     public DateTimeOffset? LastUsedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
+    /// <summary>Darf ToDos (Personen, die einen Key bekommen sollen) in die Warteschlange schreiben. Einzige Schreibfunktion der API.</summary>
+    public bool AllowTodoWrite { get; set; }
 }
 
 public enum BatchStatus { Open = 0, Completed = 1, Cancelled = 2 }
@@ -355,4 +376,148 @@ public sealed class RegistrationBatchItem
     public string? Note { get; set; }
     public DateTimeOffset? CompletedAt { get; set; }
     public string? CompletedByName { get; set; }
+}
+
+public enum ApprovalStatus { Pending = 0, Approved = 1, Rejected = 2, Used = 3, Cancelled = 4 }
+
+/// <summary>Vier-Augen-Freigabe (V2): ein zweiter Admin gibt eine Breakglass-Registrierung frei, bevor sie laufen darf.</summary>
+public sealed class RegistrationApproval
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public KeyUsage Usage { get; set; } = KeyUsage.Breakglass;
+    /// <summary>Konten, die auf den Key sollen (Entra-Objekt-IDs).</summary>
+    public List<string> EntraUserIds { get; set; } = [];
+    public List<string> UserPrincipalNames { get; set; } = [];
+    public string? Custodian { get; set; }
+    public string Reason { get; set; } = "";
+    public ApprovalStatus Status { get; set; } = ApprovalStatus.Pending;
+    public Guid RequestedById { get; set; }
+    public string RequestedByName { get; set; } = "";
+    public DateTimeOffset RequestedAt { get; set; } = DateTimeOffset.UtcNow;
+    public Guid? DecidedById { get; set; }
+    public string? DecidedByName { get; set; }
+    public DateTimeOffset? DecidedAt { get; set; }
+    public string? DecisionNote { get; set; }
+    /// <summary>Eine Freigabe gilt begrenzt (Standard 24 Stunden) und nur für einen Lauf.</summary>
+    public DateTimeOffset? ValidUntil { get; set; }
+    public DateTimeOffset? UsedAt { get; set; }
+    public Guid? KeyId { get; set; }
+}
+
+public enum TodoStatus { Open = 0, Done = 1, Cancelled = 2 }
+
+/// <summary>ToDo-Liste (V2): Ticketsystem oder Admin meldet eine Person, die einen Key bekommen soll.</summary>
+public sealed class RegistrationTodo
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public string EntraUserId { get; set; } = "";
+    public string UserPrincipalName { get; set; } = "";
+    public string? UserDisplayName { get; set; }
+    public string? Department { get; set; }
+    public string? TicketId { get; set; }
+    public string? TicketUrl { get; set; }
+    public string? Note { get; set; }
+    public Guid? ProfileId { get; set; }
+    public DateOnly? DueDate { get; set; }
+    /// <summary>Herkunft, z. B. „API: Ticketsystem“ oder „Manuell“.</summary>
+    public string Source { get; set; } = "";
+    public Guid? ApiKeyId { get; set; }
+    public TodoStatus Status { get; set; } = TodoStatus.Open;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? CreatedByName { get; set; }
+    public DateTimeOffset? CompletedAt { get; set; }
+    public string? CompletedByName { get; set; }
+    public Guid? KeyId { get; set; }
+    public string? CancelReason { get; set; }
+}
+
+/// <summary>Webhook (V2): Ereignisse aus dem Audit-Log werden signiert an eine URL geschickt.</summary>
+public sealed class WebhookSubscription
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public string Url { get; set; } = "";
+    /// <summary>Geheimnis für die HMAC-Signatur, mit Data Protection verschlüsselt.</summary>
+    public string SecretProtected { get; set; } = "";
+    /// <summary>Ereignistypen; leer = alle.</summary>
+    public List<string> Events { get; set; } = [];
+    public bool AllTenants { get; set; } = true;
+    public List<Guid> TenantIds { get; set; } = [];
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? CreatedBy { get; set; }
+    public DateTimeOffset? LastDeliveryAt { get; set; }
+    public bool? LastDeliverySucceeded { get; set; }
+    public string? LastError { get; set; }
+}
+
+public enum DeliveryStatus { Pending = 0, Delivered = 1, Failed = 2 }
+
+public sealed class WebhookDelivery
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid SubscriptionId { get; set; }
+    public long? AuditSequence { get; set; }
+    public string EventType { get; set; } = "";
+    public string Payload { get; set; } = "";
+    public DeliveryStatus Status { get; set; } = DeliveryStatus.Pending;
+    public int Attempts { get; set; }
+    public DateTimeOffset NextAttemptAt { get; set; } = DateTimeOffset.UtcNow;
+    public int? LastStatusCode { get; set; }
+    public string? LastError { get; set; }
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? DeliveredAt { get; set; }
+}
+
+/// <summary>Fortschritt der Webhook-Auswertung im Audit-Log, damit kein Ereignis verloren geht oder doppelt geht.</summary>
+public sealed class IntegrationState
+{
+    public int Id { get; set; } = 1;
+    public long WebhookAuditCursor { get; set; }
+}
+
+public enum SmtpSecurity { None = 0, StartTls = 1, SslOnConnect = 2 }
+
+/// <summary>Mailserver für Mail-Berichte (V2).</summary>
+public sealed class SmtpSettings
+{
+    public int Id { get; set; } = 1;
+    public string? Host { get; set; }
+    public int Port { get; set; } = 587;
+    public SmtpSecurity Security { get; set; } = SmtpSecurity.StartTls;
+    public string? Username { get; set; }
+    public string? PasswordProtected { get; set; }
+    public string? FromAddress { get; set; }
+    public string? FromName { get; set; }
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(Host) && !string.IsNullOrWhiteSpace(FromAddress);
+}
+
+public enum ReportFrequency { Daily = 0, Weekly = 1, Monthly = 2 }
+
+/// <summary>Geplanter Mail-Bericht (V2): Dashboard als PDF an feste Empfänger.</summary>
+public sealed class ReportSchedule
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string Name { get; set; } = "";
+    public List<string> Recipients { get; set; } = [];
+    public bool AllTenants { get; set; } = true;
+    public List<Guid> TenantIds { get; set; } = [];
+    public ReportFrequency Frequency { get; set; } = ReportFrequency.Weekly;
+    /// <summary>0 = Sonntag … 6 = Samstag (wöchentlich).</summary>
+    public int DayOfWeek { get; set; } = 1;
+    /// <summary>1 … 28 (monatlich).</summary>
+    public int DayOfMonth { get; set; } = 1;
+    /// <summary>Uhrzeit in der Zeitzone <see cref="TimeZone"/>.</summary>
+    public int Hour { get; set; } = 7;
+    public string TimeZone { get; set; } = "Europe/Berlin";
+    public bool IncludeCsv { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public string? CreatedBy { get; set; }
+    public DateTimeOffset? NextRunAt { get; set; }
+    public DateTimeOffset? LastSentAt { get; set; }
+    public bool? LastSucceeded { get; set; }
+    public string? LastError { get; set; }
 }

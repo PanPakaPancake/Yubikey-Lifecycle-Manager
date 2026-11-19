@@ -23,6 +23,11 @@ import AuditPage from './pages/Audit';
 import UsersPage from './pages/Users';
 import PlatformPage from './pages/Platform';
 import PartnerStockPage from './pages/PartnerStock';
+import SharedWizardPage from './pages/SharedWizard';
+import ApprovalsPage from './pages/Approvals';
+import TodosPage from './pages/Todos';
+import IdentifyPage from './pages/Identify';
+import IntegrationsPage from './pages/Integrations';
 import { TenantProvider, TenantSwitcher, useTenant } from './tenant';
 
 const roleLabel: Record<string, string> = { Owner: 'Owner', Operator: 'Operator', Helpdesk: 'Helpdesk', Auditor: 'Auditor' };
@@ -99,8 +104,12 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
-          {can('RegisterKeys') && item('/register', 'keyPlus', 'Key registrieren')}
+          {can('RegisterKeys') && item('/register', 'keyPlus', 'Key registrieren', true)}
+          {can('RegisterKeys') && item('/register/shared', 'share', 'Geteilter Key')}
           {can('RegisterKeys') && item('/batches', 'layers', 'Stapelregistrierung')}
+          {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
+          {item('/approvals', 'shield', 'Freigaben')}
+          {can('ManageInventory') && item('/keys/identify', 'scan', 'Nacherfassen')}
           {tenant && item('/tenant', 'building', 'Tenant-Einstellungen')}
           {item('/profiles', 'sliders', 'Profile')}
           {can('ReadAudit') && item('/audit', 'scroll', 'Audit-Log')}
@@ -110,6 +119,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           {item('/tenants', 'building', 'Tenants')}
           {can('ManagePartnerStock') && item('/partner/stock', 'box', 'Partnerlager')}
           {can('ManageUsers') && item('/users', 'users', 'Benutzer & Rollen')}
+          {can('ManageApiKeys') && item('/partner/integrations', 'plug', 'Integrationen')}
           {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
           {can('ReadAudit') && item('/partner/audit', 'scroll', 'Audit-Log (alle)')}
           {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
@@ -140,8 +150,12 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/keys" element={<KeysPage />} />
+          <Route path="/keys/identify" element={<IdentifyPage />} />
           <Route path="/keys/:id" element={<KeyDetailPage />} />
           <Route path="/register" element={<WizardPage />} />
+          <Route path="/register/shared" element={<SharedWizardPage />} />
+          <Route path="/todos" element={<TodosPage />} />
+          <Route path="/approvals" element={<ApprovalsPage />} />
           <Route path="/batches" element={<BatchesPage />} />
           <Route path="/batches/new" element={<NewBatchPage />} />
           <Route path="/batches/:id" element={<BatchRunPage />} />
@@ -150,6 +164,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/partner" element={<DashboardPage scope="all" />} />
           <Route path="/partner/stock" element={<PartnerStockPage />} />
+          <Route path="/partner/integrations" element={<IntegrationsPage />} />
           <Route path="/partner/audit" element={<AuditPage scope="all" />} />
           <Route path="/tenants" element={<TenantsPage />} />
           <Route path="/tenants/:id" element={<TenantRoute />} />

@@ -102,7 +102,7 @@ services:
       Ylm__RequirePhishingResistantSignIn: "false"
 ```
 
-Die Pflicht testen wir am Ende in Schritt 6 wieder mit eingeschalteter Einstellung.
+Die Pflicht testen wir am Ende in Schritt 7 wieder mit eingeschalteter Einstellung.
 
 > Variante B: Der Reverse Proxy muss `X-Forwarded-Proto` und `X-Forwarded-Host` setzen, Port 8080 darf nicht aus dem Netz erreichbar sein. Beispiel für Caddy steht in [BETRIEB.md](BETRIEB.md#1-server-docker).
 
@@ -479,9 +479,91 @@ Vorbereitung: eine kleine Entra-Gruppe mit zwei bis drei Testpersonen, die noch 
 - Nach der letzten Person steht der Stapel auf **Abgeschlossen**; im Audit-Log stehen `batch.created`, je Person `key.registered` und `batch.completed`.
 - Optional als CSV statt Gruppe: Datei mit Kopfzeile `UPN;Seriennummer;Profil`. Unbekannte Personen und falsche Seriennummern werden mit Zeilennummer gemeldet.
 
+### 5.12 Geteilter Key (ab V1.1)
+
+Vorbereitung: zwei Testkonten (z. B. Schichtarbeitsplatz) und ein Key im Werkszustand mit Firmware ≥ 5.7.
+
+1. **Geteilter Key** → Reiter **Geteilter Key** → Verwahrer eintragen (Pflichtfeld) → beide Konten hinzufügen → **Weiter**.
+2. Key einstecken → Profil prüfen → **Registrieren**.
+3. Den einen PIN-Brief herunterladen: er ist an den Verwahrer adressiert und nennt beide Konten.
+
+**Erwartet:**
+
+- In Entra hat jedes der beiden Konten einen Passkey auf demselben Key.
+- Im Inventar steht der Key mit Nutzung **Geteilt**, dem Verwahrer und zwei Registrierungen.
+- Ohne Verwahrer lässt sich nicht weiterklicken.
+
+Weitere Konten hinzufügen: in der Key-Ansicht **Weitere Konten hinzufügen**. Der Key hat dann schon eine PIN; der Assistent fragt die aktuelle PIN ab und setzt keine neue. **Wichtig:** Steht der erzwungene PIN-Wechsel noch aus, lehnt der Key weitere Passkeys ab. Der Verwahrer muss die PIN also vorher einmal ändern (z. B. bei der ersten Anmeldung).
+
+Einzelnes Konto entfernen: in der Key-Ansicht beim Konto **Entfernen**. Der Passkey wird in Entra gelöscht, der Key bleibt für die anderen Konten aktiv.
+
+### 5.13 Breakglass mit Vier-Augen-Freigabe (ab V2)
+
+Vorbereitung: ein zweites Plattformkonto mit dem Recht „Breakglass freigeben“ (Owner oder eigene Rolle).
+
+1. **Tenant-Einstellungen** → **Vier-Augen-Freigabe für Breakglass-Keys** anhaken → **Speichern**.
+2. **Geteilter Key** → Reiter **Breakglass** → Verwahrer (z. B. „IT-Tresor“), Breakglass-Konto, Key und Profil wählen. In Schritt 3 erscheint statt **Registrieren** der Kasten **Freigabe beantragen** mit Pflichtfeld Grund.
+3. Mit dem zweiten Konto anmelden → **Freigaben** → **Freigeben**.
+4. Wieder mit dem ersten Konto: im Assistenten ist die Freigabe jetzt grün, **Registrieren** ist möglich.
+
+**Erwartet:**
+
+- Das eigene Konto kann den eigenen Antrag nicht freigeben.
+- Eine Freigabe gilt 24 Stunden und für genau einen Durchlauf; danach steht sie auf **Verwendet**.
+- Ablehnen braucht einen Grund. Die Übersicht zeigt offene Anträge unter „Handlungsbedarf“.
+- Im Audit-Log: `approval.requested`, `approval.approved`, `approval.used`, `key.registered`.
+
+### 5.14 Nacherfassen (ab V1.1)
+
+Vorbereitung: eine Testperson registriert selbst einen YubiKey unter `https://mysignins.microsoft.com/security-info`, danach **Jetzt synchronisieren** im Tenant.
+
+1. **Nacherfassen** → Person in der Liste wählen.
+2. Den Key der Person einstecken (die PIN wird nicht gebraucht) → **Nacherfassen**.
+
+**Erwartet:**
+
+- Seriennummer und Firmware stehen danach im Inventar, der Eintrag verschwindet aus der Liste.
+- Passt das Modell nicht zu dem, was Entra meldet: Warnung mit **Trotzdem zuordnen**.
+- Lag derselbe Key schon im Lager (Wareneingang), werden beide Einträge zusammengeführt; Tags und Zusatzfelder bleiben erhalten.
+
+### 5.15 ToDo-Liste (ab V2)
+
+1. **ToDo-Liste** → **Person eintragen** → Person suchen, Ticket-Nummer eintragen → **Eintragen**.
+2. Beim ToDo **Registrieren**: der Einzel-Wizard öffnet sich mit der Person schon gesucht. Registrierung durchführen.
+3. Zurück in der ToDo-Liste: das ToDo steht auf **Erledigt** und verlinkt den Key.
+4. Per API (Ticketsystem): unter **Globale Einstellungen** einen API-Schlüssel mit **ToDo-Liste schreiben** anlegen, dann:
+
+```bash
+curl -X POST https://<plattform>/api/v1/todos -H "X-Api-Key: ylm_…" -H "Content-Type: application/json" \
+  -d '{"tenant":"contoso.onmicrosoft.com","userPrincipalName":"anna@contoso.com","ticketId":"INC-4711"}'
+```
+
+**Erwartet:** `201` für ein neues ToDo, `200` wenn für die Person schon ein offenes ToDo existiert, `422` bei unbekannter Person, `403` mit einem Schlüssel ohne Schreibrecht. Mehrere offene ToDos lassen sich auswählen und **als Stapel registrieren**.
+
 ---
 
-## 6. Anmeldung nur mit YubiKey (Abschlusstest)
+## 6. Integrationen (ab V2)
+
+Alles unter **Integrationen** (Partnerebene, Recht „API und Integrationen“).
+
+### 6.1 Webhooks
+
+1. Auf `https://webhook.site` eine Test-URL holen.
+2. **Webhook anlegen** → Name, URL, Ereignisse (z. B. „Key registriert“, „ToDo erledigt“). Das angezeigte Geheimnis notieren; es erscheint nur einmal.
+3. **Testen**, danach eine echte Aktion auslösen (z. B. Key sperren).
+
+**Erwartet:** Ein `POST` mit JSON und den Headern `X-YLM-Event`, `X-YLM-Delivery`, `X-YLM-Timestamp` und `X-YLM-Signature: sha256=…` (HMAC-SHA256 über `Timestamp + "." + Body` mit dem Geheimnis). Im **Protokoll** steht jede Zustellung; Fehlschläge werden nach 1 und 5 Minuten, 30 Minuten, 2 und 6 Stunden wiederholt.
+
+### 6.2 Mail-Berichte
+
+1. Reiter **Mail-Berichte** → **SMTP** eintragen (Server, Port, STARTTLS/SSL, Absender, optional Anmeldung) → **Testmail senden**.
+2. **Bericht anlegen**: Empfänger, täglich/wöchentlich/monatlich, Uhrzeit, Tenants, optional mit CSV → **Jetzt senden**.
+
+**Erwartet:** Mail mit Kennzahlen im Text und dem Dashboard-PDF im Anhang (plus Keys-CSV, wenn gewählt). „nächster Versand“ stimmt mit der eingestellten Uhrzeit (Zeitzone Europe/Berlin) überein.
+
+---
+
+## 7. Anmeldung nur mit YubiKey (Abschlusstest)
 
 1. Für das **Owner-Konto** selbst einen YubiKey/Passkey registrieren (z. B. über `https://mysignins.microsoft.com/security-info`).
 2. Die Datei `docker-compose.override.yml` löschen und neu starten:
@@ -576,7 +658,13 @@ YubiKey 2:         Modell ________  FW ______  SN ________
 [ ] 5.9  Zurücksetzen entfernt Passkey und setzt Key zurück
 [ ] 5.10 Negativtests
 [ ] 5.11 Stapelregistrierung
-[ ] 6    Anmeldung nur mit YubiKey erzwungen
+[ ] 5.12 Geteilter Key: Verwahrer, mehrere Konten, ein PIN-Brief
+[ ] 5.13 Breakglass mit Vier-Augen-Freigabe
+[ ] 5.14 Nacherfassen
+[ ] 5.15 ToDo-Liste (Oberfläche und API)
+[ ] 6.1  Webhooks mit Signatur
+[ ] 6.2  Mail-Bericht mit PDF
+[ ] 7    Anmeldung nur mit YubiKey erzwungen
 
 Abweichungen:
 - Schritt __: ...

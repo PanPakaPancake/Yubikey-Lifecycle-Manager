@@ -17,7 +17,7 @@ public static class TenantEndpoints
 {
     public sealed record ConsentRequest(string? TenantHint);
     public sealed record FixRequest(List<string> CheckIds);
-    public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes);
+    public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes, bool? RequireBreakglassApproval = null);
     public sealed record OffboardRequest(bool Confirm);
 
     private sealed record ConsentState(Guid UserId, DateTimeOffset ExpiresAt, string Nonce);
@@ -43,6 +43,7 @@ public static class TenantEndpoints
         Checks = TenantCheckService.ReadChecks(t).Select(c => new { c.Id, c.Title, Status = c.Status.ToString(), c.Message, c.CanFix, c.ManualInstructions }),
         t.OffboardedAt,
         t.DataDeletionDueAt,
+        t.RequireBreakglassApproval,
     };
 
     private static List<GroupRef> NormalizeGroups(IEnumerable<GroupRef> groups)
@@ -149,6 +150,7 @@ public static class TenantEndpoints
                 if (interval is < 5 or > 1440) throw ApiException.BadRequest("invalid", "Das Sync-Intervall muss zwischen 5 und 1440 Minuten liegen.");
                 t.SyncIntervalMinutes = interval;
             }
+            if (body.RequireBreakglassApproval is { } four) t.RequireBreakglassApproval = four;
             audit.Add(AuditService.User(user), AuditActions.TenantUpdated, t.Id, details: body);
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(t));

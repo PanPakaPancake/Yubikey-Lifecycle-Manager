@@ -16,6 +16,7 @@
     </PackageReference>
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
     <PackageReference Include="PDFsharp" />
+    <PackageReference Include="MailKit" />
     <PackageReference Include="Scalar.AspNetCore" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" />
   </ItemGroup>

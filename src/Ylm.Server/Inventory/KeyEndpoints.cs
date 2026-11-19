@@ -11,7 +11,10 @@ namespace Ylm.Server.Inventory;
 
 public static class KeyEndpoints
 {
-    public sealed record UpdateKeyRequest(List<string>? Tags, Dictionary<string, string?>? CustomFields, string? Notes);
+    public sealed record UpdateKeyRequest(List<string>? Tags, Dictionary<string, string?>? CustomFields, string? Notes, string? Custodian = null);
+    /// <param name="Custodian">Nur nötig, wenn der Key dadurch zum geteilten Key wird.</param>
+    /// <param name="IgnoreModelMismatch">Bestätigt: der eingesteckte Key ist trotz anderem Modell der richtige.</param>
+    public sealed record IdentifyRequest(Guid AgentId, string? Custodian, bool IgnoreModelMismatch = false);
     public sealed record LockRequest(LockReason Reason, string? Note);
     /// <param name="ToPartnerStock">true: Key vom Tenant trennen und ins Partnerlager legen; false: bleibt im Tenant.</param>
     public sealed record RetireRequest(string? Note, bool ToPartnerStock = false);
@@ -37,6 +40,9 @@ public static class KeyEndpoints
         k.StatusNote,
         Source = k.Source.ToString(),
         NeedsDetails = k.SerialNumber is null,
+        Usage = k.Usage.ToString(),
+        k.Custodian,
+        k.IdentifiedAt,
         k.Tags,
         k.CustomFields,
         k.Notes,
@@ -121,12 +127,20 @@ public static class KeyEndpoints
         {
             var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
             var user = await cu.RequireKeyAccessAsync(key.TenantId, key.TenantId is null ? Permission.ManagePartnerStock : Permission.ManageInventory);
-            var before = new { key.Tags, key.CustomFields, key.Notes };
+            var before = new { key.Tags, key.CustomFields, key.Notes, key.Custodian };
+            if (body.Custodian is not null)
+            {
+                if (key.Usage != KeyUsage.Personal && string.IsNullOrWhiteSpace(body.Custodian))
+                    throw ApiException.BadRequest("custodian_required", "Bei geteilten Keys ist der Verwahrer Pflicht.");
+                var c = string.IsNullOrWhiteSpace(body.Custodian) ? null : body.Custodian.Trim();
+                if (c != key.Custodian) audit.Add(AuditService.User(user), AuditActions.KeyCustodianChanged, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { before = key.Custodian, after = c });
+                key.Custodian = c;
+            }
             if (body.Tags is not null) key.Tags = Tags.Normalize(body.Tags).ToList();
             if (body.CustomFields is not null) key.CustomFields = await keys.ValidateFieldsAsync(key.TenantId, body.CustomFields, key.CustomFields);
             if (body.Notes is not null) key.Notes = body.Notes.Length == 0 ? null : body.Notes;
             key.UpdatedAt = DateTimeOffset.UtcNow;
-            audit.Add(AuditService.User(user), AuditActions.KeyUpdated, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { before, after = new { key.Tags, key.CustomFields, key.Notes } });
+            audit.Add(AuditService.User(user), AuditActions.KeyUpdated, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { before, after = new { key.Tags, key.CustomFields, key.Notes, key.Custodian } });
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(key));
         });
@@ -180,6 +194,28 @@ public static class KeyEndpoints
             if (toPartner) await cu.RequireAsync(Permission.ManagePartnerStock);
             var job = reg.StartReset(key, user, body.AgentId, toPartner, jobs, scopes);
             return Results.Accepted($"/api/jobs/{job.Id}", job.ToDto());
+        });
+
+        // Nacherfassen eines selbst registrierten Keys (planning 5.1).
+        g.MapPost("/keys/{id:guid}/identify", async (Guid id, IdentifyRequest body, CurrentUser cu, YlmDbContext db, AgentGateway agents, KeyService keys) =>
+        {
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.ManageInventory);
+            var agent = agents.Require(body.AgentId, user.Id);
+            var info = await agents.ReadKeyAsync(agent) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
+            var result = await keys.IdentifyAsync(key, info, body.Custodian, body.IgnoreModelMismatch, AuditService.User(user), agent.MachineName);
+            var fresh = await db.Keys.AsNoTracking().Include(k => k.Tenant).Include(k => k.Registrations).FirstAsync(k => k.Id == result.Id);
+            return Results.Ok(new { key = ToDto(fresh), merged = result.Id != id });
+        });
+
+        // Ein Konto von einem geteilten Key entfernen (Passkey in Entra löschen, die anderen Konten bleiben).
+        g.MapDelete("/keys/{id:guid}/registrations/{registrationId:guid}", async (Guid id, Guid registrationId, CurrentUser cu, YlmDbContext db, SharedKeyService shared) =>
+        {
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.LockKeys);
+            await shared.RemoveAccountAsync(key, registrationId, AuditService.User(user));
+            await db.Entry(key).Reference(k => k.Tenant).LoadAsync();
+            return Results.Ok(ToDto(key, true));
         });
 
         // Wareneingang per Einstecken (planning 5.3).

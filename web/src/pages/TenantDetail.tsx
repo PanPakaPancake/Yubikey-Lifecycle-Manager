@@ -112,6 +112,7 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const [interval, setInterval] = useState(tenant.syncIntervalMinutes);
   const [include, setInclude] = useState<GroupRef[]>(tenant.targetIncludeGroups ?? []);
   const [exclude, setExclude] = useState<GroupRef[]>(tenant.targetExcludeGroups ?? []);
+  const [fourEyes, setFourEyes] = useState(!!tenant.requireBreakglassApproval);
   const { busy, error, run } = useAction();
   const [saved, setSaved] = useState(false);
   const toast = useToast();
@@ -120,7 +121,7 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const used = [...include, ...exclude].map((g) => g.id);
 
   const save = () => run(async () => {
-    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude }));
+    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude, requireBreakglassApproval: fourEyes }));
     setSaved(true);
     toast.ok('Einstellungen gespeichert.');
   });
@@ -142,6 +143,10 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
       </div>
 
       <Field label="Sync-Intervall (Minuten)"><input type="number" min={5} max={1440} value={interval} disabled={!editable} onChange={(e) => { setInterval(Number(e.target.value)); changed(); }} /></Field>
+      <label className="check" style={{ marginBottom: 12 }}>
+        <input type="checkbox" checked={fourEyes} disabled={!editable} onChange={(e) => { setFourEyes(e.target.checked); changed(); }} />
+        <span>Vier-Augen-Freigabe für Breakglass-Keys<br /><span className="small muted">Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss jede Breakglass-Registrierung vorab freigeben (gilt 24 Stunden für einen Durchlauf).</span></span>
+      </label>
       <ErrorBox error={error} />
       {editable && <button className="primary" disabled={busy} onClick={save}>{saved ? 'Gespeichert' : 'Speichern'}</button>}
     </Card>

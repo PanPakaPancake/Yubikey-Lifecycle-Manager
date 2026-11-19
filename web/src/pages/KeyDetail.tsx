@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { api, fmtDate, lockReasons, type AgentInfo, type AuditEntry, type CustomField, type Job, type YubiKey } from '../api';
+import { api, fmtDate, lockReasons, usageLabels, type AgentInfo, type AuditEntry, type CustomField, type Job, type YubiKey } from '../api';
 import { useCan } from '../auth';
 import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, StatusBadge, useAction, useApi, usePolling } from '../ui';
 import { CustomFieldInput } from './Keys';
 import { useTenant } from '../tenant';
+import { useConfirm, useToast } from '../feedback';
 
 const sourceLabels: Record<string, string> = {
   Platform: 'Über die Plattform registriert', EntraSync: 'Aus Entra übernommen (selbst registriert)', StockIntake: 'Wareneingang', Import: 'CSV-Import',
@@ -19,6 +20,8 @@ export default function KeyDetailPage() {
   // Partnerlager: nur globale Felder.
   const { data: fields } = useApi<CustomField[]>(key ? (key.tenantId ? `/api/tenants/${key.tenantId}/fields` : '/api/fields') : null, [key?.id, key?.tenantId]);
   const [modal, setModal] = useState<'lock' | 'retire' | 'reset' | 'edit' | 'toPartner' | 'assign' | 'delete' | null>(null);
+  const confirm = useConfirm();
+  const toast = useToast();
 
   if (error) return <ErrorBox error={error} />;
   if (!key) return <Spinner label="Wird geladen …" />;
@@ -43,7 +46,10 @@ export default function KeyDetailPage() {
         </>}
       />
       {key.needsDetails && key.status !== 'Retired' && (
-        <Info>Dieser Key wurde vom Nutzer selbst registriert. Seriennummer und Firmware fehlen; das Nacherfassen per Einstecken folgt in Version 1.1.</Info>
+        <Info>
+          Dieser Key wurde vom Nutzer selbst registriert. Seriennummer und Firmware fehlen, weil Entra sie nicht kennt.
+          {can('ManageInventory') && key.tenantId && <> <Link className="btn small" to={`/keys/identify?keyId=${key.id}`}>Jetzt nacherfassen</Link></>}
+        </Info>
       )}
       {key.advisories.length > 0 && (
         <Info tone="warn">
@@ -59,9 +65,10 @@ export default function KeyDetailPage() {
               <tr><th>Modell</th><td>{key.model ?? '–'} {key.isFips && <Badge tone="info">FIPS</Badge>}</td></tr>
               <tr><th>Firmware</th><td className="mono">{key.firmwareVersion ?? '–'}</td></tr>
               <tr><th>AAGUID</th><td className="mono small">{key.aaGuid ?? '–'}</td></tr>
+              <tr><th>Nutzung</th><td>{usageLabels[key.usage] ?? key.usage}{key.usage !== 'Personal' && <div className="small">Verwahrer: <strong>{key.custodian ?? '–'}</strong></div>}</td></tr>
               <tr><th>PIN-Wechsel erzwungen</th><td>{key.pinChangeForced == null ? '–' : key.pinChangeForced ? 'Ja' : 'Nein'}</td></tr>
               <tr><th>Herkunft</th><td>{sourceLabels[key.source] ?? key.source}</td></tr>
-              <tr><th>Erfasst</th><td>{fmtDate(key.createdAt)}</td></tr>
+              <tr><th>Erfasst</th><td>{fmtDate(key.createdAt)}{key.identifiedAt && <div className="small muted">nacherfasst {fmtDate(key.identifiedAt)}</div>}</td></tr>
             </tbody>
           </table>
         </Card>
@@ -78,7 +85,7 @@ export default function KeyDetailPage() {
       <Card title="Registrierungen" className="mt">
         {key.registrations.length === 0 ? <p className="muted">Keine Registrierung.</p> : (
           <table>
-            <thead><tr><th>Person</th><th>Anzeigename in Entra</th><th>Registriert</th><th>Durch</th><th>Status</th></tr></thead>
+            <thead><tr><th>Person</th><th>Anzeigename in Entra</th><th>Registriert</th><th>Durch</th><th>Status</th>{key.usage !== 'Personal' && can('LockKeys') && <th />}</tr></thead>
             <tbody>
               {key.registrations.map((r) => (
                 <tr key={r.id}>
@@ -87,12 +94,19 @@ export default function KeyDetailPage() {
                   <td>{fmtDate(r.registeredAt)}</td>
                   <td>{r.registeredByName ?? (r.source === 'EntraSync' ? 'Selbst registriert' : '–')}</td>
                   <td>{r.removedAt ? <span className="small muted">entfernt {fmtDate(r.removedAt)}{r.removedReason ? ` (${r.removedReason})` : ''}</span> : <Badge tone="ok">aktiv</Badge>}</td>
+                  {key.usage !== 'Personal' && can('LockKeys') && <td>{!r.removedAt && (
+                    <button className="small danger" onClick={async () => {
+                      if (!await confirm({ title: 'Konto entfernen?', message: `Der Passkey von ${r.userPrincipalName} wird in Entra gelöscht. Die anderen Konten auf dem Key bleiben.`, confirmLabel: 'Entfernen', danger: true })) return;
+                      try { await api.del(`/api/keys/${key.id}/registrations/${r.id}`); toast.ok('Konto entfernt.'); reload(); } catch (e) { toast.error((e as Error).message); }
+                    }}>Entfernen</button>
+                  )}</td>}
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-        {active.length === 0 && key.status === 'InStock' && key.tenantId && can('RegisterKeys') && <p><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link></p>}
+        {active.length === 0 && key.status === 'InStock' && key.tenantId && can('RegisterKeys') && <p className="actions"><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link><Link className="btn" to={`/register/shared?tenantId=${key.tenantId}`}>Als geteilten Key registrieren</Link></p>}
+        {key.usage !== 'Personal' && key.status === 'Active' && key.tenantId && can('RegisterKeys') && <p><Link className="btn" to={`/register/shared?tenantId=${key.tenantId}&usage=${key.usage}&custodian=${encodeURIComponent(key.custodian ?? '')}`}>Weitere Konten hinzufügen</Link></p>}
         {key.inPartnerStock && key.status === 'InStock' && <p className="muted small">Keys aus dem Partnerlager werden bei der Registrierung automatisch dem Tenant zugewiesen.</p>}
       </Card>
       {history && history.length > 0 && (
@@ -261,14 +275,16 @@ export function JobProgress({ job }: { job: Job }) {
 function EditModal({ keyItem, fields, onClose, onDone }: { keyItem: YubiKey; fields: CustomField[]; onClose: () => void; onDone: (k: YubiKey) => void }) {
   const [tags, setTags] = useState(keyItem.tags.join(', '));
   const [notes, setNotes] = useState(keyItem.notes ?? '');
+  const [custodian, setCustodian] = useState(keyItem.custodian ?? '');
   const [values, setValues] = useState<Record<string, string>>(Object.fromEntries(Object.entries(keyItem.customFields).map(([k, v]) => [k, v ?? ''])));
   const { busy, error, run } = useAction();
   const go = () => run(async () => onDone(await api.patch<YubiKey>(`/api/keys/${keyItem.id}`, {
-    tags: tags.split(',').map((t) => t.trim()).filter(Boolean), notes,
+    tags: tags.split(',').map((t) => t.trim()).filter(Boolean), notes, ...(keyItem.usage !== 'Personal' ? { custodian } : {}),
     customFields: Object.fromEntries(fields.map((f) => [f.key, values[f.key] || null])),
   })));
   return (
     <Modal title="Key bearbeiten" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy} onClick={go}>Speichern</button></>}>
+      {keyItem.usage !== 'Personal' && <Field label="Verwahrer *" hint="Wer den geteilten Key aufbewahrt, z. B. Abteilungsleiter"><input value={custodian} onChange={(e) => setCustodian(e.target.value)} /></Field>}
       <Field label="Tags" hint="Mit Komma getrennt"><input value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
       {fields.map((f) => (
         <Field key={f.key} label={f.label + (f.required ? ' *' : '')}>

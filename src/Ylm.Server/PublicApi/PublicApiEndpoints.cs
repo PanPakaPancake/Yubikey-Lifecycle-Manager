@@ -4,6 +4,7 @@ using Ylm.Core;
 using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
+using Ylm.Server.Registration;
 using Ylm.Server.Reporting;
 using Ylm.Server.Security;
 
@@ -106,10 +107,13 @@ public static class PublicApiEndpoints
             var name = tenants.Count == 1 ? tenants[0].DisplayName : $"Alle ({tenants.Count} Tenants)";
             return TypedResults.Ok(new ApiSummary(name, d.Total, d.ByStatus, d.UsersWithKey, d.TargetUsers, d.CoveragePercent, tenants.Max(t => t.LastSyncAt)));
         }).WithSummary("Kennzahlen").WithDescription("Für einen Tenant oder zusammengefasst über alle Tenants des Schlüssels." + tenantHint);
+
+        // ToDo-Liste (V2): einzige Schreibfunktion, nur mit ToDo-Schreibrecht am Schlüssel.
+        app.MapGroup("/api/v1").RequireAuthorization("ApiKey").WithGroupName(GroupName).WithTags("ToDo-Liste").MapTodoApi(ScopeAsync);
     }
 
-    public sealed record CreateApiKeyRequest(string Name, int? ExpiresInDays, bool AllTenants, List<Guid>? TenantIds);
-    public sealed record UpdateApiKeyRequest(bool AllTenants, List<Guid>? TenantIds);
+    public sealed record CreateApiKeyRequest(string Name, int? ExpiresInDays, bool AllTenants, List<Guid>? TenantIds, bool AllowTodoWrite = false);
+    public sealed record UpdateApiKeyRequest(bool AllTenants, List<Guid>? TenantIds, bool? AllowTodoWrite = null);
 
     /// <summary>Management of API keys in the platform area of the web UI (Owner).</summary>
     public static void MapApiKeyManagement(this IEndpointRouteBuilder app)
@@ -138,7 +142,7 @@ public static class PublicApiEndpoints
             var keys = await db.ApiKeys.OrderByDescending(k => k.CreatedAt).ToListAsync();
             return Results.Ok(keys.Select(k => new
             {
-                k.Id, k.Name, k.Prefix, k.CreatedAt, k.CreatedBy, k.LastUsedAt, k.ExpiresAt, k.RevokedAt, k.AllTenants,
+                k.Id, k.Name, k.Prefix, k.CreatedAt, k.CreatedBy, k.LastUsedAt, k.ExpiresAt, k.RevokedAt, k.AllTenants, k.AllowTodoWrite,
                 Tenants = k.TenantIds.Select(id => new { Id = id, DisplayName = names.GetValueOrDefault(id, "(gelöscht)") }),
             }));
         });
@@ -152,13 +156,13 @@ public static class PublicApiEndpoints
             var secret = TokenHashing.NewSecret();
             var key = new ApiKey
             {
-                AllTenants = body.AllTenants, TenantIds = tenantIds,
+                AllTenants = body.AllTenants, TenantIds = tenantIds, AllowTodoWrite = body.AllowTodoWrite,
                 Name = body.Name.Trim(), Prefix = prefix, SecretHash = TokenHashing.Hash(secret), CreatedBy = user.Upn,
                 ExpiresAt = body.ExpiresInDays is { } d and > 0 ? DateTimeOffset.UtcNow.AddDays(d) : null,
             };
             db.ApiKeys.Add(key);
             audit.Add(AuditService.User(user), AuditActions.ApiKeyCreated, tenantIds.Count == 1 ? tenantIds[0] : null, target: key.Name,
-                details: new { key.Prefix, key.ExpiresAt, key.AllTenants, key.TenantIds });
+                details: new { key.Prefix, key.ExpiresAt, key.AllTenants, key.TenantIds, key.AllowTodoWrite });
             await db.SaveChangesAsync();
             return Results.Ok(new { key.Id, key.Name, key.Prefix, key.ExpiresAt, apiKey = $"ylm_{prefix}_{secret}" });
         });
@@ -168,11 +172,12 @@ public static class PublicApiEndpoints
             var user = await cu.RequireAsync(Permission.ManageApiKeys);
             var key = await db.ApiKeys.FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("API-Schlüssel");
             if (key.RevokedAt is not null) throw ApiException.Conflict("revoked", "Der Schlüssel ist widerrufen.");
-            var before = new { key.AllTenants, key.TenantIds };
+            var before = new { key.AllTenants, key.TenantIds, key.AllowTodoWrite };
             key.TenantIds = await ValidateScopeAsync(user, body.AllTenants, body.TenantIds, db);
             key.AllTenants = body.AllTenants;
+            if (body.AllowTodoWrite is { } w) key.AllowTodoWrite = w;
             audit.Add(AuditService.User(user), AuditActions.ApiKeyScopeChanged, null, target: key.Name,
-                details: new { key.Prefix, before, after = new { key.AllTenants, key.TenantIds } });
+                details: new { key.Prefix, before, after = new { key.AllTenants, key.TenantIds, key.AllowTodoWrite } });
             await db.SaveChangesAsync();
             return Results.NoContent();
         });
