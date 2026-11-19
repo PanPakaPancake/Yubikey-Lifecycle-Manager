@@ -2,6 +2,7 @@ import { api, fmtDate, loginKindLabel, type UserPasskey } from '../api';
 import { useAuth } from '../auth';
 import { Card, ErrorBox, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { createPasskey, passkeyError } from '../webauthn';
+import { useConfirm, useToast } from '../feedback';
 
 /** Eigenes Konto: Anmeldeart und, bei lokalen Konten, die eigenen Passkeys. */
 export default function AccountPage() {
@@ -10,6 +11,8 @@ export default function AccountPage() {
   const local = user.loginKind === 'Local';
   const { data, error, reload } = useApi<UserPasskey[]>(local ? '/api/me/passkeys' : null);
   const { busy, error: actionError, run } = useAction();
+  const confirm = useConfirm();
+  const toast = useToast();
 
   const add = () => run(async () => {
     const name = window.prompt('Name des neuen Schlüssels', 'YubiKey Ersatz');
@@ -20,11 +23,14 @@ export default function AccountPage() {
     await api.post('/api/me/passkeys', { requestId, response, name });
     reload();
   });
-  const remove = (p: UserPasskey) => run(async () => {
-    if (!window.confirm(`Passkey „${p.name}“ entfernen? Mit diesem Schlüssel ist dann keine Anmeldung mehr möglich.`)) return;
-    await api.del('/api/me/passkeys/' + p.id);
-    reload();
-  });
+  const remove = async (p: UserPasskey) => {
+    if (!(await confirm({ title: 'Passkey entfernen?', message: `Mit „${p.name}“ ist danach keine Anmeldung mehr möglich.`, confirmLabel: 'Entfernen', danger: true }))) return;
+    await run(async () => {
+      await api.del('/api/me/passkeys/' + p.id);
+      toast.ok(`Passkey „${p.name}“ entfernt.`);
+      reload();
+    });
+  };
 
   return (
     <>

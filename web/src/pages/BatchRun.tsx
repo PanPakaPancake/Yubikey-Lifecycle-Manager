@@ -6,6 +6,7 @@ import { useTenant } from '../tenant';
 import { JobProgress } from './KeyDetail';
 import { canStartPreview, PreviewDetails, type Preview } from './Wizard';
 import { BatchProgress, BatchStatusBadge, PersonSearch } from './Batches';
+import { useConfirm } from '../feedback';
 
 type NextResult =
   | { state: 'ready'; item: BatchItem; profileId: string; preview: Preview; key: KeyInfo }
@@ -53,6 +54,7 @@ export default function BatchRunPage() {
   const [forcedItem, setForcedItem] = useState<string>();
   const [adding, setAdding] = useState(false);
   const { busy, error, run, setError } = useAction();
+  const confirm = useConfirm();
   // Serial of the key we already acted on; a new check starts only for another key or after re-plugging.
   const handled = useRef<number | null | undefined>(undefined);
   const checking = useRef(false);
@@ -261,7 +263,7 @@ export default function BatchRunPage() {
         actions={<>
           {open && <button onClick={() => setAdding(true)}>Personen hinzufügen</button>}
           {open && !running && <button onClick={() => setStatus('Completed')}>Stapel abschließen</button>}
-          {open && !running && <button className="danger" onClick={() => { if (window.confirm('Stapel abbrechen? Bereits registrierte Keys bleiben registriert.')) void setStatus('Cancelled'); }}>Abbrechen</button>}
+          {open && !running && <button className="danger" onClick={async () => { if (await confirm({ title: 'Stapel abbrechen?', message: 'Bereits registrierte Keys bleiben registriert.', confirmLabel: 'Stapel abbrechen', danger: true })) void setStatus('Cancelled'); }}>Abbrechen</button>}
           {batch.status !== 'Open' && <button onClick={() => setStatus('Open')}>Wieder öffnen</button>}
         </>}
       >

@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
-import { NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router';
 import { api, type Me } from './api';
 import { AuthContext } from './auth';
-import { Spinner, useApi } from './ui';
+import { Empty, Spinner, useApi } from './ui';
+import { Icon, type IconName } from './icons';
+import { ThemeToggle } from './theme';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
 import AccountSetupPage from './pages/AccountSetup';
@@ -72,39 +74,59 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   const location = useLocation();
   const { tenant } = useTenant();
   const partner = isPartnerPath(location.pathname);
+  const [menuOpen, setMenuOpen] = useState(false);
+  // Close the mobile menu on every navigation.
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
   const { data: updates } = useApi<{ updateAvailable: boolean; latestVersion?: string }>(can('ManageSettings') ? '/api/platform/updates' : null);
+  const item = (to: string, icon: IconName, label: ReactNode, end = false) => (
+    <NavLink to={to} end={end}><Icon name={icon} />{label}</NavLink>
+  );
   return (
-    <div className="shell">
+    <div className={'shell' + (menuOpen ? ' menu-open' : '')}>
+      <header className="mobilebar">
+        <button type="button" className="icon-btn" aria-label="Menü öffnen" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" size={22} /></button>
+        <span className="mobilebar-title">Lifecycle Manager</span>
+      </header>
+      <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />
       <aside className="sidebar">
         <div className="brand">
-          <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden><rect x="21" y="12" width="9" height="8" fill="#b8bec7" /><rect x="2" y="8" width="22" height="16" rx="6" fill="#2b2f36" /><circle cx="11" cy="16" r="5" fill="#d4a52a" /></svg>
+          <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden><rect x="21" y="12" width="9" height="8" fill="#b8bec7" /><rect className="brand-body" x="2" y="8" width="22" height="16" rx="6" /><circle cx="11" cy="16" r="5" fill="#d4a52a" /></svg>
           <div>Lifecycle Manager<small>{me.organizationName || 'YubiKeys'}</small></div>
+          <button type="button" className="icon-btn sidebar-close" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}><Icon name="x" size={20} /></button>
         </div>
         <nav className="nav">
           <div className="section customer"><span className="context-dot" />Kunde</div>
           <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
-          <NavLink to="/" end>Übersicht</NavLink>
-          <NavLink to="/keys">Inventar</NavLink>
-          {can('RegisterKeys') && <NavLink to="/register">Key registrieren</NavLink>}
-          {can('RegisterKeys') && <NavLink to="/batches">Stapelregistrierung</NavLink>}
-          {tenant && <NavLink to="/tenant">Tenant-Einstellungen</NavLink>}
-          <NavLink to="/profiles">Profile</NavLink>
-          {can('ReadAudit') && <NavLink to="/audit">Audit-Log</NavLink>}
+          {item('/', 'home', 'Übersicht', true)}
+          {item('/keys', 'key', 'Inventar')}
+          {can('RegisterKeys') && item('/register', 'keyPlus', 'Key registrieren')}
+          {can('RegisterKeys') && item('/batches', 'layers', 'Stapelregistrierung')}
+          {tenant && item('/tenant', 'building', 'Tenant-Einstellungen')}
+          {item('/profiles', 'sliders', 'Profile')}
+          {can('ReadAudit') && item('/audit', 'scroll', 'Audit-Log')}
 
           <div className="section partner"><span className="context-dot" />Partner</div>
-          <NavLink to="/partner" end>Übersicht aller Kunden</NavLink>
-          <NavLink to="/tenants">Tenants</NavLink>
-          {can('ManagePartnerStock') && <NavLink to="/partner/stock">Partnerlager</NavLink>}
-          {can('ManageUsers') && <NavLink to="/users">Benutzer &amp; Rollen</NavLink>}
-          <NavLink to="/platform">Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn" title={`Update auf ${updates.latestVersion} verfügbar`} />}</NavLink>
-          {can('ReadAudit') && <NavLink to="/partner/audit">Audit-Log (alle)</NavLink>}
-          {(can('RegisterKeys') || can('ManageInventory')) && <NavLink to="/agents">Mein Agent</NavLink>}
+          {item('/partner', 'globe', 'Übersicht aller Kunden', true)}
+          {item('/tenants', 'building', 'Tenants')}
+          {can('ManagePartnerStock') && item('/partner/stock', 'box', 'Partnerlager')}
+          {can('ManageUsers') && item('/users', 'users', 'Benutzer & Rollen')}
+          {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
+          {can('ReadAudit') && item('/partner/audit', 'scroll', 'Audit-Log (alle)')}
+          {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
         </nav>
         <div className="sidebar-foot">
-          <div><NavLink to="/account" className="account-link"><strong>{me.user?.displayName}</strong></NavLink></div>
-          <div className="muted small">{me.user?.role === 'Custom' ? me.user?.customRoleName : roleLabel[me.user?.role ?? ''] ?? me.user?.role}</div>
-          <button className="link small" onClick={logout}>Abmelden</button>
-          {me.version && <div className="small muted">Version {me.version}</div>}
+          <NavLink to="/account" className="account-link">
+            <span className="avatar" aria-hidden>{initials(me.user?.displayName)}</span>
+            <span className="account-text">
+              <strong>{me.user?.displayName}</strong>
+              <span className="muted small">{me.user?.role === 'Custom' ? me.user?.customRoleName : roleLabel[me.user?.role ?? ''] ?? me.user?.role}</span>
+            </span>
+          </NavLink>
+          <div className="foot-actions">
+            <ThemeToggle />
+            <button type="button" className="ghost small" onClick={logout}><Icon name="logout" size={16} />Abmelden</button>
+          </div>
+          {me.version && <div className="small muted version">Version {me.version}</div>}
         </div>
       </aside>
       <main className="main">
@@ -114,6 +136,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
             ? <span className="context-badge partner" title="Einstellungen hier gelten für die ganze Plattform und alle Kunden">Partnerebene</span>
             : <span className="context-badge customer">Kundenebene{tenant ? ': ' + tenant.displayName : ', alle Tenants'}</span>}
         </div>
+        <div className="page" key={location.pathname}>
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/keys" element={<KeysPage />} />
@@ -135,8 +158,9 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/platform" element={<PlatformPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
-          <Route path="*" element={<p>Seite nicht gefunden.</p>} />
+          <Route path="*" element={<Empty>Seite nicht gefunden. <Link to="/">Zur Übersicht</Link></Empty>} />
         </Routes>
+        </div>
       </main>
     </div>
   );
@@ -160,4 +184,9 @@ function TenantRoute() {
   useEffect(() => { if (id && known && id !== tenantId) setTenantId(id); }, [id, known, tenantId, setTenantId]);
   if (id && known && id === tenantId) return <Navigate to={'/tenant' + location.search} replace />;
   return <TenantDetailPage id={id} />;
+}
+
+function initials(name?: string) {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
 }

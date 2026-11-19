@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
 import { api, fieldTypes, fmtDate, keyFromLabel, type CustomField, type GroupRef, type Profile, type ResolvedField, type Tenant } from '../api';
 import { useCan } from '../auth';
 import { Badge, Card, download, ErrorBox, Field, GroupChips, GroupSearch, Info, Modal, OriginBadge, PageHeader, Spinner, useAction, useApi } from '../ui';
+import { useToast } from '../feedback';
 
 const statusText = { Ok: 'In Ordnung', Warning: 'Hinweis', Failed: 'Fehlt' } as const;
 
@@ -13,7 +14,7 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
   const can = useCan();
   const { data: t, error, setData } = useApi<Tenant>('/api/tenants/' + id, [id]);
   const act = useAction();
-  const [syncResult, setSyncResult] = useState<string>();
+  const toast = useToast();
   const [offboarding, setOffboarding] = useState(false);
 
   if (error) return <ErrorBox error={error} />;
@@ -25,7 +26,7 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
   const fix = (ids: string[]) => act.run(async () => setData(await api.post<Tenant>(`/api/tenants/${t.id}/fix`, { checkIds: ids })));
   const sync = () => act.run(async () => {
     const r = await api.post<{ usersScanned: number; imported: number; updated: number; removed: number }>(`/api/tenants/${t.id}/sync`);
-    setSyncResult(`${r.usersScanned} Personen geprüft, ${r.imported} Keys neu übernommen, ${r.updated} aktualisiert, ${r.removed} entfernt.`);
+    toast.ok(`Synchronisiert: ${r.usersScanned} Personen geprüft, ${r.imported} Keys neu übernommen, ${r.updated} aktualisiert, ${r.removed} entfernt.`);
     setData(await api.get<Tenant>('/api/tenants/' + t.id));
   });
 
@@ -43,7 +44,6 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
       {t.status === 'Offboarded' && <Info tone="warn">Dieser Tenant wurde am {fmtDate(t.offboardedAt)} offboarded. Die Daten werden am {fmtDate(t.dataDeletionDueAt, false)} gelöscht. Ein erneuter Admin-Consent stellt ihn wieder her.</Info>}
       {t.status === 'PendingConsent' && <Info tone="warn">Der Admin-Consent für diesen Tenant fehlt noch. Fügen Sie den Tenant unter „Tenants“ erneut hinzu.</Info>}
       <ErrorBox error={act.error} />
-      {syncResult && <Info tone="ok">{syncResult}</Info>}
 
       <Card
         title="Prüfungen"
@@ -114,6 +114,7 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const [exclude, setExclude] = useState<GroupRef[]>(tenant.targetExcludeGroups ?? []);
   const { busy, error, run } = useAction();
   const [saved, setSaved] = useState(false);
+  const toast = useToast();
   const editable = can('ManageTenants');
   const changed = () => setSaved(false);
   const used = [...include, ...exclude].map((g) => g.id);
@@ -121,6 +122,7 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const save = () => run(async () => {
     onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude }));
     setSaved(true);
+    toast.ok('Einstellungen gespeichert.');
   });
 
   return (
