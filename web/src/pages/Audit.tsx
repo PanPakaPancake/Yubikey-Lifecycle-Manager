@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { api, fmtDate, type AuditEntry } from '../api';
 import { useAuth } from '../auth';
-import { Card, download, Empty, ErrorBox, Info, PageHeader, Spinner, useAction, useApi } from '../ui';
+import { Card, download, Empty, ErrorBox, Info, LiveSearchInput, PageHeader, useAction, useApi } from '../ui';
+import { useToast } from '../feedback';
 import { useTenant } from '../tenant';
 
 /** Kundenebene: Einträge des gewählten Tenants; scope="all": alle Einträge (Partnerebene). */
@@ -13,10 +14,10 @@ export default function AuditPage({ scope }: { scope?: 'all' }) {
   useEffect(() => setOlder([]), [tenantId]);
   const [action, setAction] = useState('');
   const [q, setQ] = useState('');
-  const [search, setSearch] = useState('');
   const [older, setOlder] = useState<AuditEntry[]>([]);
   const [verify, setVerify] = useState<{ valid: boolean; checkedEntries: number; brokenAt?: number }>();
   const act = useAction();
+  const toast = useToast();
 
   const qs = new URLSearchParams();
   if (tenantId) qs.set('tenantId', tenantId);
@@ -34,7 +35,11 @@ export default function AuditPage({ scope }: { scope?: 'all' }) {
     setOlder((o) => [...o, ...more]);
   });
   const resetFilters = (fn: () => void) => { setOlder([]); fn(); };
-  const doVerify = () => act.run(async () => setVerify(await api.get('/api/audit/verify')));
+  const doVerify = () => act.run(async () => {
+    const r = await api.get<{ valid: boolean; checkedEntries: number; brokenAt?: number }>('/api/audit/verify');
+    setVerify(r);
+    if (r.valid) toast.ok(`Die Kette ist intakt (${r.checkedEntries} Einträge geprüft).`);
+  });
   const exportQs = tenantId ? '?tenantId=' + tenantId : '';
 
   return (
@@ -47,9 +52,8 @@ export default function AuditPage({ scope }: { scope?: 'all' }) {
           <button onClick={() => download('/api/audit/export.csv' + exportQs)}>Export (CSV)</button>
         </>}
       />
-      {verify && (verify.valid
-        ? <Info tone="ok">Die Kette ist intakt ({verify.checkedEntries} Einträge geprüft).</Info>
-        : <Info tone="error">Die Kette ist ab Eintrag {verify.brokenAt} verändert worden! ({verify.checkedEntries} Einträge geprüft)</Info>)}
+      {verify && !verify.valid && (
+        <Info tone="error">Die Kette ist ab Eintrag {verify.brokenAt} verändert worden! ({verify.checkedEntries} Einträge geprüft)</Info>)}
       <div className="toolbar">
         <select value={action} onChange={(e) => resetFilters(() => setAction(e.target.value))} aria-label="Aktion">
           <option value="">Alle Aktionen</option>
@@ -66,10 +70,7 @@ export default function AuditPage({ scope }: { scope?: 'all' }) {
           <option value="export.">Exporte</option>
           <option value="setup.">Einrichtung</option>
         </select>
-        <form onSubmit={(e) => { e.preventDefault(); resetFilters(() => setQ(search.trim())); }}>
-          <input type="search" placeholder="Person oder Ziel …" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </form>
-        {loading && <Spinner />}
+        <LiveSearchInput value={q} onSearch={(v) => resetFilters(() => setQ(v))} placeholder="Person oder Ziel …" busy={loading} />
       </div>
       <ErrorBox error={error ?? act.error} />
       {data && rows.length === 0 && <Empty>Keine Einträge.</Empty>}

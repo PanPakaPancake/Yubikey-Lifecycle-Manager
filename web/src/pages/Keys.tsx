@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 import { api, fmtDate, statusLabels, type AgentInfo, type CustomField, type KeyStatus, type YubiKey } from '../api';
 import { useCan } from '../auth';
-import { Badge, Empty, ErrorBox, Field, Info, Modal, PageHeader, Spinner, StatusBadge, useAction, useApi } from '../ui';
+import { Badge, Empty, ErrorBox, Field, formatSort, Info, LiveSearchInput, Modal, PageHeader, parseSort, SortTh, Spinner, StatusBadge, useAction, useApi, type SortState } from '../ui';
 import { useTenant } from '../tenant';
 
 interface KeyPage { total: number; page: number; pageSize: number; items: YubiKey[] }
@@ -14,7 +14,15 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
   const ctx = useTenant();
   const paramTenant = params.get('tenantId');
   const { setTenantId } = ctx;
-  useEffect(() => { if (paramTenant) setTenantId(paramTenant); }, [paramTenant, setTenantId]);
+  // ?tenantId=… wählt den Tenant im Umschalter („all“ = alle Tenants) und verschwindet dann aus der Adresse.
+  useEffect(() => {
+    if (!paramTenant) return;
+    setTenantId(paramTenant === 'all' ? '' : paramTenant);
+    const next = new URLSearchParams(params);
+    next.delete('tenantId');
+    setParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramTenant, setTenantId]);
   const tenantId = partner ? '' : ctx.tenantId;
   const canIntake = partner ? can('ManagePartnerStock') && can('ManageInventory') : can('ManageInventory');
   const status = params.get('status') ?? '';
@@ -22,7 +30,8 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
   const tag = params.get('tag') ?? '';
   const needsDetails = params.get('needsDetails') === '1';
   const page = Number(params.get('page') ?? '1');
-  const [search, setSearch] = useState(q);
+  const sort = parseSort(params.get('sort'), { key: 'updated', desc: true });
+  const onSort = (s: SortState) => set('sort', s.key === 'updated' && s.desc ? '' : formatSort(s));
   const [modal, setModal] = useState<'import' | 'intake' | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulk, setBulk] = useState<BulkKind | null>(null);
@@ -42,6 +51,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
   if (q) qs.set('q', q);
   if (tag) qs.set('tag', tag);
   if (needsDetails) qs.set('needsDetails', 'true');
+  if (params.get('sort')) qs.set('sort', params.get('sort')!);
   qs.set('page', String(page));
   const { data, error, loading, reload } = useApi<KeyPage>('/api/keys?' + qs.toString(), [qs.toString()]);
   const { data: tags } = useApi<string[]>('/api/tags' + (tenantId ? '?tenantId=' + tenantId : ''), [tenantId]);
@@ -73,11 +83,8 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
           <option value="">Alle Tags</option>
           {tags?.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
-        <form onSubmit={(e) => { e.preventDefault(); set('q', search.trim()); }}>
-          <input type="search" placeholder="Seriennummer, Person, Modell …" value={search} onChange={(e) => setSearch(e.target.value)} />
-        </form>
+        <LiveSearchInput value={q} onSearch={(v) => set('q', v)} placeholder="Seriennummer, Person, Modell …" busy={loading} />
         <label className="check"><input type="checkbox" checked={needsDetails} onChange={(e) => set('needsDetails', e.target.checked ? '1' : '')} /> Nur ohne Seriennummer</label>
-        {loading && <Spinner />}
       </div>
       <ErrorBox error={error} />
       {selectedKeys.length > 0 && (
@@ -90,13 +97,13 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
           <button className="link" style={{ marginLeft: 8 }} onClick={() => setBulkResult(undefined)}>Ausblenden</button>
         </Info>
       )}
-      {data && data.items.length === 0 && <Empty>Keine Keys gefunden.</Empty>}
+      {data && data.items.length === 0 && <Empty>{q || status || tag || needsDetails ? <>Keine Keys passen zu diesen Filtern. <button className="link" onClick={() => setParams(new URLSearchParams())}>Filter zurücksetzen</button></> : canIntake ? <>Noch keine Keys. Erfassen Sie Keys per <button className="link" onClick={() => setModal('intake')}>Wareneingang</button> oder <button className="link" onClick={() => setModal('import')}>CSV-Import</button>.</> : 'Noch keine Keys.'}</Empty>}
       {data && data.items.length > 0 && (
         <div className="card table-wrap" style={{ padding: 0 }}>
           <table>
             <thead>
               <tr>{canBulk && <th style={{ width: 32 }}><input type="checkbox" aria-label="Alle auf dieser Seite auswählen" checked={allOnPage}
-                onChange={(e) => setSelected(e.target.checked ? new Set(data.items.map((k) => k.id)) : new Set())} /></th>}<th>Seriennummer</th><th>Modell</th><th>Firmware</th><th>Status</th><th>Person</th>{!partner && <th>Tenant</th>}<th>Tags</th><th>Geändert</th></tr>
+                onChange={(e) => setSelected(e.target.checked ? new Set(data.items.map((k) => k.id)) : new Set())} /></th>}<SortTh label="Seriennummer" sortKey="serial" sort={sort} onSort={onSort} /><SortTh label="Modell" sortKey="model" sort={sort} onSort={onSort} /><SortTh label="Firmware" sortKey="firmware" sort={sort} onSort={onSort} /><SortTh label="Status" sortKey="status" sort={sort} onSort={onSort} /><th>Person</th>{!partner && <th>Tenant</th>}<th>Tags</th><SortTh label="Geändert" sortKey="updated" sort={sort} onSort={onSort} /></tr>
             </thead>
             <tbody>
               {data.items.map((k) => {

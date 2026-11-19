@@ -59,7 +59,7 @@ public static class KeyEndpoints
         var g = app.MapGroup("/api").RequireAuthorization();
 
         // partner=true: nur das Partnerlager; ohne tenantId: alle zuständigen Tenants plus Partnerlager (mit Recht „Partnerlager verwalten“).
-        g.MapGet("/keys", async (Guid? tenantId, bool? partner, string? status, string? q, string? tag, string? source, bool? needsDetails, int? page, int? pageSize, CurrentUser cu, YlmDbContext db) =>
+        g.MapGet("/keys", async (Guid? tenantId, bool? partner, string? status, string? q, string? tag, string? source, bool? needsDetails, string? sort, int? page, int? pageSize, CurrentUser cu, YlmDbContext db) =>
         {
             var me = await cu.RequireAsync(Permission.ReadInventory);
             var ids = await cu.AccessibleTenantIdsAsync();
@@ -93,7 +93,18 @@ public static class KeyEndpoints
             var size = Math.Clamp(pageSize ?? 50, 1, 500);
             var p = Math.Max(page ?? 1, 1);
             var total = await query.CountAsync();
-            var items = await query.OrderByDescending(k => k.UpdatedAt).Skip((p - 1) * size).Take(size).ToListAsync();
+            // sort: serial | model | firmware | status | updated, mit „-“ davor absteigend. Standard: zuletzt geändert zuerst.
+            var desc = sort?.StartsWith('-') == true;
+            IOrderedQueryable<YubiKey> ordered = (sort?.TrimStart('-').ToLowerInvariant()) switch
+            {
+                "serial" => desc ? query.OrderByDescending(k => k.SerialNumber) : query.OrderBy(k => k.SerialNumber),
+                "model" => desc ? query.OrderByDescending(k => k.Model) : query.OrderBy(k => k.Model),
+                "firmware" => desc ? query.OrderByDescending(k => k.FirmwareVersion) : query.OrderBy(k => k.FirmwareVersion),
+                "status" => desc ? query.OrderByDescending(k => k.Status) : query.OrderBy(k => k.Status),
+                "updated" when !desc => query.OrderBy(k => k.UpdatedAt),
+                _ => query.OrderByDescending(k => k.UpdatedAt),
+            };
+            var items = await ordered.ThenBy(k => k.Id).Skip((p - 1) * size).Take(size).ToListAsync();
             return Results.Ok(new { total, page = p, pageSize = size, items = items.Select(k => ToDto(k)) });
         });
 

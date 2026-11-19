@@ -1,7 +1,9 @@
 import { Link } from 'react-router';
 import { fmtDate, statusLabels, type KeyStatus } from '../api';
 import { useCan } from '../auth';
+import type { ReactNode } from 'react';
 import { Badge, Card, download, Empty, ErrorBox, PageHeader, Spinner, useApi } from '../ui';
+import { Icon } from '../icons';
 import { useTenant } from '../tenant';
 
 interface DashboardData {
@@ -22,6 +24,8 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
   const can = useCan();
   const q = tenantId ? '?tenantId=' + tenantId : '';
   const { data, error, loading } = useApi<DashboardData>('/api/dashboard' + q, [tenantId]);
+  // Kennzahlen führen ins passend gefilterte Inventar (auf Partnerebene: über alle Tenants).
+  const keysLink = (status: KeyStatus) => '/keys?status=' + status + (scope === 'all' ? '&tenantId=all' : '');
   const maxMonth = Math.max(1, ...(data?.issuedPerMonth.map((m) => m.count) ?? [1]));
 
   return (
@@ -41,35 +45,18 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
       {!data && loading && <Spinner label="Wird geladen …" />}
       {data && (
         <>
-          <div className="grid cols-4">
-            <div className="card kpi">
-              <div className="label">Abdeckung Zielgruppe</div>
-              <div className="value">{data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}</div>
-              <div className="sub">{data.usersWithKey} von {data.targetUsers ?? '?'} Personen mit Key</div>
-              {data.coveragePercent != null && <div className="meter"><span style={{ width: Math.min(100, data.coveragePercent) + '%' }} /></div>}
-            </div>
-            <div className="card kpi">
-              <div className="label">Keys aktiv</div>
-              <div className="value">{data.byStatus.Active ?? 0}</div>
-              <div className="sub">{data.total} Keys gesamt</div>
-            </div>
-            <div className="card kpi">
-              <div className="label">Im Lager</div>
-              <div className="value">{data.inStock}</div>
-              <div className="sub">{data.byStatus.Locked ?? 0} gesperrt, {data.byStatus.Retired ?? 0} ausgemustert</div>
-            </div>
-            <div className="card kpi">
-              <div className="label">Firmware mit Sicherheitshinweis</div>
-              <div className="value" style={{ color: data.vulnerableKeys ? 'var(--warn)' : undefined }}>{data.vulnerableKeys}</div>
-              <div className="sub">{data.forcePinChangeUnsupported} ohne erzwingbaren PIN-Wechsel</div>
-            </div>
-          </div>
+          <ActionItems data={data} keysLink={keysLink} />
 
-          {data.needsDetails > 0 && (
-            <div className="alert info" style={{ marginTop: 16 }}>
-              {data.needsDetails} selbst registrierte Keys ohne Seriennummer/Firmware. <Link to="/keys?needsDetails=1">Im Inventar ansehen</Link>
-            </div>
-          )}
+          <div className="grid cols-4">
+            <Kpi label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
+              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`}>
+              {data.coveragePercent != null && <div className="meter"><span style={{ width: Math.min(100, data.coveragePercent) + '%' }} /></div>}
+            </Kpi>
+            <Kpi label="Keys aktiv" value={data.byStatus.Active ?? 0} sub={`${data.total} Keys gesamt`} to={keysLink('Active')} />
+            <Kpi label="Im Lager" value={data.inStock} sub={`${data.byStatus.Locked ?? 0} gesperrt, ${data.byStatus.Retired ?? 0} ausgemustert`} to={keysLink('InStock')} />
+            <Kpi label="Firmware mit Sicherheitshinweis" value={data.vulnerableKeys} tone={data.vulnerableKeys ? 'warn' : undefined}
+              sub={`${data.forcePinChangeUnsupported} ohne erzwingbaren PIN-Wechsel`} to={data.vulnerableKeys ? '#firmware' : undefined} />
+          </div>
 
           <div className="grid cols-2" style={{ marginTop: 16 }}>
             <Card title="Ausgegebene Keys pro Monat">
@@ -87,7 +74,7 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
               <table>
                 <tbody>
                   {(Object.keys(statusLabels) as KeyStatus[]).map((s) => (
-                    <tr key={s}><td><span className={'badge status-' + s}>{statusLabels[s]}</span></td><td style={{ textAlign: 'right' }}>{data.byStatus[s] ?? 0}</td></tr>
+                    <tr key={s}><td><Link to={keysLink(s)} className={'badge status-' + s}>{statusLabels[s]}</Link></td><td className="num">{data.byStatus[s] ?? 0}</td></tr>
                   ))}
                 </tbody>
               </table>
@@ -95,7 +82,7 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
           </div>
 
           <div className="grid cols-2" style={{ marginTop: 16 }}>
-            <Card title="Firmware-Stände">
+            <Card title={<span id="firmware">Firmware-Stände</span>}>
               {data.firmware.length === 0 ? <Empty>Noch keine Firmware-Daten.</Empty> : (
                 <table>
                   <thead><tr><th>Firmware</th><th>Keys</th><th>Hinweise</th></tr></thead>
@@ -133,5 +120,47 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
         </>
       )}
     </>
+  );
+}
+
+function Kpi({ label, value, sub, to, tone, children }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode }) {
+  const body = <>
+    <div className="label">{label}</div>
+    <div className={'value' + (tone ? ' tone-text-' + tone : '')}>{value}</div>
+    <div className="sub">{sub}</div>
+    {children}
+  </>;
+  if (!to) return <div className="card kpi">{body}</div>;
+  if (to.startsWith('#')) return <a className="card kpi kpi-link" href={to}>{body}</a>;
+  return <Link className="card kpi kpi-link" to={to}>{body}</Link>;
+}
+
+/** „Handlungsbedarf“: alles, was ein Admin heute anfassen sollte, mit direktem Link. */
+function ActionItems({ data, keysLink }: { data: DashboardData; keysLink: (s: KeyStatus) => string }) {
+  const items: { tone: 'error' | 'warn' | 'info'; text: ReactNode; to: string; cta: string }[] = [];
+  for (const t of data.tenants) {
+    if (t.checksFailed > 0) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: {t.checksFailed} FIDO2-Prüfung(en) fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Beheben' });
+    if (t.lastSyncSucceeded === false) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: letzte Synchronisation fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Ansehen' });
+  }
+  if ((data.byStatus.Locked ?? 0) > 0) items.push({ tone: 'warn', text: <>{data.byStatus.Locked} gesperrte(r) Key(s)</>, to: keysLink('Locked'), cta: 'Im Inventar' });
+  if (data.vulnerableKeys > 0) items.push({ tone: 'warn', text: <>{data.vulnerableKeys} Key(s) mit Firmware-Sicherheitshinweis</>, to: '#firmware', cta: 'Firmware-Stände' });
+  if (data.needsDetails > 0) items.push({ tone: 'info', text: <>{data.needsDetails} selbst registrierte Key(s) ohne Seriennummer/Firmware</>, to: '/keys?needsDetails=1', cta: 'Nacherfassen' });
+
+  if (items.length === 0) return (
+    <div className="action-items all-good"><span className="ai-icon tone-ok"><Icon name="check" size={16} /></span>Kein Handlungsbedarf. Alle Prüfungen und Synchronisationen sind in Ordnung.</div>
+  );
+  return (
+    <section className="action-items" aria-label="Handlungsbedarf">
+      <h2>Handlungsbedarf <span className="count">{items.length}</span></h2>
+      <ul>
+        {items.map((i, n) => (
+          <li key={n}>
+            <span className={'ai-icon tone-' + i.tone}><Icon name={i.tone === 'info' ? 'info' : 'alert'} size={15} /></span>
+            <span className="ai-text">{i.text}</span>
+            {i.to.startsWith('#') ? <a href={i.to}>{i.cta}</a> : <Link to={i.to}>{i.cta}</Link>}
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

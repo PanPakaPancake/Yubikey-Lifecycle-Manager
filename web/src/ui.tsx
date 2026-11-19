@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Icon } from './icons';
 import { api, ApiError, statusLabels, type GroupRef, type KeyStatus, type Tenant } from './api';
 
 export function useApi<T>(url: string | null, deps: unknown[] = []) {
@@ -230,4 +231,67 @@ export function OriginBadge({ origin, state }: { origin: 'Global' | 'Tenant'; st
   if (state === 'Modified') return <Badge tone="warn">Global · hier verändert</Badge>;
   if (state === 'Disabled') return <Badge tone="error">Global · hier deaktiviert</Badge>;
   return <Badge>Global · geerbt</Badge>;
+}
+
+/** Returns `value` once it has not changed for `ms` milliseconds (for search-as-you-type into URL filters). */
+export function useDebounced<T>(value: T, ms = 300) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const id = window.setTimeout(() => setV(value), ms);
+    return () => window.clearTimeout(id);
+  }, [value, ms]);
+  return v;
+}
+
+/** Numbered step indicator with check marks for finished steps. */
+export function Steps({ names, current }: { names: string[]; current: number }) {
+  return (
+    <ol className="steps">
+      {names.map((s, i) => {
+        const state = i < current ? 'done' : i === current ? 'current' : '';
+        return (
+          <li key={s} className={'step ' + state} aria-current={i === current ? 'step' : undefined}>
+            <span className="step-no" aria-hidden>{i < current ? <Icon name="check" size={14} /> : i + 1}</span>
+            <span className="step-name">{s}</span>
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+/** Search field that applies its value while typing (debounced); Enter applies at once. */
+export function LiveSearchInput({ value, onSearch, placeholder, busy }: { value: string; onSearch: (q: string) => void; placeholder: string; busy?: boolean }) {
+  const [text, setText] = useState(value);
+  const debounced = useDebounced(text, 350);
+  const last = useRef(value);
+  const apply = useCallback((q: string) => { const t = q.trim(); if (t !== last.current) { last.current = t; onSearch(t); } }, [onSearch]);
+  useEffect(() => { apply(debounced); }, [debounced, apply]);
+  // Follow outside changes (e.g. browser back).
+  useEffect(() => { if (value !== last.current) { last.current = value; setText(value); } }, [value]);
+  return (
+    <div className={'live-search' + (busy ? ' busy' : '')}>
+      <Icon name="search" size={16} />
+      <input type="search" placeholder={placeholder} value={text} onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); apply(text); } }} aria-label={placeholder} />
+      {busy && <span className="spinner" aria-hidden />}
+    </div>
+  );
+}
+
+export type SortState = { key: string; desc: boolean };
+export const parseSort = (s: string | null | undefined, fallback: SortState): SortState =>
+  s ? { key: s.replace(/^-/, ''), desc: s.startsWith('-') } : fallback;
+export const formatSort = (s: SortState) => (s.desc ? '-' : '') + s.key;
+
+/** Table header cell that toggles sorting by `sortKey`. */
+export function SortTh({ label, sortKey, sort, onSort, className }: { label: string; sortKey: string; sort: SortState; onSort: (s: SortState) => void; className?: string }) {
+  const active = sort.key === sortKey;
+  return (
+    <th className={className} aria-sort={active ? (sort.desc ? 'descending' : 'ascending') : 'none'}>
+      <button type="button" className={'sort-btn' + (active ? ' active' : '')} onClick={() => onSort({ key: sortKey, desc: active ? !sort.desc : false })}>
+        {label}<span className="sort-arrow" aria-hidden>{active ? (sort.desc ? '↓' : '↑') : '↕'}</span>
+      </button>
+    </th>
+  );
 }
