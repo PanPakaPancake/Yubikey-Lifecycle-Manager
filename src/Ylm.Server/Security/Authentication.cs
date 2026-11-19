@@ -25,7 +25,7 @@ public static class AuthSchemes
 }
 
 /// <summary>Configures the Entra OpenID Connect login from the installation settings stored in the database.</summary>
-public sealed class EntraOidcOptionsSetup(IServiceScopeFactory scopes, IOptions<YlmOptions> ylm) : IConfigureNamedOptions<OpenIdConnectOptions>
+public sealed class EntraOidcOptionsSetup(IServiceScopeFactory scopes, IOptions<YlmOptions> ylm, ILogger<EntraOidcOptionsSetup> logger) : IConfigureNamedOptions<OpenIdConnectOptions>
 {
     public void Configure(OpenIdConnectOptions options) => Configure(Options.DefaultName, options);
 
@@ -36,7 +36,7 @@ public sealed class EntraOidcOptionsSetup(IServiceScopeFactory scopes, IOptions<
         var db = scope.ServiceProvider.GetRequiredService<YlmDbContext>();
         InstallationSettings? settings = null;
         try { settings = db.Installation.AsNoTracking().FirstOrDefault(); }
-        catch (Exception) { /* database not ready yet */ }
+        catch (Exception e) { logger.LogWarning("Entra-Anmeldung: Einstellungen nicht lesbar ({Message}).", e.Message); }
 
         var tenant = settings?.HomeTenantId?.ToString() ?? "organizations";
         options.Authority = $"{ylm.Value.LoginAuthority.TrimEnd('/')}/{tenant}/v2.0";
