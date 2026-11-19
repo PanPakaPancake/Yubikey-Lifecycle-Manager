@@ -17,7 +17,7 @@ public static class AuthEndpoints
         app.MapGet("/auth/login", async (string? returnUrl, int? retry, YlmDbContext db, IOptionsMonitor<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions> oidc,
             IOptionsMonitorCache<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions> oidcCache) =>
         {
-            var target = returnUrl is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") ? r : "/";
+            var target = IsLocalPath(returnUrl) ? returnUrl! : "/";
             var settings = await db.Installation.AsNoTracking().FirstOrDefaultAsync();
             if (settings is { EntraSsoEnabled: false }) return Results.Redirect("/login?error=sso_disabled");
             // Ohne eingetragene Entra-App nicht mit leerer Client-ID zu Microsoft schicken (AADSTS700038).
@@ -63,6 +63,15 @@ public static class AuthEndpoints
             }).AllowAnonymous();
         }
     }
+
+    /// <summary>
+    /// Nur Pfade dieser Plattform als Ziel nach der Anmeldung (wie Url.IsLocalUrl): "/x" ja, "//host", "/\\host" und Steuerzeichen nein.
+    /// Browser lesen "/\\host" wie "//host", das wäre sonst eine offene Weiterleitung.
+    /// </summary>
+    public static bool IsLocalPath(string? url) =>
+        url is { Length: > 0 } && url[0] == '/'
+        && (url.Length == 1 || (url[1] != '/' && url[1] != '\\'))
+        && !url.Any(char.IsControl);
 
     public static bool IsDevAuth(IWebHostEnvironment env, YlmOptions options) =>
         string.Equals(options.AuthMode, "Development", StringComparison.OrdinalIgnoreCase)

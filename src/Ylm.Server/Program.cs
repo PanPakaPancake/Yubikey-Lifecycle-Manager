@@ -127,6 +127,9 @@ builder.Services.AddRateLimiter(o =>
     o.RejectionStatusCode = 429;
     o.AddPolicy(AgentEndpoints.PairingRateLimit, ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+    // Anmeldung und Kontoeinrichtung ohne Anmeldung: bremst Durchprobieren und das Füllen des Speichers mit WebAuthn-Anfragen.
+    o.AddPolicy(SecurityHeaders.AuthRateLimit, ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
 });
 
 builder.Services.AddSignalR(o =>
@@ -164,11 +167,15 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
     o.KnownIPNetworks.Clear();
     o.KnownProxies.Clear();
+    // Ohne Einschränkung könnte jeder, der Port 8080 direkt erreicht, Absender-IP (Rate-Limit), Schema und Host vortäuschen.
+    if (!ylm.TrustedProxies.Contains("*"))
+        foreach (var network in ProxyTrust.Networks(ylm.TrustedProxies)) o.KnownIPNetworks.Add(network);
 });
 
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseMiddleware<SecurityHeaders>();
 app.UseMiddleware<ApiExceptionMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles();

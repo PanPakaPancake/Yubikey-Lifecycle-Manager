@@ -83,7 +83,7 @@ location / {
 
 Läuft der Proxy auf einem anderen Rechner, in `.env` z. B. `YLM_BIND=10.0.0.5:8080` setzen (interne Adresse).
 
-> Der Server vertraut den Forwarded-Headern des vorgeschalteten Proxys. Port 8080 darf deshalb nie direkt aus dem Internet erreichbar sein.
+> Der Server übernimmt Forwarded-Header (`X-Forwarded-For/-Proto/-Host`) nur von Loopback und privaten Netzen (10/8, 172.16/12, 192.168/16, fc00::/7). Das passt für Caddy, einen Proxy auf demselben Server und einen Proxy im internen Netz. Steht der Proxy unter einer öffentlichen Adresse, diese in `docker-compose.override.yml` beim Dienst `server` eintragen, z. B. `Ylm__TrustedProxies__0: "203.0.113.10"` (`"*"` vertraut allen, nicht empfohlen). Port 8080 sollte trotzdem nie direkt aus dem Internet erreichbar sein.
 
 ### 1.4 Ohne Skript installieren
 
@@ -239,7 +239,7 @@ Beim Offboarding entfernt die Plattform ihre Daten nach der Aufbewahrungsfrist. 
    - Dienst `YubikeyLifecycleManagerAgent` (LocalSystem, Autostart). Adminrechte sind nötig, weil Windows den direkten FIDO-Zugriff (PIN setzen, Reset) sonst sperrt.
    - Tray-App `YlmTray.exe` startet bei jeder Anmeldung.
 2. In der Web-Oberfläche unter „Agent“ einen Kopplungscode erzeugen.
-3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben.
+3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben. Koppeln und Entkoppeln dürfen nur Mitglieder der lokalen Gruppe „Administratoren“ (ohne erhöhte Rechte reicht), weil der Agent-Dienst als SYSTEM Updates vom gekoppelten Server installiert.
 
 Protokolle: `C:\ProgramData\YubikeyLifecycleManager\Agent\logs`. Update: neueres MSI installieren.
 

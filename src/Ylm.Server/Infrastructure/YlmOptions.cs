@@ -52,6 +52,12 @@ public sealed class YlmOptions
     /// <summary>Gemeinsames Geheimnis mit dem Updater-Container.</summary>
     public string? UpdaterToken { get; set; }
 
+    /// <summary>
+    /// Absender, deren X-Forwarded-For/-Proto/-Host-Header gelten (IP-Adressen oder Netze in CIDR-Schreibweise).
+    /// Leer = Loopback und private Netze (Docker, Caddy, Reverse Proxy im internen Netz). "*" = allen vertrauen (alte Voreinstellung).
+    /// </summary>
+    public string[] TrustedProxies { get; set; } = [];
+
     /// <summary>Run background jobs (sync, retention). Disabled in tests.</summary>
     public bool EnableBackgroundJobs { get; set; } = true;
 }

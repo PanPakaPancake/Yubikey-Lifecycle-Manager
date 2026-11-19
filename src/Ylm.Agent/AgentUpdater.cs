@@ -214,9 +214,15 @@ public sealed partial class AgentUpdater(
         // Alte Pakete aufräumen, nur das aktuelle bleibt liegen.
         foreach (var old in Directory.EnumerateFiles(_updateDir, "*.msi"))
             try { File.Delete(old); } catch (IOException) { }
+        // Nur vom gekoppelten Server laden: Das Agent-Token steckt im Authorization-Header und darf keinen anderen Host erreichen.
+        var source = new Uri(http.BaseAddress!, info.Url ?? "");
+        if (!string.Equals(source.GetLeftPart(UriPartial.Authority), http.BaseAddress!.GetLeftPart(UriPartial.Authority), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException("Der Server nennt eine fremde Download-Adresse für das Update. Abgebrochen.");
+        if (!VersionPattern().IsMatch(info.Version ?? ""))
+            throw new InvalidOperationException("Der Server meldet eine ungültige Versionsnummer. Abgebrochen.");
         var msi = Path.Combine(_updateDir, $"YubikeyLifecycleManager-Agent-{info.Version}.msi");
         await using (var file = File.Create(msi))
-        await using (var stream = await http.GetStreamAsync(info.Url, ct))
+        await using (var stream = await http.GetStreamAsync(source, ct))
             await stream.CopyToAsync(file, ct);
 
         await using (var check = File.OpenRead(msi))
@@ -358,6 +364,9 @@ public sealed partial class AgentUpdater(
         }
         catch (Exception) { return null; }
     }
+
+    [GeneratedRegex(@"^\d+(\.\d+){1,3}([-+][0-9A-Za-z.]+)?$")]
+    private static partial Regex VersionPattern();
 
     [GeneratedRegex(@"(?:success or error status|Erfolg- oder Fehlerstatus): (\d+)", RegexOptions.IgnoreCase)]
     private static partial Regex MsiStatus();

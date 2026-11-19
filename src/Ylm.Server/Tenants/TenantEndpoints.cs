@@ -107,6 +107,9 @@ public static class TenantEndpoints
                 return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString("Der Admin-Consent wurde nicht erteilt."));
 
             var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.EntraTenantId == entraTenantId);
+            // Einen vorhandenen (auch offboardeten) Tenant darf nur reaktivieren, wer für ihn zuständig ist.
+            if (tenant is not null && !CurrentUser.CanAccessTenant(user, tenant.Id))
+                return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString("Dieser Tenant ist bereits angebunden, Sie sind aber nicht für ihn zuständig."));
             var isNew = tenant is null;
             tenant ??= new Tenant { EntraTenantId = entraTenantId, SyncIntervalMinutes = opt.Value.DefaultSyncIntervalMinutes };
             tenant.Status = TenantStatus.Active;
@@ -114,7 +117,12 @@ public static class TenantEndpoints
             tenant.ConsentedBy = user.Upn;
             tenant.OffboardedAt = null;
             tenant.DataDeletionDueAt = null;
-            if (isNew) db.Tenants.Add(tenant);
+            if (isNew)
+            {
+                db.Tenants.Add(tenant);
+                // Wer nur für einzelne Tenants zuständig ist, soll den selbst angebundenen Tenant danach auch sehen.
+                if (!user.AllTenants) db.PlatformUserTenants.Add(new PlatformUserTenant { PlatformUserId = user.Id, TenantId = tenant.Id });
+            }
             try
             {
                 // A token issued before this consent would still carry the old permissions.
