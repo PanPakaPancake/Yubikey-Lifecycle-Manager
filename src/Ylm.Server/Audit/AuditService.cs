@@ -18,6 +18,8 @@ public static class AuditActions
     public const string UserPasskeyRemoved = "user.passkey_removed";
     public const string UpdateStarted = "platform.update_started";
     public const string LoginSettingsChanged = "settings.login_changed";
+    public const string AgentUpdatePolicyChanged = "settings.agent_update_policy_changed";
+    public const string AgentUpdateRequested = "agent.update_requested";
     public const string BrandingChanged = "settings.branding_changed";
     public const string TenantOnboarded = "tenant.onboarded";
     public const string TenantUpdated = "tenant.updated";

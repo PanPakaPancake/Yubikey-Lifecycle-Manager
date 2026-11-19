@@ -286,6 +286,7 @@ Get-ChildItem C:\ProgramData\YubikeyLifecycleManager\Agent\logs
   ```powershell
   Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run | Select-Object YubikeyLifecycleManagerTray
   ```
+  Ab 0.5 endet der Wert mit `--autostart` (damit greift „Mit Windows starten“ in den Tray-Einstellungen).
 
 ### 4.4 Tray-App prüfen (vor dem Koppeln)
 
@@ -295,7 +296,7 @@ Rechtsklick auf das Tray-Symbol.
 
 - Erste Zeile: **„Nicht gekoppelt“** (wenn dort „Agent-Dienst nicht erreichbar“ steht, siehe F4)
 - Zweite Zeile: „Kein Key eingesteckt“
-- Menüpunkte: Status anzeigen, WebGUI öffnen, Koppeln …, Kopplung lösen, Logs öffnen, Version 0.1.x, Tray beenden
+- Menüpunkte: Status anzeigen, WebGUI öffnen, Koppeln …, Kopplung lösen, Einstellungen …, Logs öffnen, Version 0.x.y, Tray beenden
 - „Logs öffnen“ öffnet den Explorer im Log-Ordner.
 
 ### 4.5 Koppeln
@@ -318,6 +319,42 @@ PC neu starten und neu anmelden.
 **Erwartet:** Dienst läuft, Tray-App startet von selbst und zeigt nach kurzer Zeit wieder „Verbunden“, ohne erneutes Koppeln.
 
 ---
+
+### 4.7 Agent-Einstellungen (ab 0.5)
+
+Tray → Rechtsklick → **Einstellungen …**
+
+| Test | Erwartet |
+|---|---|
+| Fenster öffnen | Abschnitte Allgemein, Updates, Verbindung. „Installiert: 0.5.x“, „Zuletzt geprüft“ erscheint spätestens 2 Minuten nach dem Dienststart. |
+| „Mit Windows starten“ abwählen, abmelden, wieder anmelden | Kein Tray-Symbol. Start über das Startmenü („Yubikey Lifecycle Manager“) geht weiterhin. Wieder anhaken, abmelden/anmelden: Symbol ist da. Gespeichert unter `HKCU\Software\YubikeyLifecycleManager\Tray`, Wert `AutoStart`. |
+| „Hinweise anzeigen …“ abwählen, Dienst stoppen (`Stop-Service YubikeyLifecycleManagerAgent`), Key einstecken | Keine Sprechblase. Danach `Start-Service …` und wieder anhaken. |
+| „Updates automatisch installieren“ als Administrator abwählen | Meldung „Automatische Updates sind ausgeschaltet.“ Plattform → Globale Einstellungen → Version und Updates → „Alle Agents“: dein PC zeigt Auto-Update **aus**, unter **Agent** steht die Plakette „Auto-Update aus“. Wieder anhaken. |
+| Als Standardbenutzer (ohne Adminrechte) anmelden und Einstellungen öffnen | Der Update-Schalter ist ausgegraut mit „Nur Administratoren dieses PCs können das ändern.“ (überspringen, wenn kein zweites Konto da ist) |
+| Plattform: **Agent-Updates** auf „Immer automatisch“, dann im Tray „Jetzt nach Updates suchen“ | Schalter im Tray ist angehakt und gesperrt: „Vom Server vorgegeben …“. Danach Vorgabe wieder auf Standard. |
+| „Jetzt nach Updates suchen“ ohne neue Version | „Aktuell (Version 0.5.x).“ Im Agent-Log eine Zeile `Update: Aktuell …` |
+
+### 4.8 Auto-Update in der Praxis
+
+Das Update lässt sich nur mit einer **höheren** Version testen. Vorschlag: v0.5.0 taggen, Server aktualisieren, dann v0.5.1 ohne weitere Änderungen taggen.
+
+**A) 0.4.x → 0.5.0** (dein jetziger Agent mit dem alten Update-Ablauf)
+
+1. Server auf 0.5.0 aktualisieren (Globale Einstellungen → Jetzt aktualisieren).
+2. Auf dem PC `Restart-Service YubikeyLifecycleManagerAgent`, damit der Agent nach 2 Minuten prüft (sonst bis zu 4 Stunden).
+3. **Erwartet:** Nach 2–4 Minuten zeigt die Plattform unter **Agent** Version 0.5.0. Der alte Ablauf beendet die Tray-App nicht: Steht im Tray-Menü noch die alte Version oder fehlt „Einstellungen …“, einmal ab- und wieder anmelden. Das ist nur bei diesem einen Sprung so.
+
+**B) 0.5.0 → 0.5.1** (neuer Ablauf)
+
+1. Server auf 0.5.1 aktualisieren. Plattform → **Agent**: Plakette „Update auf 0.5.1 folgt automatisch“ und der Link **Jetzt aktualisieren**.
+2. **Jetzt aktualisieren** klicken (oder Tray → Einstellungen → „Jetzt nach Updates suchen“).
+3. **Erwartet:**
+   - Sprechblase „Agent wird aktualisiert“, das Tray-Symbol verschwindet.
+   - Nach etwa einer Minute ist das Symbol von selbst wieder da, Sprechblase „Agent aktualisiert … Version 0.5.1“.
+   - Tray → Einstellungen: „Aktualisiert von 0.5.0 auf 0.5.1 am …“. Kein Neustart des PCs nötig.
+   - Agent-Log: `Neue Agent-Version 0.5.1 verfügbar`, `Installiere Agent 0.5.1`, nach dem Neustart `Update: Aktualisiert von 0.5.0 auf 0.5.1` und `Tray-App in Sitzung N neu gestartet`.
+   - `C:\ProgramData\YubikeyLifecycleManager\Agent\updates\install-0.5.1.log` endet mit `Installation success or error status: 0` (bzw. „Erfolg- oder Fehlerstatus: 0“).
+4. Falls es fehlschlägt: Die Meldung steht im Tray unter Einstellungen und in der Plattform (Agent-Liste, rot). Bitte das msiexec-Protokoll und das Agent-Log mitschicken.
 
 ## 5. Echter YubiKey
 

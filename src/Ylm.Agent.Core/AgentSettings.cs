@@ -1,4 +1,6 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
+using Ylm.Contracts;
 
 namespace Ylm.Agent.Core;
 
@@ -10,6 +12,10 @@ public sealed record AgentSettings
     public string? ProtectedToken { get; init; }
     public string? PairedUser { get; init; }
     public string? InstanceName { get; init; }
+    /// <summary>Lokale Einstellung "Automatische Updates" (null = Standard: an).</summary>
+    public bool? AutoUpdate { get; init; }
+    /// <summary>Zuletzt vom Server gemeldete Vorgabe.</summary>
+    public AgentUpdatePolicy? ServerPolicy { get; init; }
 }
 
 /// <summary>Protects the agent token at rest (DPAPI LocalMachine on Windows).</summary>
@@ -28,7 +34,8 @@ public sealed class PlainSecretProtector : ISecretProtector
 
 public sealed class AgentSettingsStore(string path, ISecretProtector protector)
 {
-    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true };
+    private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
+    private readonly Lock _lock = new();
 
     public AgentSettings Load()
     {
@@ -42,12 +49,26 @@ public sealed class AgentSettingsStore(string path, ISecretProtector protector)
         }
     }
 
+    /// <summary>Liest, ändert und speichert unter einer Sperre (Kopplung und Update-Einstellungen schreiben dieselbe Datei).</summary>
+    public AgentSettings Change(Func<AgentSettings, AgentSettings> change)
+    {
+        lock (_lock)
+        {
+            var next = change(Load());
+            Save(next);
+            return next;
+        }
+    }
+
     public void Save(AgentSettings settings)
     {
-        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-        var tmp = path + ".tmp";
-        File.WriteAllText(tmp, JsonSerializer.Serialize(settings, Json));
-        File.Move(tmp, path, true);
+        lock (_lock)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            var tmp = path + ".tmp";
+            File.WriteAllText(tmp, JsonSerializer.Serialize(settings, Json));
+            File.Move(tmp, path, true);
+        }
     }
 
     public string? Token(AgentSettings s) => s.ProtectedToken is null ? null : protector.Unprotect(s.ProtectedToken);

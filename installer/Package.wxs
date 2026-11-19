@@ -48,10 +48,10 @@
       <RemoveFolder Id="RemoveStartMenuFolder" Directory="AppStartMenuFolder" On="uninstall" />
     </Component>
 
-    <!-- Tray-App startet bei jeder Benutzeranmeldung. -->
+    <!-- Tray-App startet bei jeder Benutzeranmeldung (abschaltbar pro Benutzer in den Tray-Einstellungen: "Mit Windows starten"). -->
     <Component Id="TrayAutostart" Directory="AgentFolder" Guid="C4E8A2F1-3B7D-4D19-9E6A-5F0B1C8D2A77">
       <RegistryValue Root="HKLM" Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run" Name="YubikeyLifecycleManagerTray"
-                     Type="string" Value="&quot;[AgentFolder]YlmTray.exe&quot;" KeyPath="yes" />
+                     Type="string" Value="&quot;[AgentFolder]YlmTray.exe&quot; --autostart" KeyPath="yes" />
     </Component>
 
 

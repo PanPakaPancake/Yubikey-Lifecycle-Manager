@@ -82,6 +82,8 @@ public interface IAgentClient
     Task<MakeCredentialResult> MakeCredential(MakeCredentialRequest request, CancellationToken cancellationToken);
     Task<OperationResult> ForcePinChange(ForcePinChangeRequest request, CancellationToken cancellationToken);
     Task ShowProgress(AgentProgress progress);
+    /// <summary>Der Server bittet den Agent, sofort nach einem Update zu suchen und es zu installieren. Antwort: Ergebnistext.</summary>
+    Task<string> CheckForUpdate(CancellationToken cancellationToken);
 }
 
 public static class AgentProtocol
@@ -94,7 +96,23 @@ public static class AgentProtocol
     public const string ReportHelloMethod = "Hello";
 }
 
-public sealed record AgentHello(string MachineName, string AgentVersion, string ProtocolVersion, string? OsUser);
+/// <param name="AutoUpdate">Ob der Agent Updates selbst installiert (wirksamer Wert nach Server-Vorgabe). Null bei Agents vor 0.5.</param>
+/// <param name="UpdateError">Fehlertext des letzten Updateversuchs, null wenn alles in Ordnung ist.</param>
+public sealed record AgentHello(string MachineName, string AgentVersion, string ProtocolVersion, string? OsUser, bool? AutoUpdate = null, string? UpdateError = null);
+
+/// <summary>Server-Vorgabe für automatische Agent-Updates (Globale Einstellungen).</summary>
+public enum AgentUpdatePolicy
+{
+    /// <summary>Standard: Agents aktualisieren sich automatisch, am PC lässt sich das abschalten.</summary>
+    AgentDecides = 0,
+    /// <summary>Immer automatisch, der Schalter am PC ist gesperrt.</summary>
+    Always = 1,
+    /// <summary>Keine automatischen Updates; am PC geht "Jetzt aktualisieren" weiterhin.</summary>
+    Never = 2,
+}
+
+/// <summary>Antwort von GET /api/agent/update?info=1.</summary>
+public sealed record AgentUpdateInfo(bool Available, string? Version, string? Sha256, long? Size, string? Url, AgentUpdatePolicy Policy);
 
 public sealed record PairingRequest(string Code, string MachineName, string AgentVersion);
 public sealed record PairingResponse(Guid AgentId, string AgentToken, string UserDisplayName, string InstanceName);

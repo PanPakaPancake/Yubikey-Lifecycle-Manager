@@ -111,7 +111,11 @@ export interface KeyInfo {
 
 export interface AgentInfo {
   id: string; machineName: string; agentVersion?: string; createdAt: string; lastSeenAt?: string; online: boolean; key?: KeyInfo; busy?: string;
+  /** Wirksame Auto-Update-Einstellung laut Agent; null bei Agents vor 0.5. */
+  autoUpdate?: boolean | null; updateError?: string | null;
 }
+
+export type AgentUpdatePolicy = 'AgentDecides' | 'Always' | 'Never';
 
 export interface Profile {
   id: string; tenantId?: string; name: string; description?: string; pinStrategy: 'Random' | 'Fixed'; pinLength: number; hasFixedPin: boolean;

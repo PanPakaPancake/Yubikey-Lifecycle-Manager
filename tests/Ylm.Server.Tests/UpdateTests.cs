@@ -105,4 +105,34 @@ public sealed class UpdateTests : IAsyncLifetime
         var anonymous = _factory.CreateClient(new() { BaseAddress = new Uri("https://ylm.test") });
         Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync("/api/agent/update?current=1.0.0")).StatusCode);
     }
+
+    [Fact]
+    public async Task Agent_update_info_carries_server_policy_and_never_blocks_old_agents()
+    {
+        var owner = await LoginAsync("owner@home.example", PlatformRole.Owner);
+        var code = (await Json(await owner.PostAsync("/api/agents/pairing-codes", null))).GetProperty("code").GetString();
+        var paired = await Json(await Client().PostAsJsonAsync("/api/agent/pair", new { code, machineName = "PC-2", agentVersion = "9.0.0" }));
+        var agent = _factory.CreateClient(new() { BaseAddress = new Uri("https://ylm.test") });
+        agent.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", paired.GetProperty("agentToken").GetString());
+
+        var info = await Json(await agent.GetAsync("/api/agent/update?info=1&current=9.0.0"));
+        Assert.True(info.GetProperty("available").GetBoolean());
+        Assert.Equal("9.1.0", info.GetProperty("version").GetString());
+        Assert.Equal("AgentDecides", info.GetProperty("policy").GetString());
+        var current = await Json(await agent.GetAsync("/api/agent/update?info=1&current=9.1.0"));
+        Assert.False(current.GetProperty("available").GetBoolean());
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await (await LoginAsync("op@home.example", PlatformRole.Operator))
+            .PutAsJsonAsync("/api/platform/updates/agent-policy", new { policy = "Never" })).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await owner.PutAsJsonAsync("/api/platform/updates/agent-policy", new { policy = "Never" })).StatusCode);
+        info = await Json(await agent.GetAsync("/api/agent/update?info=1&current=9.0.0"));
+        Assert.Equal("Never", info.GetProperty("policy").GetString());
+        Assert.True(info.GetProperty("available").GetBoolean());
+        // Ältere Agents ohne info=1 installieren jedes Angebot sofort: bei "Nie" bekommen sie keins.
+        Assert.Equal(HttpStatusCode.NoContent, (await agent.GetAsync("/api/agent/update?current=9.0.0")).StatusCode);
+
+        var overview = (await Json(await owner.GetAsync("/api/platform/updates"))).GetProperty("agent");
+        Assert.Equal("Never", overview.GetProperty("policy").GetString());
+        Assert.Contains(overview.GetProperty("list").EnumerateArray(), a => a.GetProperty("machineName").GetString() == "PC-2" && a.GetProperty("outdated").GetBoolean());
+    }
 }

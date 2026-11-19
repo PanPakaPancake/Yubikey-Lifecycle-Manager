@@ -27,9 +27,10 @@ builder.Services.AddSingleton(sp => new AgentConnection(
     sp.GetRequiredService<AgentSettingsStore>(),
     sp.GetRequiredService<ILoggerFactory>().CreateLogger("Ylm.Agent.Connection"),
     agentVersion));
-builder.Services.AddHostedService(sp => new AgentUpdater(
+builder.Services.AddSingleton(sp => new AgentUpdater(
     sp.GetRequiredService<AgentConnection>(), sp.GetRequiredService<AgentSettingsStore>(), sp.GetRequiredService<IConfiguration>(),
-    sp.GetRequiredService<ILogger<AgentUpdater>>(), agentVersion));
+    sp.GetRequiredService<ILogger<AgentUpdater>>(), agentVersion, dataDir));
+builder.Services.AddHostedService(sp => sp.GetRequiredService<AgentUpdater>());
 builder.Services.AddHostedService<AgentWorker>();
 builder.Services.AddHostedService<TrayPipeServer>();
 

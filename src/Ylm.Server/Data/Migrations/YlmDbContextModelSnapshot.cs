@@ -32,6 +32,9 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<string>("AgentVersion")
                         .HasColumnType("text");
 
+                    b.Property<bool?>("AutoUpdate")
+                        .HasColumnType("boolean");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -50,6 +53,9 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<string>("TokenHash")
                         .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("UpdateError")
                         .HasColumnType("text");
 
                     b.HasKey("Id");
@@ -345,6 +351,9 @@ namespace Ylm.Server.Data.Migrations
             modelBuilder.Entity("Ylm.Server.Data.InstallationSettings", b =>
                 {
                     b.Property<int>("Id")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("AgentUpdatePolicy")
                         .HasColumnType("integer");
 
                     b.Property<string>("BootstrapOwnerUpn")

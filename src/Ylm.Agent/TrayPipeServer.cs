@@ -10,7 +10,7 @@ namespace Ylm.Agent;
 /// Named pipe between the service and the per-user tray app (planning 2.3). The service pushes status
 /// updates; the tray sends pairing requests. One line of JSON per message.
 /// </summary>
-public sealed class TrayPipeServer(AgentConnection connection, ILogger<TrayPipeServer> logger) : BackgroundService
+public sealed class TrayPipeServer(AgentConnection connection, AgentUpdater updater, ILogger<TrayPipeServer> logger) : BackgroundService
 {
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -63,9 +63,11 @@ public sealed class TrayPipeServer(AgentConnection connection, ILogger<TrayPipeS
 
         void OnStatus(TrayStatus s) => _ = SendAsync(new TrayMessage { Type = TrayMessageType.Status, Status = s });
         void OnNotification(string title, string text, bool error) => _ = SendAsync(new TrayMessage { Type = TrayMessageType.Notification, Title = title, Text = text, IsError = error });
+        void OnTrayExit() => _ = SendAsync(new TrayMessage { Type = TrayMessageType.UpdateInstalling, Text = updater.State.AvailableVersion });
 
         connection.StatusChanged += OnStatus;
         connection.Notification += OnNotification;
+        connection.TrayExitRequested += OnTrayExit;
         try
         {
             await SendAsync(new TrayMessage { Type = TrayMessageType.Status, Status = connection.Status });
@@ -86,6 +88,20 @@ public sealed class TrayPipeServer(AgentConnection connection, ILogger<TrayPipeS
                     case TrayMessageType.Unpair:
                         await connection.UnpairAsync();
                         break;
+                    case TrayMessageType.SetAutoUpdate when msg.Enabled is { } enabled:
+                        var (changed, message) = IsAdministrator(pipe)
+                            ? await updater.SetAutoUpdateAsync(enabled)
+                            : (false, "Nur Administratoren dieses PCs können automatische Updates ändern.");
+                        await SendAsync(new TrayMessage { Type = TrayMessageType.CommandResult, Text = message, IsError = !changed });
+                        break;
+                    case TrayMessageType.CheckForUpdate:
+                        // Läuft im Hintergrund weiter, damit die Pipe frei bleibt (Status kommt über StatusChanged).
+                        _ = Task.Run(async () =>
+                        {
+                            var result = await updater.CheckWithTimeoutAsync();
+                            await SendAsync(new TrayMessage { Type = TrayMessageType.CommandResult, Text = result, IsError = updater.State.LastResultIsError });
+                        }, ct);
+                        break;
                 }
             }
         }
@@ -97,6 +113,35 @@ public sealed class TrayPipeServer(AgentConnection connection, ILogger<TrayPipeS
         {
             connection.StatusChanged -= OnStatus;
             connection.Notification -= OnNotification;
+            connection.TrayExitRequested -= OnTrayExit;
         }
+    }
+
+    /// <summary>
+    /// Gehört der Benutzer am anderen Ende der Pipe zu den lokalen Administratoren? Zählt auch ohne erhöhte Rechte (UAC):
+    /// Dann steht die Administratoren-Gruppe im Token als "deny only". Die Tray-App öffnet die Pipe dafür mit Identification.
+    /// </summary>
+    private bool IsAdministrator(NamedPipeServerStream pipe)
+    {
+        if (!OperatingSystem.IsWindows()) return true;
+        var admin = false;
+        try
+        {
+            pipe.RunAsClient(() =>
+            {
+                using var identity = WindowsIdentity.GetCurrent(TokenAccessLevels.Query);
+                admin = IsAdministrator(identity);
+            });
+        }
+        catch (Exception ex) { logger.LogWarning("Benutzer der Tray-App nicht ermittelbar: {Message}", ex.Message); }
+        return admin;
+    }
+
+    [System.Runtime.Versioning.SupportedOSPlatform("windows")]
+    internal static bool IsAdministrator(WindowsIdentity identity)
+    {
+        const string admins = "S-1-5-32-544";
+        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)
+               || identity.Claims.Any(c => c.Type == System.Security.Claims.ClaimTypes.DenyOnlySid && c.Value == admins);
     }
 }

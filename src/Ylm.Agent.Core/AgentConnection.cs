@@ -26,6 +26,13 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
 
     public event Action<TrayStatus>? StatusChanged;
     public event Action<string, string, bool>? Notification;
+    /// <summary>Ein Update wird gleich installiert: die Tray-Apps sollen sich beenden, damit ihre Datei ersetzt werden kann.</summary>
+    public event Action? TrayExitRequested;
+
+    /// <summary>Liefert den Update-Stand für die Anmeldung am Server (Hello).</summary>
+    public Func<(bool? AutoUpdate, string? Error)>? UpdateReport { get; set; }
+    /// <summary>Wird aufgerufen, wenn der Server "Jetzt aktualisieren" auslöst.</summary>
+    public Func<CancellationToken, Task<string>>? UpdateRequested { get; set; }
 
     public AgentConnection(IKeyDevice device, AgentSettingsStore store, ILogger logger, string version, Func<HttpMessageHandler>? handlerFactory = null,
         Action<Microsoft.AspNetCore.Http.Connections.Client.HttpConnectionOptions>? configureHttp = null)
@@ -51,6 +58,20 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
     {
         _status = change(_status);
         StatusChanged?.Invoke(_status);
+    }
+
+    public void SetUpdateState(AgentUpdateState state) => Update(s => s with { Update = state });
+
+    public void RequestTrayExit() => TrayExitRequested?.Invoke();
+
+    /// <summary>Meldet den aktuellen Stand (z. B. geänderte Update-Einstellung) erneut an den Server.</summary>
+    public async Task ResendHelloAsync()
+    {
+        try
+        {
+            if (_hub is { State: HubConnectionState.Connected } hub) await HelloAsync(hub);
+        }
+        catch (Exception ex) { _logger.LogDebug(ex, "Hello failed"); }
     }
 
     public void Prompt(string text)
@@ -122,6 +143,8 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         });
         hub.On<ForcePinChangeRequest, OperationResult>(nameof(IAgentClient.ForcePinChange), async req =>
             await RunAsync("PIN-Wechsel erzwingen", () => _device.ForcePinChangeAsync(req.ExpectedSerialNumber, req.Pin)));
+        hub.On(nameof(IAgentClient.CheckForUpdate), async () =>
+            UpdateRequested is { } check ? await check(CancellationToken.None) : "Auto-Update ist auf diesem Agent nicht verfügbar.");
         hub.On<AgentProgress>(nameof(IAgentClient.ShowProgress), p =>
         {
             _logger.LogInformation("Server: {Title}{Prompt}", p.Title, p.Prompt is null ? "" : " – " + p.Prompt);
@@ -203,7 +226,9 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
 
     private async Task HelloAsync(HubConnection hub)
     {
-        await hub.InvokeAsync(AgentProtocol.ReportHelloMethod, new AgentHello(Environment.MachineName, _version, AgentProtocol.ProtocolVersion, Environment.UserName));
+        var update = UpdateReport?.Invoke();
+        await hub.InvokeAsync(AgentProtocol.ReportHelloMethod,
+            new AgentHello(Environment.MachineName, _version, AgentProtocol.ProtocolVersion, Environment.UserName, update?.AutoUpdate, update?.Error));
         await hub.InvokeAsync(AgentProtocol.ReportKeyStateMethod, await _device.ReadAsync());
     }
 
@@ -255,11 +280,10 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
                 return (false, err?.Message ?? $"Kopplung fehlgeschlagen ({(int)res.StatusCode}).");
             }
             var pairing = (await res.Content.ReadFromJsonAsync<PairingResponse>(ct))!;
-            _settings = _store.WithToken(new AgentSettings
+            _settings = _store.Change(old => _store.WithToken(old with
             {
                 ServerUrl = uri.GetLeftPart(UriPartial.Authority), AgentId = pairing.AgentId, PairedUser = pairing.UserDisplayName, InstanceName = pairing.InstanceName,
-            }, pairing.AgentToken);
-            _store.Save(_settings);
+            }, pairing.AgentToken));
             Update(s => s with { ServerUrl = _settings.ServerUrl, PairedUser = pairing.UserDisplayName, InstanceName = pairing.InstanceName });
             _logger.LogInformation("Gekoppelt mit {Url} ({Instance}) als {User}", serverUrl, pairing.InstanceName, pairing.UserDisplayName);
             _ = ConnectAsync(CancellationToken.None);
@@ -275,8 +299,8 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
     public async Task UnpairAsync()
     {
         if (_hub is not null) { await _hub.DisposeAsync(); _hub = null; }
-        _settings = new AgentSettings();
-        _store.Save(_settings);
+        // Die lokale Update-Einstellung gehört zum PC, nicht zur Kopplung.
+        _settings = _store.Change(old => new AgentSettings { AutoUpdate = old.AutoUpdate });
         Update(s => s with { Connection = BackendConnectionState.NotPaired, ServerUrl = null, PairedUser = null, InstanceName = null, LastError = null });
     }
 

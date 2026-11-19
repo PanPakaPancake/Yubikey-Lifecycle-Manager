@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router';
-import { api, fieldTypes, fmtDate, keyFromLabel, type CustomField, type GlobalField, type Tenant } from '../api';
+import { api, fieldTypes, fmtDate, keyFromLabel, type AgentUpdatePolicy, type CustomField, type GlobalField, type Tenant } from '../api';
 import { useAuth, useCan } from '../auth';
 import { Badge, Card, ErrorBox, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { FieldExplanation } from './TenantDetail';
@@ -243,8 +243,62 @@ export type UpdateInfo = {
   currentVersion: string; latestVersion?: string | null; updateAvailable: boolean; releaseUrl?: string | null; publishedAt?: string | null; notes?: string | null;
   error?: string | null; checkedAt: string;
   updater: { configured: boolean; status?: UpdaterStatus | null };
-  agent: { bundledVersion?: string | null; latestVersion?: string | null; agents: number; outdated: number };
+  agent: {
+    bundledVersion?: string | null; latestVersion?: string | null; agents: number; outdated: number; autoUpdateOff: number; failed: number;
+    policy: AgentUpdatePolicy; list: AgentRow[];
+  };
 };
+type AgentRow = {
+  id: string; machineName: string; agentVersion?: string | null; autoUpdate?: boolean | null; updateError?: string | null;
+  lastSeenAt?: string | null; owner?: string | null; online: boolean; outdated: boolean;
+};
+
+const policyLabels: Record<AgentUpdatePolicy, string> = {
+  AgentDecides: 'Automatisch, am PC abschaltbar (Standard)',
+  Always: 'Immer automatisch',
+  Never: 'Keine automatischen Updates',
+};
+
+function AgentUpdates({ agent, onChanged }: { agent: UpdateInfo['agent']; onChanged: () => void }) {
+  const { busy, error, run } = useAction();
+  const setPolicy = (policy: AgentUpdatePolicy) => run(async () => { await api.put('/api/platform/updates/agent-policy', { policy }); onChanged(); });
+  const parts = [
+    agent.outdated > 0 ? `${agent.outdated} von ${agent.agents} veraltet` : `alle ${agent.agents} aktuell`,
+    agent.autoUpdateOff > 0 && `${agent.autoUpdateOff} mit Auto-Update aus`,
+    agent.failed > 0 && `${agent.failed} mit Updatefehler`,
+  ].filter(Boolean).join(' · ');
+  return (
+    <>
+      <tr><th>Agent im Paket</th><td>{agent.bundledVersion
+        ? <><span className="mono">{agent.bundledVersion}</span> · {parts}</>
+        : <span className="muted">nicht enthalten (lokaler Build)</span>}</td></tr>
+      <tr><th>Agent-Updates</th><td>
+        <select value={agent.policy} disabled={busy} onChange={(e) => setPolicy(e.target.value as AgentUpdatePolicy)}>
+          {(Object.keys(policyLabels) as AgentUpdatePolicy[]).map((p) => <option key={p} value={p}>{policyLabels[p]}</option>)}
+        </select>
+        <div className="small muted">Agents fragen alle 4 Stunden nach einer neuen Version. „Jetzt aktualisieren“ im Tray oder unter „Agent“ geht immer.</div>
+        <ErrorBox error={error} />
+        {agent.list.length > 0 && (
+          <details><summary className="small muted">Alle Agents ({agent.list.length})</summary>
+            <table>
+              <thead><tr><th>PC</th><th>Benutzer</th><th>Version</th><th>Auto-Update</th><th>Zuletzt gesehen</th></tr></thead>
+              <tbody>{agent.list.map((a) => (
+                <tr key={a.id}>
+                  <td>{a.machineName} {a.online ? <Badge tone="ok">online</Badge> : <Badge>offline</Badge>}</td>
+                  <td>{a.owner ?? '–'}</td>
+                  <td><span className="mono">{a.agentVersion ?? '?'}</span> {a.outdated && <Badge tone="warn">veraltet</Badge>}</td>
+                  <td>{a.autoUpdate == null ? <span className="muted small">unbekannt (vor 0.5)</span> : a.autoUpdate ? 'an' : <Badge>aus</Badge>}
+                    {a.updateError && <div className="small" title={a.updateError}><Badge tone="error">Fehler</Badge> {a.updateError.length > 80 ? a.updateError.slice(0, 80) + ' …' : a.updateError}</div>}</td>
+                  <td className="small muted">{fmtDate(a.lastSeenAt ?? undefined)}</td>
+                </tr>))}
+              </tbody>
+            </table>
+          </details>
+        )}
+      </td></tr>
+    </>
+  );
+}
 
 function UpdatesCard() {
   const [refresh, setRefresh] = useState(0);
@@ -299,9 +353,7 @@ function UpdatesCard() {
                 {data.publishedAt && <span className="small muted"> vom {fmtDate(data.publishedAt, false)}</span>}
                 {data.releaseUrl && <> · <a href={data.releaseUrl} target="_blank" rel="noreferrer">Änderungen</a></>}</>
               : <span className="muted">{data.error ?? 'unbekannt'}</span>}</td></tr>
-            <tr><th>Agent im Paket</th><td>{data.agent.bundledVersion
-              ? <><span className="mono">{data.agent.bundledVersion}</span> · {data.agent.outdated > 0 ? `${data.agent.outdated} von ${data.agent.agents} Agents aktualisieren sich automatisch` : `alle ${data.agent.agents} Agents aktuell`}</>
-              : <span className="muted">nicht enthalten (lokaler Build)</span>}</td></tr>
+            <AgentUpdates agent={data.agent} onChanged={reload} />
             <tr><th>Update per Klick</th><td>{!data.updater.configured
               ? <span className="muted">nicht eingerichtet (<code>UPDATER_TOKEN</code> in <code>.env</code> fehlt)</span>
               : status && (status.state === 'unreachable' || status.state === 'error')
