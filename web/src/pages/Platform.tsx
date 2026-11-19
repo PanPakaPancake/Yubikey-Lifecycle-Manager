@@ -5,6 +5,7 @@ import { useAuth, useCan } from '../auth';
 import { Badge, Card, ErrorBox, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { FieldExplanation } from './TenantDetail';
 import { useConfirm } from '../feedback';
+import { BrandingCard } from './Branding';
 
 /** Platform level: settings that apply to the whole installation and are inherited by the tenants. */
 export default function PlatformPage() {
@@ -30,6 +31,7 @@ export default function PlatformPage() {
       </Card>
       {can('ManageSettings') && <UpdatesCard />}
       {can('ManageSettings') && <LoginSettingsCard />}
+      <BrandingCard editable={!!can('ManageSettings')} />
       <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
       {can('ManageApiKeys') && <ApiKeysCard />}
       {can('ManageApiKeys') && <Info>Webhooks und Mail-Berichte stehen unter <Link to="/partner/integrations">Integrationen</Link>.</Info>}

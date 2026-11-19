@@ -521,3 +521,23 @@ public sealed class ReportSchedule
     public bool? LastSucceeded { get; set; }
     public string? LastError { get; set; }
 }
+
+/// <summary>
+/// Erscheinungsbild der erzeugten Dokumente (PIN-Briefe, Berichte, Exporte).
+/// TenantId null = Vorgabe des Partners für alle Kunden; ein Eintrag pro Tenant überschreibt einzelne Felder (null = vom Partner übernehmen).
+/// </summary>
+public sealed class Branding
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? TenantId { get; set; }
+    public string? CompanyName { get; set; }
+    /// <summary>Akzentfarbe als #rrggbb.</summary>
+    public string? AccentColor { get; set; }
+    /// <summary>Logo als PNG oder JPEG.</summary>
+    public byte[]? Logo { get; set; }
+    public string? LogoContentType { get; set; }
+    /// <summary>Kontakt für Rückfragen, z. B. „IT-Service · 0123 456 · it@firma.de“.</summary>
+    public string? Contact { get; set; }
+    public string? Footer { get; set; }
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}

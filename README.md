@@ -64,6 +64,8 @@ Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images
 
 **Wer hat welchen Key**: Übersicht pro Tenant oder über alle Tenants, nach Person oder nach Key, mit Verwahrern geteilter Keys und Auffälligkeiten; Export als Excel, CSV und PDF; in der Lese-API unter `GET /api/v1/assignments`.
 
+**Whitelabeling**: PIN-Briefe, Berichte und PDF-Exporte mit eigenem Firmennamen, Logo, Farbe, Kontakt und Fußzeile; Vorgabe in den globalen Einstellungen, pro Tenant einzeln überschreibbar.
+
 Automatisch getestet sind die Fachlogik und der komplette Ablauf im Backend mit simuliertem YubiKey und simuliertem Microsoft Graph.
 
 **Noch nicht getestet:**

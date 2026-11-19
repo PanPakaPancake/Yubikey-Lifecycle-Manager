@@ -36,6 +36,7 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
     public DbSet<IntegrationState> IntegrationState => Set<IntegrationState>();
     public DbSet<SmtpSettings> Smtp => Set<SmtpSettings>();
     public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
+    public DbSet<Branding> Brandings => Set<Branding>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -223,6 +224,13 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
         });
 
         b.Entity<ReportSchedule>(e => e.ToTable("report_schedules"));
+
+        b.Entity<Branding>(e =>
+        {
+            e.ToTable("brandings");
+            e.HasIndex(x => x.TenantId).IsUnique().AreNullsDistinct(false);
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
     }
 
     private static ValueConverter<T, string> JsonConverter<T>() where T : new() => new(

@@ -30,11 +30,14 @@ public static class ReportPdf
             page.Width = XUnit.FromMillimeter(210);
             page.Height = XUnit.FromMillimeter(297);
             g = XGraphics.FromPdfPage(page);
+            DrawBrandFooter(g, m, page.Height.Point - 20, w);
             y = 44;
         }
 
         g.DrawRectangle(new XSolidBrush(Accent), 0, 0, page.Width.Point, 6);
-        Text(g, organizationName, F(9.5, true), Muted, m, 26, w, 14);
+        DrawLogo(g, m + w, 20, 140, 40);
+        DrawBrandFooter(g, m, page.Height.Point - 20, w);
+        Text(g, organizationName, F(9.5, true), Muted, m, 26, w - 150, 14);
         Text(g, "YubiKey-Bericht", F(20, true), Ink, m, 40, w, 26);
         Text(g, $"{scope} · Stand {d.GeneratedAt.ToLocalTime():dd.MM.yyyy HH:mm}", F(9.5), Muted, m, 68, w, 14);
         y = 96;

@@ -52,7 +52,7 @@ public static class ReportingEndpoints
         });
 
         g.MapGet("/exports/assignments.{format}", async (string format, Guid? tenantId, string? q, string? usage, bool? issues, CurrentUser cu, AssignmentService assignments,
-            SetupService setup, AuditService audit, Data.YlmDbContext db) =>
+            SetupService setup, BrandingService branding, AuditService audit, Data.YlmDbContext db) =>
         {
             format = format.ToLowerInvariant();
             if (format is not ("csv" or "xlsx" or "pdf")) return Results.NotFound();
@@ -66,7 +66,9 @@ public static class ReportingEndpoints
             {
                 var settings = await setup.GetSettingsAsync();
                 var scope = tenantId is { } t ? (await db.Tenants.FindAsync(t))?.DisplayName ?? "Tenant" : "Alle Tenants";
-                return Results.File(Pdf.AssignmentPdf.Create(settings.OrganizationName, scope, o, includeTenant), "application/pdf", name + ".pdf");
+                var brand = await branding.ResolveAsync(tenantId);
+                using var _ = Pdf.Theme.Use(brand);
+                return Results.File(Pdf.AssignmentPdf.Create(brand.CompanyName ?? settings.OrganizationName, scope, o, includeTenant), "application/pdf", name + ".pdf");
             }
             var (header, rows) = AssignmentService.Table(o, includeTenant);
             return format == "csv"
@@ -74,14 +76,16 @@ public static class ReportingEndpoints
                 : Results.File(Xlsx.Write("Key-Zuweisungen", header, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
         });
 
-        g.MapGet("/exports/dashboard.pdf", async (Guid? tenantId, CurrentUser cu, DashboardService dash, SetupService setup, AuditService audit, Data.YlmDbContext db) =>
+        g.MapGet("/exports/dashboard.pdf", async (Guid? tenantId, CurrentUser cu, DashboardService dash, SetupService setup, BrandingService branding, AuditService audit, Data.YlmDbContext db) =>
         {
             var user = await cu.RequireAsync(Permission.ReadReports);
             var ids = await ScopeAsync(cu, tenantId);
             var d = await dash.BuildAsync(ids);
             var settings = await setup.GetSettingsAsync();
             var scope = tenantId is { } t ? (await db.Tenants.FindAsync(t))?.DisplayName ?? "Tenant" : "Alle Tenants";
-            var pdf = ReportPdf.Create(settings.OrganizationName, scope, d);
+            var brand = await branding.ResolveAsync(tenantId);
+            byte[] pdf;
+            using (Theme.Use(brand)) pdf = ReportPdf.Create(brand.CompanyName ?? settings.OrganizationName, scope, d);
             await audit.WriteAsync(AuditService.User(user), AuditActions.ExportCreated, tenantId, details: new { kind = "dashboard.pdf" });
             return Results.File(pdf, "application/pdf", $"yubikey-bericht-{DateTime.Today:yyyy-MM-dd}.pdf");
         });

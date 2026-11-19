@@ -37,6 +37,7 @@ public static class AssignmentPdf
             var w = page.Width.Point - 2 * Margin;
             g.DrawRectangle(new XSolidBrush(Accent), 0, 0, page.Width.Point, 5);
             Text(g, string.Join(" · ", new[] { organizationName, "Key-Zuweisungen", scope }.Where(x => !string.IsNullOrWhiteSpace(x))), F(7.5), Muted, Margin, page.Height.Point - 24, w - 60, 10);
+            DrawBrandFooter(g, Margin, page.Height.Point - 26, w - 60);
             g.DrawString($"Seite {pageNo}", F(7.5), new XSolidBrush(Muted), new XRect(Margin, page.Height.Point - 24, w, 10), XStringFormats.TopRight);
             y = 30;
         }
@@ -70,7 +71,8 @@ public static class AssignmentPdf
 
         NewPage();
         var width = page.Width.Point - 2 * Margin;
-        Text(g, organizationName, F(9, true), Muted, Margin, 22, width, 12);
+        DrawLogo(g, Margin + width, 14, 140, 36);
+        Text(g, organizationName, F(9, true), Muted, Margin, 22, width - 150, 12);
         Text(g, "Wer hat welchen Key?", F(19, true), Ink, Margin, 35, width, 24);
         Text(g, $"{scope} · Stand {o.GeneratedAt.ToLocalTime():dd.MM.yyyy HH:mm}", F(9), Muted, Margin, 61, width, 12);
         y = 84;

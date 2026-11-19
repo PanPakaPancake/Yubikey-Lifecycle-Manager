@@ -87,6 +87,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Ylm.Server.Integra
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<AssignmentService>();
+builder.Services.AddScoped<Ylm.Server.Setup.BrandingService>();
 builder.Services.AddHostedService<BackgroundJobs>();
 
 builder.Services.AddSingleton<IConfigureOptions<OpenIdConnectOptions>, EntraOidcOptionsSetup>();
@@ -196,6 +197,7 @@ app.MapApprovals();
 app.MapTodos();
 Ylm.Server.Integrations.IntegrationEndpoints.MapIntegrations(app);
 app.MapReporting();
+Ylm.Server.Setup.BrandingEndpoints.MapBranding(app);
 app.MapAudit();
 app.MapPublicApi();
 app.MapApiKeyManagement();

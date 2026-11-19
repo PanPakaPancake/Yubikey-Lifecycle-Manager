@@ -336,8 +336,10 @@ public sealed class SharedKeyService(
             if (newPin)
             {
                 var settings = await db.Installation.AsNoTracking().FirstAsync(ct);
+                var brand = await new Setup.BrandingService(db).ResolveAsync(tenant.Id, ct);
+                using var brandScope = Theme.Use(brand);
                 var pdf = PinLetterPdf.Create(new PinLetterData(
-                    settings.OrganizationName, tenant.DisplayName, req.Custodian!, req.Usage == KeyUsage.Breakglass ? "Breakglass-Key" : "Geteilter Key", pin,
+                    brand.CompanyName ?? settings.OrganizationName, tenant.DisplayName, req.Custodian!, req.Usage == KeyUsage.Breakglass ? "Breakglass-Key" : "Geteilter Key", pin,
                     key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now, users.Select(u => u.UserPrincipalName).ToList()));
                 job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief geteilter Key {key.SerialNumber}.pdf");
             }

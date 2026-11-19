@@ -4,6 +4,7 @@ import { api, fieldTypes, fmtDate, keyFromLabel, type CustomField, type GroupRef
 import { useCan } from '../auth';
 import { Badge, Card, download, ErrorBox, Field, GroupChips, GroupSearch, Info, Modal, OriginBadge, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { useToast } from '../feedback';
+import { BrandingCard } from './Branding';
 
 const statusText = { Ok: 'In Ordnung', Warning: 'Hinweis', Failed: 'Fehlt' } as const;
 
@@ -89,6 +90,7 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
 
       {active && <GroupProfilesCard tenantId={t.id} editable={can('ManageProfiles')} />}
       {active && <FieldsCard tenantId={t.id} editable={can('ManageProfiles')} />}
+      {active && <BrandingCard tenantId={t.id} editable={!!can('ManageTenants')} />}
       {active && can('ManageApiKeys') && (
         <Card title="API-Schlüssel" className="mt">
           <p className="muted small" style={{ margin: 0 }}>API-Schlüssel werden jetzt plattformweit verwaltet und gelten für alle Tenants oder nur für ausgewählte. <Link to="/platform#api">Zur API-Verwaltung</Link></p>
