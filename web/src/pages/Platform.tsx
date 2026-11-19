@@ -294,6 +294,11 @@ function UpdatesCard() {
             <tr><th>Agent im Paket</th><td>{data.agent.bundledVersion
               ? <><span className="mono">{data.agent.bundledVersion}</span> · {data.agent.outdated > 0 ? `${data.agent.outdated} von ${data.agent.agents} Agents aktualisieren sich automatisch` : `alle ${data.agent.agents} Agents aktuell`}</>
               : <span className="muted">nicht enthalten (lokaler Build)</span>}</td></tr>
+            <tr><th>Update per Klick</th><td>{!data.updater.configured
+              ? <span className="muted">nicht eingerichtet (<code>UPDATER_TOKEN</code> in <code>.env</code> fehlt)</span>
+              : status && (status.state === 'unreachable' || status.state === 'error')
+                ? <Badge tone="warn">Updater nicht erreichbar</Badge>
+                : <><Badge tone="ok">bereit</Badge>{!data.updateAvailable && <span className="small muted"> · der Knopf erscheint, sobald eine neue Version verfügbar ist</span>}</>}</td></tr>
             <tr><th>Geprüft</th><td className="small muted">{fmtDate(data.checkedAt)}</td></tr>
           </tbody>
         </table>
