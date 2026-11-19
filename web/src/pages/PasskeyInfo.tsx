@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { Icon, type IconName } from '../icons';
 import { ThemeToggle } from '../theme';
 import '../passkey.css';
 
-// Öffentliche Infoseiten für Endnutzer: „Passkey verstehen“ (/passkey) und „So geht's“ (/passkey/anleitung).
+// Öffentliche Passkey-Infoseite (/passkey) mit zwei Ansichten: Endbenutzer (Standard, mit Anleitung) und Techniker (?ansicht=techniker).
 // Ohne Anmeldung erreichbar, damit der PIN-Brief darauf verlinken kann. ?t=<Tenant-Id> wählt das Erscheinungsbild des Tenants.
 
 interface PublicBrand { companyName?: string | null; accentColor?: string | null; contact?: string | null; hasLogo: boolean }
@@ -19,9 +19,8 @@ function useBrand(tenant: string | null) {
 }
 
 /** Abschnitte blenden beim Scrollen weich ein. */
-function useReveal() {
+function useReveal(key: string) {
   const ref = useRef<HTMLDivElement>(null);
-  const { pathname } = useLocation();
   useEffect(() => {
     const root = ref.current;
     if (!root) return;
@@ -32,7 +31,7 @@ function useReveal() {
     }, { rootMargin: '0px 0px -8% 0px' });
     items.forEach((el) => io.observe(el));
     return () => io.disconnect();
-  }, [pathname]);
+  }, [key]);
   return ref;
 }
 
@@ -59,19 +58,33 @@ function useStepper(count: number, ms: number) {
   return { ref, step, playing, setPlaying, go };
 }
 
+type View = 'endbenutzer' | 'techniker';
+
 export default function PasskeyInfoPage({ authenticated }: { authenticated: boolean }) {
   const { pathname, search } = useLocation();
-  const tenant = new URLSearchParams(search).get('t');
+  const navigate = useNavigate();
+  // Früher zwei Seiten: /passkey/anleitung landet jetzt in der Endbenutzer-Ansicht.
+  useEffect(() => { if (pathname !== '/passkey') navigate('/passkey' + search, { replace: true }); }, [pathname, search, navigate]);
+  const params = new URLSearchParams(search);
+  const tenant = params.get('t');
+  const view: View = params.get('ansicht') === 'techniker' ? 'techniker' : 'endbenutzer';
   const brand = useBrand(tenant);
-  const guide = pathname.startsWith('/passkey/anleitung');
-  const ref = useReveal();
-  const keep = tenant ? '?t=' + encodeURIComponent(tenant) : '';
+  const ref = useReveal(view);
+  const tech = view === 'techniker';
+
+  const switchTo = (v: View) => {
+    const q = new URLSearchParams(search);
+    if (v === 'techniker') q.set('ansicht', 'techniker'); else q.delete('ansicht');
+    const s = q.toString();
+    navigate('/passkey' + (s ? '?' + s : ''), { replace: true });
+  };
 
   useEffect(() => {
-    document.title = (guide ? "So geht's mit dem YubiKey" : 'Passkey verstehen') + (brand?.companyName ? ' · ' + brand.companyName : '');
-    window.scrollTo(0, 0);
-  }, [guide, brand?.companyName]);
+    document.title = (tech ? 'Passkeys für Techniker' : 'Was ist ein Passkey?') + (brand?.companyName ? ' · ' + brand.companyName : '');
+  }, [tech, brand?.companyName]);
+  useEffect(() => { window.scrollTo(0, 0); }, [view]);
 
+  const keep = tenant ? '?t=' + encodeURIComponent(tenant) : '';
   const style = brand?.accentColor && /^#[0-9a-f]{6}$/i.test(brand.accentColor) ? ({ '--pk-brand': brand.accentColor } as React.CSSProperties) : undefined;
 
   return (
@@ -84,18 +97,18 @@ export default function PasskeyInfoPage({ authenticated }: { authenticated: bool
               : <KeyArt size={34} />}
             <span>{brand?.companyName || 'YubiKey & Passkey'}</span>
           </div>
-          <nav className="pk-tabs" aria-label="Infoseiten">
-            <Link to={'/passkey' + keep} className={guide ? '' : 'active'}>Passkey verstehen</Link>
-            <Link to={'/passkey/anleitung' + keep} className={guide ? 'active' : ''}>So geht's</Link>
-          </nav>
+          <div className="pk-tabs" role="tablist" aria-label="Ansicht">
+            <button type="button" role="tab" aria-selected={!tech} className={tech ? '' : 'active'} onClick={() => switchTo('endbenutzer')}><Icon name="user" size={15} />Endbenutzer</button>
+            <button type="button" role="tab" aria-selected={tech} className={tech ? 'active' : ''} onClick={() => switchTo('techniker')}><Icon name="settings" size={15} />Techniker</button>
+          </div>
           <div className="pk-top-actions">
             <ThemeToggle />
             {authenticated && <Link className="btn small" to="/">Zur Plattform</Link>}
           </div>
         </div>
       </header>
-      <main className="pk-main" key={pathname}>
-        {guide ? <Guide brand={brand} keep={keep} /> : <Knowledge keep={keep} />}
+      <main className="pk-main" key={view}>
+        {tech ? <Technical onSwitch={() => switchTo('endbenutzer')} /> : <EndUser brand={brand} onSwitch={() => switchTo('techniker')} />}
       </main>
       <footer className="pk-foot">
         {brand?.contact && <p>Fragen zu Ihrem YubiKey? Ihre IT hilft weiter: <strong>{brand.contact}</strong></p>}
@@ -104,6 +117,7 @@ export default function PasskeyInfoPage({ authenticated }: { authenticated: bool
     </div>
   );
 }
+
 
 /* ---------- Bausteine ---------- */
 
@@ -195,8 +209,10 @@ const flowSteps = [
   { title: 'Geprüft', text: 'Microsoft prüft die Unterschrift mit dem öffentlichen Prüfschlüssel. Passt sie, sind Sie angemeldet.', token: '' },
 ];
 
-function LoginFlow() {
-  const { ref, step, playing, setPlaying, go } = useStepper(flowSteps.length, 2800);
+type FlowStep = { title: string; text: string; token: string };
+
+function LoginFlow({ steps, tech = false }: { steps: FlowStep[]; tech?: boolean }) {
+  const { ref, step, playing, setPlaying, go } = useStepper(steps.length, tech ? 4200 : 2800);
   // Position des „Umschlags“: 0 = YubiKey, 50 = Laptop, 100 = Microsoft.
   const pos = [55, 8, 8, 92, 92][step];
   const from = [8, 92, 8, 8, 92][step];
@@ -206,7 +222,7 @@ function LoginFlow() {
         <div className="pk-actor key">
           <div className={'pk-actor-art' + (step === 2 ? ' active' : '')}><KeyArt size={96} glow={step === 2} /></div>
           <span>Ihr YubiKey</span>
-          <small>geheimer Schlüssel</small>
+          <small>{tech ? 'privater Schlüssel, Secure Element' : 'geheimer Schlüssel'}</small>
         </div>
         <div className="pk-actor laptop">
           <Laptop>
@@ -215,23 +231,23 @@ function LoginFlow() {
             {step === 3 && <div className="pk-mini-login"><b>Bitte warten …</b><span className="pk-spin" /></div>}
             {step === 4 && <div className="pk-mini-login ok"><span className="pk-check"><Icon name="check" size={26} /></span><b>Angemeldet</b></div>}
           </Laptop>
-          <span>Ihr Browser</span>
+          <span>{tech ? 'Browser (WebAuthn)' : 'Ihr Browser'}</span>
           <small>login.microsoft.com</small>
         </div>
         <div className="pk-actor cloud">
           <div className={'pk-actor-art' + (step === 4 ? ' active' : '')}><Cloud /></div>
           <span>Microsoft Entra ID</span>
-          <small>öffentlicher Prüfschlüssel</small>
+          <small>{tech ? 'Relying Party, Public Key' : 'öffentlicher Prüfschlüssel'}</small>
         </div>
         <div className="pk-track" aria-hidden><div className="pk-track-line" /></div>
-        {flowSteps[step].token && (
+        {steps[step].token && (
           <div key={step} className="pk-token" style={{ ['--from' as string]: from + '%', ['--to' as string]: pos + '%' }}>
-            {flowSteps[step].token}
+            {steps[step].token}
           </div>
         )}
       </div>
       <ol className="pk-flow-steps">
-        {flowSteps.map((s, i) => (
+        {steps.map((s, i) => (
           <li key={s.title} className={i === step ? 'active' : i < step ? 'done' : ''}>
             <button type="button" onClick={() => go(i)} aria-current={i === step}>
               <span className="pk-num">{i < step ? <Icon name="check" size={13} /> : i + 1}</span>{s.title}
@@ -239,7 +255,7 @@ function LoginFlow() {
           </li>
         ))}
       </ol>
-      <div className="pk-flow-caption" aria-live="polite" key={'c' + step}>{flowSteps[step].text}</div>
+      <div className="pk-flow-caption" aria-live="polite" key={'c' + step}>{steps[step].text}</div>
       <button type="button" className="ghost small pk-play" onClick={() => setPlaying(!playing)}>
         {playing ? '❚❚ Anhalten' : '▶ Abspielen'}
       </button>
@@ -302,29 +318,45 @@ function KeyPair() {
   );
 }
 
-/* ---------- Seite 1: Passkey verstehen ---------- */
+/* ---------- Ansicht Endbenutzer ---------- */
 
-function Knowledge({ keep }: { keep: string }) {
+function EndUser({ brand, onSwitch }: { brand: PublicBrand | null; onSwitch: () => void }) {
   const toc = [
-    { id: 'problem', label: 'Das Problem mit Passwörtern', icon: 'alert' as const },
-    { id: 'prinzip', label: 'So funktioniert ein Passkey', icon: 'key' as const },
-    { id: 'phishing', label: 'Gefälschte Seiten gehen leer aus', icon: 'shield' as const },
-    { id: 'hack', label: 'Was bei einem Hack passiert', icon: 'box' as const },
-    { id: 'pin', label: 'PIN und Berührung', icon: 'user' as const },
-    { id: 'vergleich', label: 'Passwort und Passkey im Vergleich', icon: 'list' as const },
-    { id: 'standard', label: 'Wer steckt dahinter?', icon: 'globe' as const },
-    { id: 'grenzen', label: 'Ehrlich gesagt: die Nachteile', icon: 'info' as const },
+    { id: 'was', label: 'Was ist ein Passkey?', icon: 'info' as const },
+    { id: 'ablauf', label: 'So läuft die Anmeldung ab', icon: 'monitor' as const },
+    { id: 'sicher', label: 'Warum das sicherer ist', icon: 'shield' as const },
+    { id: 'key', label: 'Ihr YubiKey', icon: 'key' as const },
+    { id: 'anmelden', label: 'Am PC anmelden', icon: 'monitor' as const },
+    { id: 'erste', label: 'Erste Anmeldung und neue PIN', icon: 'user' as const },
+    { id: 'handy', label: 'Am Handy anmelden', icon: 'share' as const },
+    { id: 'pin', label: 'PIN selbst ändern', icon: 'settings' as const },
+    { id: 'regeln', label: 'Sicher aufbewahren', icon: 'shield' as const },
+    { id: 'hilfe', label: 'Es klappt nicht', icon: 'alert' as const },
   ];
   return (
     <>
       <Hero eyebrow="Einfach erklärt" title="Was ist ein Passkey?" art={<div className="pk-float"><KeyArt size={220} glow /></div>}>
         Ein Passkey ersetzt das Passwort. Statt etwas einzutippen, das man sich merken muss und das gestohlen werden kann,
         bestätigen Sie die Anmeldung mit Ihrem YubiKey: einstecken, PIN eingeben, goldene Fläche berühren.
-        Hier erfahren Sie, warum das so viel sicherer ist.
       </Hero>
       <Toc items={toc} />
 
-      <Section id="problem" n={1} title="Das Problem mit Passwörtern">
+      <Section id="was" n={1} title="Was ist ein Passkey?">
+        <p>
+          Stellen Sie sich ein Siegel vor: Nur Sie besitzen den Siegelstempel, aber jeder kann am Abdruck erkennen, dass er echt ist.
+          Ein Passkey besteht genau so aus zwei zusammengehörenden Teilen.
+        </p>
+        <KeyPair />
+        <Note title="Kurz gesagt">Der geheime Teil steckt fest in Ihrem YubiKey und funktioniert nur zusammen mit Ihrer PIN und nur auf der echten Microsoft-Anmeldeseite.</Note>
+      </Section>
+
+      <Section id="ablauf" n={2} title="So läuft die Anmeldung ab">
+        <p>Die Animation zeigt, was bei jeder Anmeldung passiert. Sie können auch auf einen Schritt klicken.</p>
+        <LoginFlow steps={flowSteps} />
+        <Note title="Gut zu wissen">Die Aufgabe ist bei jeder Anmeldung neu. Eine abgefangene Unterschrift nützt deshalb niemandem.</Note>
+      </Section>
+
+      <Section id="sicher" n={3} title="Warum das sicherer ist als ein Passwort">
         <p>Ein Passwort ist ein Geheimnis, das Sie bei jeder Anmeldung herausgeben. Genau das macht es angreifbar.</p>
         <div className="pk-cards four">
           <Card icon="alert" title="Phishing">Eine gefälschte Seite sieht aus wie die echte. Wer dort sein Passwort eintippt, hat es verschenkt.</Card>
@@ -333,108 +365,298 @@ function Knowledge({ keep }: { keep: string }) {
           <Card icon="key" title="Zu einfach">Gute Passwörter sind lang und zufällig. Merken kann sie sich kaum jemand.</Card>
         </div>
         <Note kind="ok" title="Mit Passkey">Es gibt nichts mehr, das Sie eintippen, merken oder verraten könnten. Ihr YubiKey beweist, dass Sie es sind, ohne ein Geheimnis herauszugeben.</Note>
-      </Section>
-
-      <Section id="prinzip" n={2} title="So funktioniert ein Passkey">
-        <p>
-          Stellen Sie sich ein Siegel vor: Nur Sie besitzen den Siegelstempel, aber jeder kann am Abdruck erkennen, dass er echt ist.
-          Ein Passkey besteht genau so aus zwei zusammengehörenden Teilen, einem <strong>Schlüsselpaar</strong>.
-        </p>
-        <KeyPair />
-        <p>Bei jeder Anmeldung passiert dann Folgendes. Die Animation zeigt es Schritt für Schritt, Sie können auch auf einen Schritt klicken.</p>
-        <LoginFlow />
-        <Note title="Gut zu wissen">Die Aufgabe ist bei jeder Anmeldung neu. Eine abgefangene Unterschrift nützt deshalb niemandem, sie passt nur ein einziges Mal.</Note>
-      </Section>
-
-      <Section id="phishing" n={3} title="Warum gefälschte Seiten leer ausgehen">
-        <p>
-          Jeder Passkey ist fest an die Adresse gebunden, für die er erstellt wurde, bei Ihnen <code>login.microsoft.com</code>.
-          Der Browser teilt dem YubiKey bei jeder Anfrage mit, auf welcher Seite Sie gerade sind. Stimmt die Adresse nicht, bleibt der Key stumm.
-        </p>
+        <h3>Gefälschte Seiten gehen leer aus</h3>
+        <p>Ihr Passkey gehört fest zur Adresse <code>login.microsoft.com</code>. Auf einer gefälschten Seite bleibt der YubiKey einfach stumm.</p>
         <PhishingDemo />
       </Section>
 
-      <Section id="hack" n={4} title="Was bei einem Hack passiert">
+      <Section id="key" n={4} title="Ihr YubiKey">
+        <div className="pk-anatomy">
+          <div className="pk-anatomy-art"><KeyArt size={260} /></div>
+          <ul>
+            <li><span className="pk-dot gold" /><span><strong>Goldene Fläche:</strong> zum Berühren. Sie blinkt, wenn der Key auf Sie wartet.</span></li>
+            <li><span className="pk-dot metal" /><span><strong>Stecker:</strong> USB-A oder USB-C, je nach Modell. Passt nicht? Ein Adapter hilft.</span></li>
+            <li><span className="pk-dot ring" /><span><strong>Öse:</strong> für den Schlüsselbund. Dort ist der Key am besten aufgehoben.</span></li>
+            <li><span className="pk-dot nfc" /><span><strong>NFC</strong> (Modelle mit „NFC“ im Namen): auch kontaktlos am Handy nutzbar.</span></li>
+          </ul>
+        </div>
+      </Section>
+
+      <Section id="anmelden" n={5} title="Am PC anmelden">
+        <div className="pk-steps">
+          <Step n={3} title="Key einstecken" art={<PlugArt />}>Stecken Sie den YubiKey in einen freien USB-Anschluss. Es passiert noch nichts, das ist richtig so.</Step>
+          <Step n={4} title="Anmeldeoption wählen" art={<OptionsArt />}>
+            Geben Sie bei der Microsoft-Anmeldung Ihre E-Mail-Adresse ein. Falls nach einem Passwort gefragt wird, wählen Sie
+            „Andere Anmeldemöglichkeiten“ und dann „Gesicht, Fingerabdruck, PIN oder Sicherheitsschlüssel“.
+          </Step>
+          <Step n={5} title="PIN eingeben" art={<PinArt />}>Windows oder der Browser fragt nach der PIN des Sicherheitsschlüssels. Geben Sie Ihre PIN ein und bestätigen Sie.</Step>
+          <Step n={6} title="Goldene Fläche berühren" art={<TouchArt />}>Sobald der Key blinkt, berühren Sie kurz die goldene Fläche. Fertig, Sie sind angemeldet.</Step>
+        </div>
+        <Note kind="ok" title="Beim nächsten Mal">Microsoft merkt sich, dass Sie einen Sicherheitsschlüssel nutzen, und bietet ihn direkt an.</Note>
+      </Section>
+
+      <Section id="erste" n={6} title="Erste Anmeldung und neue PIN">
+        <p>Ihre erste PIN steht im PIN-Brief, den Sie mit dem Key erhalten haben.</p>
+        <ol className="pk-list numbered">
+          <li>Melden Sie sich wie oben beschrieben an und geben Sie die PIN aus dem Brief ein.</li>
+          <li>Steht im Brief, dass ein PIN-Wechsel nötig ist, fordert Windows Sie direkt auf, eine <strong>neue PIN</strong> zu wählen. Wie lang sie mindestens sein muss, zeigt Windows an.</li>
+          <li>Geben Sie die neue PIN zweimal ein und berühren Sie den Key, wenn er blinkt.</li>
+          <li>Vernichten Sie danach den PIN-Brief. Ihre neue PIN kennen nur Sie.</li>
+        </ol>
+        <Note kind="warn" title="Die IT fragt nie nach Ihrer PIN">Niemand braucht Ihre PIN, auch nicht die IT. Wer danach fragt, will Sie täuschen.</Note>
+      </Section>
+
+      <Section id="handy" n={7} title="Am Handy anmelden">
         <div className="pk-split">
           <div>
-            <p>
-              Bei Microsoft liegt nur der öffentliche Prüfschlüssel. Mit ihm kann man Unterschriften prüfen, aber keine erstellen.
-              Selbst wenn Angreifer diese Daten erbeuten, können sie sich damit nirgends anmelden.
-            </p>
-            <p>Es gibt also keine Passwortliste, die gestohlen und ausprobiert werden könnte.</p>
+            <p>In Apps wie Outlook oder Teams auf dem Handy funktioniert der YubiKey ebenfalls.</p>
+            <ul className="pk-list">
+              <li><strong>Mit NFC:</strong> Wählen Sie „Sicherheitsschlüssel“, geben Sie die PIN ein und halten Sie den Key an die Rückseite des Handys, bis die Anmeldung durch ist.</li>
+              <li><strong>Mit USB-C:</strong> Key einstecken, PIN eingeben, goldene Fläche berühren, genau wie am PC.</li>
+            </ul>
+            <p className="muted small">Wo die NFC-Stelle liegt, hängt vom Handy ab. Meist ist sie oben in der Mitte der Rückseite.</p>
           </div>
-          <div className="pk-vault pk-reveal" aria-hidden>
-            <div className="pk-vault-row"><Icon name="shield" size={18} /><span>Prüfschlüssel</span><em>nutzlos für Angreifer</em></div>
-            <div className="pk-vault-row"><Icon name="shield" size={18} /><span>Prüfschlüssel</span><em>nutzlos für Angreifer</em></div>
-            <div className="pk-vault-row strike"><Icon name="key" size={18} /><span>Passwörter</span><em>gibt es nicht</em></div>
+          <PhoneArt />
+        </div>
+      </Section>
+
+      <Section id="pin" n={8} title="PIN selbst ändern">
+        <p>Sie können Ihre PIN jederzeit ändern, zum Beispiel wenn jemand zugesehen hat.</p>
+        <div className="pk-path">
+          {['Einstellungen', 'Konten', 'Anmeldeoptionen', 'Sicherheitsschlüssel', 'Verwalten', 'Sicherheitsschlüssel-PIN „Ändern“'].map((s, i) => (
+            <span key={s} style={{ animationDelay: i * 90 + 'ms' }}>{s}</span>
+          ))}
+        </div>
+        <p className="muted small">Windows fragt nach der alten PIN, zweimal nach der neuen und bittet Sie, den Key zu berühren.</p>
+      </Section>
+
+      <Section id="regeln" n={9} title="Sicher aufbewahren">
+        <div className="pk-cards two">
+          <div className="pk-card good">
+            <strong><Icon name="check" size={16} /> So ist es gut</strong>
+            <ul><li>Am Schlüsselbund, den Sie ohnehin dabeihaben</li><li>PIN nur im Kopf</li><li>Verlust sofort der IT melden</li></ul>
+          </div>
+          <div className="pk-card bad">
+            <strong><Icon name="x" size={16} /> Lieber nicht</strong>
+            <ul><li>PIN auf einen Zettel am Key schreiben</li><li>Key dauerhaft im Firmen-PC stecken lassen</li><li>Key an Kollegen verleihen</li></ul>
           </div>
         </div>
       </Section>
 
-      <Section id="pin" n={5} title="PIN und Berührung: zwei Beweise in einem">
-        <div className="pk-cards">
-          <Card icon="user" title="Die PIN beweist: Sie sind es">
-            Die PIN wird nur vom YubiKey selbst geprüft und verlässt ihn nie. Sie ist kein Passwort, denn ohne den Key ist sie wertlos.
-            Nach 8 falschen Versuchen sperrt sich der Key.
-          </Card>
-          <Card icon="check" title="Die Berührung beweist: Sie sind da">
-            Die goldene Fläche reagiert nur auf einen echten Finger. Ein Angreifer aus der Ferne kann den Key also nicht heimlich benutzen.
-          </Card>
-          <Card icon="key" title="Der Key beweist: dieses Gerät">
-            Der geheime Schlüssel ist im Chip eingeschlossen. Man kann ihn nicht kopieren, auch nicht mit Zugriff auf Ihren PC.
-          </Card>
+      <Section id="hilfe" n={10} title="Es klappt nicht">
+        <div className="pk-faq">
+          {[
+            ['Der Key blinkt nicht.', 'Ziehen Sie den Key ab und stecken Sie ihn erneut ein, gern in einen anderen Anschluss. Bei USB-Hubs und Dockingstationen hilft oft ein Anschluss direkt am Gerät.'],
+            ['Es wird nur nach einem Passwort gefragt.', 'Klicken Sie auf „Andere Anmeldemöglichkeiten“ bzw. „Anmeldeoptionen“ und wählen Sie „Gesicht, Fingerabdruck, PIN oder Sicherheitsschlüssel“.'],
+            ['Windows bietet Windows Hello statt des Keys an.', 'Wählen Sie im Fenster „Weitere Optionen“ und dann „Sicherheitsschlüssel“.'],
+            ['Die PIN wird nicht angenommen.', 'Achten Sie auf Groß- und Kleinschreibung, falls Ihre PIN Buchstaben enthält. Nach 8 Fehlversuchen sperrt sich der Key, dann hilft nur die IT.'],
+            ['Das Fenster ist einfach verschwunden.', 'Für die Berührung bleiben etwa 30 Sekunden. Starten Sie die Anmeldung einfach noch einmal.'],
+            ['Ich habe meinen Key verloren.', 'Melden Sie es sofort der IT. Der Key wird gesperrt, und Sie bekommen einen neuen. Ein Finder kann ohne Ihre PIN nichts damit anfangen.'],
+            ['Ich habe meine PIN vergessen.', 'Die PIN lässt sich nicht auslesen. Die IT setzt den Key zurück und richtet ihn neu für Sie ein.'],
+          ].map(([q, a]) => (
+            <details key={q}>
+              <summary>{q}</summary>
+              <p>{a}</p>
+            </details>
+          ))}
         </div>
-        <Note title="Darum reicht eine kurze PIN">Wer Ihre PIN kennt, braucht trotzdem Ihren Key, und wer Ihren Key findet, kennt Ihre PIN nicht. Erst beides zusammen öffnet die Tür.</Note>
-      </Section>
-
-      <Section id="vergleich" n={6} title="Passwort und Passkey im Vergleich">
-        <div className="pk-table-wrap">
-          <table className="pk-table">
-            <thead><tr><th>Frage</th><th>Passwort</th><th>Passkey (YubiKey)</th></tr></thead>
-            <tbody>
-              {[
-                ['Muss ich mir etwas merken?', 'Ja, für jeden Dienst ein anderes', 'Nur eine kurze PIN'],
-                ['Funktioniert eine gefälschte Seite?', 'Ja, wenn man darauf hereinfällt', 'Nein, der Key antwortet nicht'],
-                ['Was nützt ein Datenleck beim Anbieter?', 'Passwörter können geknackt werden', 'Nichts, dort liegt nur der Prüfschlüssel'],
-                ['Kann jemand aus der Ferne mitlesen?', 'Ja, beim Eintippen oder per Schadsoftware', 'Nein, es wird kein Geheimnis übertragen'],
-                ['Kann man es kopieren?', 'Ja, beliebig oft', 'Nein, der Schlüssel steckt im Chip'],
-                ['Wie schnell ist die Anmeldung?', 'Tippen, vertippen, zurücksetzen', 'Einstecken, PIN, berühren'],
-              ].map(([q, a, b]) => (
-                <tr key={q}><td>{q}</td><td className="bad"><Icon name="x" size={14} />{a}</td><td className="good"><Icon name="check" size={14} />{b}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Section>
-
-      <Section id="standard" n={7} title="Wer steckt dahinter?">
-        <p>
-          Passkeys sind kein Sonderweg eines Herstellers, sondern ein offener Standard namens <strong>FIDO2</strong> mit dem Browser-Teil <strong>WebAuthn</strong>.
-          Entwickelt wurde er von der FIDO-Allianz, zu der unter anderem Microsoft, Google, Apple und Yubico gehören.
-        </p>
-        <div className="pk-cards">
-          <Card icon="key" title="Passkey im Sicherheitsschlüssel">So wie Ihr YubiKey: Der Passkey ist an genau dieses Gerät gebunden und verlässt es nie. Das ist die stärkste Form.</Card>
-          <Card icon="monitor" title="Passkey im Handy oder PC">Passkeys können auch in Windows Hello, im Handy oder im Passwortmanager liegen und werden dort oft über die Cloud synchronisiert.</Card>
-          <Card icon="shield" title="Phishing-resistent">Microsoft stuft Sicherheitsschlüssel als „phishing-resistent“ ein, die höchste Stufe der Anmeldesicherheit in Entra ID.</Card>
-        </div>
-      </Section>
-
-      <Section id="grenzen" n={8} title="Ehrlich gesagt: die Nachteile">
-        <ul className="pk-list">
-          <li><strong>Der Key muss dabei sein.</strong> Ohne YubiKey keine Anmeldung. Behandeln Sie ihn wie Ihren Haustürschlüssel.</li>
-          <li><strong>Verloren ist verloren.</strong> Ein verlorener Key lässt sich nicht wiederherstellen. Die IT sperrt ihn und gibt Ihnen einen neuen, Ihre Daten bleiben dabei sicher.</li>
-          <li><strong>Ein Anschluss wird gebraucht.</strong> Der Key braucht einen passenden USB-Anschluss oder NFC am Handy. Für andere Anschlüsse gibt es Adapter.</li>
-          <li><strong>Es ist ungewohnt.</strong> Die ersten Anmeldungen fühlen sich anders an. Nach wenigen Tagen geht es schneller als jedes Passwort.</li>
-        </ul>
+        {brand?.contact && <Note title="Weiterhin Probleme?">Ihre IT hilft Ihnen gern weiter: <strong>{brand.contact}</strong></Note>}
       </Section>
 
       <div className="pk-cta pk-reveal">
-        <div><strong>Bereit?</strong><span className="muted">Die Schritt-für-Schritt-Anleitung zeigt, wie Sie sich mit Ihrem YubiKey anmelden.</span></div>
-        <Link className="btn primary" to={'/passkey/anleitung' + keep}>Zur Anleitung</Link>
+        <div><strong>Mehr Details?</strong><span className="muted">Die Techniker-Ansicht erklärt Kryptografie, Phishing-Resistenz und die Einbindung in Entra ID.</span></div>
+        <button type="button" className="primary" onClick={onSwitch}><Icon name="settings" size={16} />Zur Techniker-Ansicht</button>
       </div>
     </>
   );
 }
+
+/* ---------- Ansicht Techniker ---------- */
+
+const techFlowSteps = [
+  { title: 'Anfrage', text: 'Der Browser ruft navigator.credentials.get() auf. Entra ID liefert dafür die Optionen: RP-ID login.microsoft.com, erlaubte Credential-IDs und userVerification = required.', token: 'GET assertion options' },
+  { title: 'Challenge', text: 'Entra ID erzeugt eine zufällige, einmalige Challenge. Der Browser bildet clientDataJSON (Challenge, Origin, Typ) und schickt über CTAP2 den rpIdHash und den Hash von clientDataJSON an den YubiKey.', token: 'challenge · rpIdHash' },
+  { title: 'UV und UP', text: 'Der YubiKey prüft die PIN selbst (User Verification, PIN/UV-Auth-Protokoll von CTAP2) und verlangt eine Berührung (User Presence). Die PIN wird am PC eingegeben und verschlüsselt an den Key übergeben, zu Entra ID gelangt sie nie.', token: '' },
+  { title: 'Assertion', text: 'Der Key signiert authenticatorData (rpIdHash, Flags UP/UV, Zähler) zusammen mit dem Hash von clientDataJSON mit dem privaten Schlüssel (ES256, P-256). Zurück gehen Signatur, authenticatorData und clientDataJSON.', token: 'signature (ES256)' },
+  { title: 'Verifikation', text: 'Entra ID prüft Challenge, Origin, rpIdHash, UV-Flag und die Signatur mit dem hinterlegten Public Key. Passt alles, wird ein Token mit der Methode „phishing-resistent“ ausgestellt.', token: '' },
+];
+
+function Technical({ onSwitch }: { onSwitch: () => void }) {
+  const toc = [
+    { id: 'secret', label: 'Das Problem: geteilte Geheimnisse', icon: 'alert' as const },
+    { id: 'krypto', label: 'Public-Key-Kryptografie', icon: 'key' as const },
+    { id: 'ablauf', label: 'Challenge-Response im Detail', icon: 'monitor' as const },
+    { id: 'origin', label: 'Origin-Bindung', icon: 'shield' as const },
+    { id: 'server', label: 'Kein Geheimnis auf dem Server', icon: 'box' as const },
+    { id: 'uv', label: 'User Verification und Presence', icon: 'user' as const },
+    { id: 'attest', label: 'Attestierung und AAGUID', icon: 'scan' as const },
+    { id: 'bindung', label: 'Gerätegebunden oder synchronisiert', icon: 'layers' as const },
+    { id: 'entra', label: 'Einbindung in Entra ID', icon: 'building' as const },
+    { id: 'vergleich', label: 'MFA-Methoden im Vergleich', icon: 'list' as const },
+    { id: 'grenzen', label: 'Grenzen und Restrisiken', icon: 'info' as const },
+  ];
+  return (
+    <>
+      <Hero eyebrow="Für Techniker" title="Warum Passkeys so sicher sind" art={<div className="pk-float"><KeyArt size={220} glow /></div>}>
+        FIDO2-Sicherheitsschlüssel wie der YubiKey gelten als phishing-resistente MFA. Hier steht, warum: asymmetrische Kryptografie,
+        Bindung an die Origin, Prüfung im Authenticator und ein Schlüssel, der das Gerät nie verlässt.
+      </Hero>
+      <Toc items={toc} />
+
+      <Section id="secret" n={1} title="Das Problem: geteilte Geheimnisse">
+        <p>
+          Passwort, SMS-Code und TOTP haben eines gemeinsam: Ein Geheimnis wird von Mensch zu Server übertragen. Wer sich dazwischen setzt, bekommt es.
+          Adversary-in-the-Middle-Proxys (etwa Evilginx) reichen sogar Einmalcodes und Push-Bestätigungen in Echtzeit durch und erbeuten das Session-Cookie.
+        </p>
+        <div className="pk-cards four">
+          <Card icon="alert" title="Phishing und AiTM">Der Mensch prüft die Adresse, und Menschen lassen sich täuschen. Einmalcodes helfen gegen Echtzeit-Proxys nicht.</Card>
+          <Card icon="box" title="Datenbank-Leaks">Passwort-Hashes lassen sich offline knacken, TOTP-Seeds liegen im Klartext beim Server.</Card>
+          <Card icon="layers" title="Credential Stuffing">Wiederverwendete Passwörter aus fremden Leaks funktionieren auch bei Ihnen.</Card>
+          <Card icon="user" title="MFA-Fatigue">Push-Anfragen werden irgendwann genervt bestätigt.</Card>
+        </div>
+      </Section>
+
+      <Section id="krypto" n={2} title="Public-Key-Kryptografie statt Geheimnis">
+        <p>
+          Bei der Registrierung erzeugt der YubiKey <strong>für genau dieses Konto und diese Relying Party</strong> ein neues Schlüsselpaar (in Entra ID ES256 auf der Kurve P-256).
+          Der private Schlüssel entsteht im Secure Element und ist nicht exportierbar. Entra ID speichert nur Credential-ID und Public Key.
+        </p>
+        <KeyPair />
+        <ul className="pk-list">
+          <li><strong>Ein Schlüssel pro Dienst:</strong> Jede Relying Party bekommt ein eigenes Paar. Konten lassen sich über Dienste hinweg nicht verknüpfen.</li>
+          <li><strong>Discoverable Credentials:</strong> Der Key kann das Credential samt Benutzer-Handle speichern, dadurch geht die Anmeldung auch ohne Benutzernamen.</li>
+          <li><strong>Begrenzter Speicher:</strong> Ein YubiKey 5 speichert je nach Firmware 25 (bis 5.6) bzw. 100 (ab 5.7) Discoverable Credentials.</li>
+        </ul>
+      </Section>
+
+      <Section id="ablauf" n={3} title="Challenge-Response im Detail">
+        <p>Die Anmeldung ist ein Challenge-Response-Verfahren nach WebAuthn (Browser ↔ Server) und CTAP2 (Browser ↔ Authenticator).</p>
+        <LoginFlow steps={techFlowSteps} tech />
+        <Note title="Replay ausgeschlossen">Die Challenge ist zufällig und nur einmal gültig, die Signatur deckt sie mit ab. Eine mitgeschnittene Assertion lässt sich nicht wiederverwenden.</Note>
+      </Section>
+
+      <Section id="origin" n={4} title="Origin-Bindung: der eigentliche Phishing-Schutz">
+        <p>
+          Nicht der Benutzer entscheidet, ob eine Seite echt ist, sondern der Browser. Er prüft, ob die angefragte RP-ID zur Domain der Seite passt, und schreibt die
+          tatsächliche Origin in <code>clientDataJSON</code>. Der Authenticator findet Credentials nur über den <code>rpIdHash</code>, und der Server prüft Origin und rpIdHash in der Signatur.
+        </p>
+        <PhishingDemo />
+        <div className="pk-cards">
+          <Card icon="x" title="Fremde Domain">Für <code>login-micros0ft.com</code> existiert kein Credential, der Key antwortet nicht.</Card>
+          <Card icon="shield" title="AiTM-Proxy">Selbst wenn ein Proxy die Anfrage weiterreicht: Die signierte Origin ist die des Proxys, Entra ID lehnt ab.</Card>
+          <Card icon="check" title="Kein Ermessen">Es gibt keinen Code, den der Benutzer abtippen und dabei falsch einsetzen könnte.</Card>
+        </div>
+      </Section>
+
+      <Section id="server" n={5} title="Kein Geheimnis auf dem Server">
+        <div className="pk-split">
+          <div>
+            <p>Entra ID kennt nur Public Keys. Ein Leak der Verzeichnisdaten liefert nichts, was sich knacken oder für eine Anmeldung nutzen ließe.</p>
+            <p>Zusätzlich führt der Authenticator einen Signaturzähler. Springt er unerwartet zurück, kann das auf ein geklontes Credential hindeuten.</p>
+          </div>
+          <div className="pk-vault pk-reveal" aria-hidden>
+            <div className="pk-vault-row"><Icon name="shield" size={18} /><span>Public Key</span><em>nutzlos für Angreifer</em></div>
+            <div className="pk-vault-row"><Icon name="list" size={18} /><span>Credential-ID, AAGUID</span><em>Metadaten</em></div>
+            <div className="pk-vault-row strike"><Icon name="key" size={18} /><span>Passwort-Hash, OTP-Seed</span><em>gibt es nicht</em></div>
+          </div>
+        </div>
+      </Section>
+
+      <Section id="uv" n={6} title="User Verification und User Presence">
+        <div className="pk-cards">
+          <Card icon="user" title="UV: die PIN">
+            Die FIDO2-PIN prüft der Key selbst (CTAP2 PIN/UV-Auth-Protokoll). Nach 8 Fehlversuchen ist sie gesperrt, dann hilft nur ein Reset, der alle Credentials löscht.
+            Nach 3 Fehlversuchen in Folge muss der Key neu eingesteckt werden.
+          </Card>
+          <Card icon="check" title="UP: die Berührung">
+            Die kapazitive Fläche bestätigt physische Anwesenheit. Schadsoftware kann den Key nicht unbemerkt aus der Ferne benutzen.
+          </Card>
+          <Card icon="settings" title="PIN-Richtlinien">
+            Ab Firmware 5.7 lassen sich eine Mindestlänge und ein erzwungener PIN-Wechsel auf dem Key setzen. Die Plattform nutzt das für zufällige Start-PINs.
+          </Card>
+        </div>
+        <Note title="Zwei Faktoren in einem Gerät">Besitz (der Key mit privatem Schlüssel) und Wissen (die PIN) werden lokal kombiniert. Entra ID sieht das UV-Flag in der signierten authenticatorData.</Note>
+      </Section>
+
+      <Section id="attest" n={7} title="Attestierung und AAGUID">
+        <p>
+          Bei der Registrierung kann der Key eine <strong>Attestierung</strong> liefern: eine Signatur mit einem Herstellerzertifikat, die belegt, dass das Credential in echter
+          YubiKey-Hardware erzeugt wurde. Die <strong>AAGUID</strong> identifiziert dabei das Modell und lässt sich gegen den FIDO Metadata Service prüfen.
+        </p>
+        <ul className="pk-list">
+          <li>In Entra ID kann die FIDO2-Richtlinie Attestierung erzwingen und nur bestimmte AAGUIDs zulassen (Key Restrictions).</li>
+          <li>Diese Plattform liest Seriennummer, Firmware und AAGUID über den lokalen Agent und warnt, wenn ein Key nicht zu den Vorgaben des Tenants passt.</li>
+          <li>Yubico-Sicherheitshinweise (etwa zu bestimmten Firmware-Ständen) lassen sich so pro Key zuordnen.</li>
+        </ul>
+      </Section>
+
+      <Section id="bindung" n={8} title="Gerätegebunden oder synchronisiert">
+        <div className="pk-table-wrap">
+          <table className="pk-table">
+            <thead><tr><th>Merkmal</th><th>Synchronisierter Passkey</th><th>Sicherheitsschlüssel (YubiKey)</th></tr></thead>
+            <tbody>
+              {[
+                ['Wo liegt der private Schlüssel?', 'Im Passwortmanager bzw. Cloud-Konto, auf mehrere Geräte kopiert', 'Im Secure Element, nicht exportierbar'],
+                ['Hängt an einem Cloud-Konto?', 'Ja, dessen Sicherheit zählt mit', 'Nein'],
+                ['Attestierung möglich?', 'In der Regel nicht', 'Ja, mit AAGUID-Einschränkung'],
+                ['Verlust des Geräts', 'Passkey bleibt über die Cloud verfügbar', 'Credential ist weg, Ersatzkey nötig'],
+              ].map(([q, a, b]) => (
+                <tr key={q}><td>{q}</td><td>{a}</td><td className="good"><Icon name="check" size={14} />{b}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted small">Für Administratoren und besonders schützenswerte Konten empfiehlt Microsoft gerätegebundene Passkeys.</p>
+      </Section>
+
+      <Section id="entra" n={9} title="Einbindung in Entra ID">
+        <div className="pk-cards">
+          <Card icon="sliders" title="Methodenrichtlinie">Passkey (FIDO2) in den Authentifizierungsmethoden aktivieren, Zielgruppen festlegen, optional Attestierung und Key Restrictions.</Card>
+          <Card icon="shield" title="Authentifizierungsstärke">Conditional Access mit der Stärke „Phishing-resistente MFA“ erzwingt FIDO2, Windows Hello for Business oder zertifikatbasierte Anmeldung.</Card>
+          <Card icon="keyPlus" title="Registrierung im Auftrag">Diese Plattform registriert Keys über Microsoft Graph (fido2Methods) im Namen der Benutzer, setzt die PIN und dokumentiert alles im Audit-Log.</Card>
+        </div>
+        <Note title="Fehlende Einstellungen">Die Tenant-Prüfung der Plattform zeigt fehlende FIDO2-Einstellungen an und behebt sie auf Wunsch direkt.</Note>
+      </Section>
+
+      <Section id="vergleich" n={10} title="MFA-Methoden im Vergleich">
+        <div className="pk-table-wrap">
+          <table className="pk-table cmp">
+            <thead><tr><th>Eigenschaft</th><th>Passwort</th><th>SMS / TOTP</th><th>Push-App</th><th>FIDO2-Key</th></tr></thead>
+            <tbody>
+              {([
+                ['Phishing-resistent', 0, 0, 0, 1],
+                ['Schutz vor AiTM-Proxy', 0, 0, 0, 1],
+                ['Kein Geheimnis beim Server', 0, 0, 1, 1],
+                ['Replay-sicher', 0, 1, 1, 1],
+                ['Nicht kopierbar', 0, 0, 1, 1],
+                ['Keine MFA-Fatigue', 1, 1, 0, 1],
+              ] as [string, number, number, number, number][]).map(([q, ...v]) => (
+                <tr key={q}><td>{q}</td>{v.map((x, i) => <td key={i} className={x ? 'good' : 'bad'}><Icon name={x ? 'check' : 'x'} size={14} />{x ? 'ja' : 'nein'}</td>)}</tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <p className="muted small">Push mit Nummernabgleich mildert MFA-Fatigue, bleibt aber für AiTM-Proxys anfällig.</p>
+      </Section>
+
+      <Section id="grenzen" n={11} title="Grenzen und Restrisiken">
+        <ul className="pk-list">
+          <li><strong>Token-Diebstahl nach der Anmeldung:</strong> FIDO2 schützt den Anmeldevorgang, nicht das ausgestellte Session-Token. Schadsoftware auf dem Gerät kann Cookies stehlen. Dagegen helfen Token Protection, konforme Geräte und kurze Sitzungen.</li>
+          <li><strong>Schwächere Methoden parallel:</strong> Solange Passwort oder SMS als Alternative erlaubt sind, wählt ein Angreifer diese. Erst Conditional Access mit phishing-resistenter Stärke schließt die Lücke.</li>
+          <li><strong>Wiederherstellung:</strong> Verlorene Keys sind nicht wiederherstellbar. Einen Prozess mit Temporary Access Pass und Ersatzkey einplanen, für kritische Konten einen zweiten Key.</li>
+          <li><strong>Legacy-Protokolle:</strong> Basic Auth (IMAP, POP, SMTP AUTH) kann kein FIDO2 und gehört abgeschaltet.</li>
+          <li><strong>Breakglass:</strong> Notfallkonten ebenfalls mit FIDO2 absichern, aber von Conditional Access ausnehmen und überwachen.</li>
+        </ul>
+      </Section>
+
+      <div className="pk-cta pk-reveal">
+        <div><strong>Für den Kunden erklärt</strong><span className="muted">Die Endbenutzer-Ansicht zeigt das Ganze einfach und mit Schritt-für-Schritt-Anleitung.</span></div>
+        <button type="button" className="primary" onClick={onSwitch}><Icon name="user" size={16} />Zur Endbenutzer-Ansicht</button>
+      </div>
+    </>
+  );
+}
+
 
 function Card({ icon, title, children }: { icon: IconName; title: string; children: ReactNode }) {
   return (
@@ -508,130 +730,3 @@ function PhoneArt() {
   );
 }
 
-function Guide({ brand, keep }: { brand: PublicBrand | null; keep: string }) {
-  const toc = [
-    { id: 'kurz', label: 'Was ist ein Passkey?', icon: 'info' as const },
-    { id: 'key', label: 'Ihr YubiKey', icon: 'key' as const },
-    { id: 'anmelden', label: 'Am PC anmelden', icon: 'monitor' as const },
-    { id: 'erste', label: 'Erste Anmeldung und neue PIN', icon: 'user' as const },
-    { id: 'handy', label: 'Am Handy anmelden', icon: 'share' as const },
-    { id: 'pin', label: 'PIN selbst ändern', icon: 'settings' as const },
-    { id: 'regeln', label: 'Sicher aufbewahren', icon: 'shield' as const },
-    { id: 'hilfe', label: 'Es klappt nicht', icon: 'alert' as const },
-  ];
-  return (
-    <>
-      <Hero eyebrow="Schritt für Schritt" title="So geht's mit dem YubiKey" art={<div className="pk-hero-touch"><TouchArt /></div>}>
-        Ihr Konto ist durch einen Passkey auf Ihrem YubiKey geschützt. Statt eines Passworts stecken Sie den Key ein,
-        geben Ihre PIN ein und berühren die goldene Fläche. Diese Anleitung zeigt alle Schritte.
-      </Hero>
-      <Toc items={toc} />
-
-      <Section id="kurz" n={1} title="Was ist ein Passkey?">
-        <p>
-          Ein Passkey ist ein digitaler Schlüssel, der fest in Ihrem YubiKey steckt. Er funktioniert nur zusammen mit Ihrer PIN und nur auf der echten
-          Microsoft-Anmeldeseite. Phishing-Mails und gefälschte Seiten laufen damit ins Leere.
-        </p>
-        <Note title="Mehr erfahren">Wie das genau funktioniert, zeigt die Seite <Link to={'/passkey' + keep}>Passkey verstehen</Link> mit animierten Beispielen.</Note>
-      </Section>
-
-      <Section id="key" n={2} title="Ihr YubiKey">
-        <div className="pk-anatomy">
-          <div className="pk-anatomy-art"><KeyArt size={260} /></div>
-          <ul>
-            <li><span className="pk-dot gold" /><span><strong>Goldene Fläche:</strong> zum Berühren. Sie blinkt, wenn der Key auf Sie wartet.</span></li>
-            <li><span className="pk-dot metal" /><span><strong>Stecker:</strong> USB-A oder USB-C, je nach Modell. Passt nicht? Ein Adapter hilft.</span></li>
-            <li><span className="pk-dot ring" /><span><strong>Öse:</strong> für den Schlüsselbund. Dort ist der Key am besten aufgehoben.</span></li>
-            <li><span className="pk-dot nfc" /><span><strong>NFC</strong> (Modelle mit „NFC“ im Namen): auch kontaktlos am Handy nutzbar.</span></li>
-          </ul>
-        </div>
-      </Section>
-
-      <Section id="anmelden" n={3} title="Am PC anmelden">
-        <div className="pk-steps">
-          <Step n={1} title="Key einstecken" art={<PlugArt />}>Stecken Sie den YubiKey in einen freien USB-Anschluss. Es passiert noch nichts, das ist richtig so.</Step>
-          <Step n={2} title="Anmeldeoption wählen" art={<OptionsArt />}>
-            Geben Sie bei der Microsoft-Anmeldung Ihre E-Mail-Adresse ein. Falls nach einem Passwort gefragt wird, wählen Sie
-            „Andere Anmeldemöglichkeiten“ und dann „Gesicht, Fingerabdruck, PIN oder Sicherheitsschlüssel“.
-          </Step>
-          <Step n={3} title="PIN eingeben" art={<PinArt />}>Windows oder der Browser fragt nach der PIN des Sicherheitsschlüssels. Geben Sie Ihre PIN ein und bestätigen Sie.</Step>
-          <Step n={4} title="Goldene Fläche berühren" art={<TouchArt />}>Sobald der Key blinkt, berühren Sie kurz die goldene Fläche. Fertig, Sie sind angemeldet.</Step>
-        </div>
-        <Note kind="ok" title="Beim nächsten Mal">Microsoft merkt sich, dass Sie einen Sicherheitsschlüssel nutzen, und bietet ihn direkt an.</Note>
-      </Section>
-
-      <Section id="erste" n={4} title="Erste Anmeldung und neue PIN">
-        <p>Ihre erste PIN steht im PIN-Brief, den Sie mit dem Key erhalten haben.</p>
-        <ol className="pk-list numbered">
-          <li>Melden Sie sich wie oben beschrieben an und geben Sie die PIN aus dem Brief ein.</li>
-          <li>Steht im Brief, dass ein PIN-Wechsel nötig ist, fordert Windows Sie direkt auf, eine <strong>neue PIN</strong> zu wählen. Wie lang sie mindestens sein muss, zeigt Windows an.</li>
-          <li>Geben Sie die neue PIN zweimal ein und berühren Sie den Key, wenn er blinkt.</li>
-          <li>Vernichten Sie danach den PIN-Brief. Ihre neue PIN kennen nur Sie.</li>
-        </ol>
-        <Note kind="warn" title="Die IT fragt nie nach Ihrer PIN">Niemand braucht Ihre PIN, auch nicht die IT. Wer danach fragt, will Sie täuschen.</Note>
-      </Section>
-
-      <Section id="handy" n={5} title="Am Handy anmelden">
-        <div className="pk-split">
-          <div>
-            <p>In Apps wie Outlook oder Teams auf dem Handy funktioniert der YubiKey ebenfalls.</p>
-            <ul className="pk-list">
-              <li><strong>Mit NFC:</strong> Wählen Sie „Sicherheitsschlüssel“, geben Sie die PIN ein und halten Sie den Key an die Rückseite des Handys, bis die Anmeldung durch ist.</li>
-              <li><strong>Mit USB-C:</strong> Key einstecken, PIN eingeben, goldene Fläche berühren, genau wie am PC.</li>
-            </ul>
-            <p className="muted small">Wo die NFC-Stelle liegt, hängt vom Handy ab. Meist ist sie oben in der Mitte der Rückseite.</p>
-          </div>
-          <PhoneArt />
-        </div>
-      </Section>
-
-      <Section id="pin" n={6} title="PIN selbst ändern">
-        <p>Sie können Ihre PIN jederzeit ändern, zum Beispiel wenn jemand zugesehen hat.</p>
-        <div className="pk-path">
-          {['Einstellungen', 'Konten', 'Anmeldeoptionen', 'Sicherheitsschlüssel', 'Verwalten', 'Sicherheitsschlüssel-PIN „Ändern“'].map((s, i) => (
-            <span key={s} style={{ animationDelay: i * 90 + 'ms' }}>{s}</span>
-          ))}
-        </div>
-        <p className="muted small">Windows fragt nach der alten PIN, zweimal nach der neuen und bittet Sie, den Key zu berühren.</p>
-      </Section>
-
-      <Section id="regeln" n={7} title="Sicher aufbewahren">
-        <div className="pk-cards two">
-          <div className="pk-card good">
-            <strong><Icon name="check" size={16} /> So ist es gut</strong>
-            <ul><li>Am Schlüsselbund, den Sie ohnehin dabeihaben</li><li>PIN nur im Kopf</li><li>Verlust sofort der IT melden</li></ul>
-          </div>
-          <div className="pk-card bad">
-            <strong><Icon name="x" size={16} /> Lieber nicht</strong>
-            <ul><li>PIN auf einen Zettel am Key schreiben</li><li>Key dauerhaft im Firmen-PC stecken lassen</li><li>Key an Kollegen verleihen</li></ul>
-          </div>
-        </div>
-      </Section>
-
-      <Section id="hilfe" n={8} title="Es klappt nicht">
-        <div className="pk-faq">
-          {[
-            ['Der Key blinkt nicht.', 'Ziehen Sie den Key ab und stecken Sie ihn erneut ein, gern in einen anderen Anschluss. Bei USB-Hubs und Dockingstationen hilft oft ein Anschluss direkt am Gerät.'],
-            ['Es wird nur nach einem Passwort gefragt.', 'Klicken Sie auf „Andere Anmeldemöglichkeiten“ bzw. „Anmeldeoptionen“ und wählen Sie „Gesicht, Fingerabdruck, PIN oder Sicherheitsschlüssel“.'],
-            ['Windows bietet Windows Hello statt des Keys an.', 'Wählen Sie im Fenster „Weitere Optionen“ und dann „Sicherheitsschlüssel“.'],
-            ['Die PIN wird nicht angenommen.', 'Achten Sie auf Groß- und Kleinschreibung, falls Ihre PIN Buchstaben enthält. Nach 8 Fehlversuchen sperrt sich der Key, dann hilft nur die IT.'],
-            ['Das Fenster ist einfach verschwunden.', 'Für die Berührung bleiben etwa 30 Sekunden. Starten Sie die Anmeldung einfach noch einmal.'],
-            ['Ich habe meinen Key verloren.', 'Melden Sie es sofort der IT. Der Key wird gesperrt, und Sie bekommen einen neuen. Ein Finder kann ohne Ihre PIN nichts damit anfangen.'],
-            ['Ich habe meine PIN vergessen.', 'Die PIN lässt sich nicht auslesen. Die IT setzt den Key zurück und richtet ihn neu für Sie ein.'],
-          ].map(([q, a]) => (
-            <details key={q}>
-              <summary>{q}</summary>
-              <p>{a}</p>
-            </details>
-          ))}
-        </div>
-        {brand?.contact && <Note title="Weiterhin Probleme?">Ihre IT hilft Ihnen gern weiter: <strong>{brand.contact}</strong></Note>}
-      </Section>
-
-      <div className="pk-cta pk-reveal">
-        <div><strong>Neugierig, warum das so sicher ist?</strong><span className="muted">Animiert erklärt: Schlüsselpaar, Unterschrift und Schutz vor gefälschten Seiten.</span></div>
-        <Link className="btn primary" to={'/passkey' + keep}>Passkey verstehen</Link>
-      </div>
-    </>
-  );
-}

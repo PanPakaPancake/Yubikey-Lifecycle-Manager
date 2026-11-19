@@ -128,9 +128,11 @@ public sealed class RegistrationService(
             var actor = AuditService.User(actorUser);
             var tenant = await db.Tenants.FirstAsync(t => t.Id == tenantId, ct);
             var profile = await LoadProfileAsync(db, tenantId, req.ProfileId, ct);
-            agent = agents.Require(req.AgentId, actorId);
-            if (agent.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
-            agent.BusyWith = "Registrierung";
+            // agent erst nach dem Belegen setzen: Eine Absage wegen agent_busy darf den laufenden Vorgang nicht freigeben.
+            var claim = agents.Require(req.AgentId, actorId);
+            if (claim.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
+            claim.BusyWith = "Registrierung";
+            agent = claim;
             var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
 
             // 1. Key auslesen und gegen das Profil prüfen
@@ -281,6 +283,7 @@ public sealed class RegistrationService(
             job.Step = "Registrierung abgeschlossen";
             job.Prompt = "Key abziehen und zusammen mit dem PIN-Brief übergeben.";
             succeeded = true;
+            if (agent is not null) agent.BusyWith = null;
             if (job.BatchItemId is null) job.State = JobState.Succeeded;
             agents.Progress(agent, new AgentProgress("Registrierung abgeschlossen", $"{user.DisplayName}: Key kann abgezogen werden.", 7, 7, Done: true));
         }
@@ -297,6 +300,7 @@ public sealed class RegistrationService(
             if (stage is "credential" or "graph" or "force_pin_change" or "save")
                 message += " Auf dem Key ist bereits eine PIN gesetzt; für einen neuen Versuch mit Werksreset registrieren.";
             succeeded = false;
+            if (agent is not null) agent.BusyWith = null; // vor dem Endzustand freigeben, sonst meldet ein sofortiger Folgeauftrag agent_busy
             job.State = JobState.Failed;
             job.Error = message;
             job.ErrorCode = code;
@@ -345,9 +349,11 @@ public sealed class RegistrationService(
             var actor = AuditService.User(actorUser);
             var key = await db.Keys.Include(k => k.Registrations).FirstAsync(k => k.Id == keyId);
             KeyLifecycle.EnsureTransition(key.Status, KeyStatus.InStock);
-            agent = agents.Require(agentId, actorId);
-            if (agent.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
-            agent.BusyWith = "Zurücksetzen";
+            // agent erst nach dem Belegen setzen: Eine Absage wegen agent_busy darf den laufenden Vorgang nicht freigeben.
+            var claim = agents.Require(agentId, actorId);
+            if (claim.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
+            claim.BusyWith = "Zurücksetzen";
+            agent = claim;
             Step(job, agent, 1, "Key wird geprüft");
             var info = await agents.ReadKeyAsync(agent) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
             if (key.SerialNumber is null || info.SerialNumber != key.SerialNumber)
@@ -365,11 +371,13 @@ public sealed class RegistrationService(
             await db.SaveChangesAsync();
             job.Step = toPartnerStock ? "Key zurückgesetzt und im Partnerlager" : "Key zurückgesetzt und im Tenant-Lager bereit";
             job.Prompt = null;
+            if (agent is not null) agent.BusyWith = null; // vor dem Endzustand freigeben, sonst meldet ein sofortiger Folgeauftrag agent_busy
             job.State = JobState.Succeeded;
             agents.Progress(agent, new AgentProgress("Key zurückgesetzt", "Der Key ist wieder im Lager.", 3, 3, Done: true));
         }
         catch (Exception ex)
         {
+            if (agent is not null) agent.BusyWith = null; // vor dem Endzustand freigeben, sonst meldet ein sofortiger Folgeauftrag agent_busy
             job.State = JobState.Failed;
             job.Error = ex is ApiException or DomainException or GraphException ? ex.Message : "Unerwarteter Fehler: " + ex.Message;
             job.ErrorCode = (ex as ApiException)?.Code ?? (ex as DomainException)?.Code;

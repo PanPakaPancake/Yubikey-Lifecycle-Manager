@@ -121,6 +121,6 @@ public sealed class BrandingTests : IAsyncLifetime
 
         var pdf = await _owner.GetAsync($"/api/branding/preview.pdf?tenantId={_tenant}");
         var text = Encoding.Latin1.GetString(await pdf.Content.ReadAsByteArrayAsync());
-        Assert.Contains($"/passkey/anleitung?t={_tenant}", text);
+        Assert.Contains($"/passkey?t={_tenant}", text);
     }
 }

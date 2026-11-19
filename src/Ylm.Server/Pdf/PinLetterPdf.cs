@@ -35,7 +35,7 @@ public static class PinLetterPdf
 
     /// <summary>Link zur Infoseite, mit Tenant für dessen Erscheinungsbild.</summary>
     public static string? InfoUrl(string? baseUrl, Guid? tenantId) =>
-        baseUrl is null ? null : $"{baseUrl}/passkey/anleitung" + (tenantId is { } t ? $"?t={t}" : "");
+        baseUrl is null ? null : $"{baseUrl}/passkey" + (tenantId is { } t ? $"?t={t}" : "");
 
     public static byte[] Create(PinLetterData d)
     {
