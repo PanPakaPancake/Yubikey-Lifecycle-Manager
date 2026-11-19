@@ -63,7 +63,9 @@ internal sealed class SettingsForm : Form
         connectionButtons.Controls.Add(logs);
         layout.Controls.Add(connectionButtons);
 
-        var close = new Button { Text = "Schließen", AutoSize = true, DialogResult = DialogResult.Cancel, Anchor = AnchorStyles.Right, Margin = new Padding(0, 14, 0, 0) };
+        // Das Fenster ist nicht modal (Show statt ShowDialog), DialogResult allein schließt es daher nicht.
+        var close = new Button { Text = "Schließen", AutoSize = true, Anchor = AnchorStyles.Right, Margin = new Padding(0, 14, 0, 0) };
+        close.Click += (_, _) => Close();
         layout.Controls.Add(close);
         Controls.Add(layout);
         CancelButton = close;

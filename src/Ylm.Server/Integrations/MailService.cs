@@ -66,6 +66,9 @@ public sealed class ReportMailService(YlmDbContext db, IMailSender sender, Dashb
         return s;
     }
 
+    /// <summary>Sends a mail with the configured SMTP server (also used for event alerts).</summary>
+    public Task SendMailAsync(OutgoingMail mail, CancellationToken ct = default) => SendAsync(mail, ct);
+
     private async Task SendAsync(OutgoingMail mail, CancellationToken ct)
     {
         var s = await SettingsAsync(ct);

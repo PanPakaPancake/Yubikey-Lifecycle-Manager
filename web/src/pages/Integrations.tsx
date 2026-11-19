@@ -5,21 +5,23 @@ import { Badge, Card, Empty, ErrorBox, Field, Info, Modal, PageHeader, Spinner, 
 import { useConfirm, useToast } from '../feedback';
 import { ScopeEditor } from './Platform';
 
-type Tab = 'webhooks' | 'mail';
+type Tab = 'webhooks' | 'alerts' | 'mail';
 
-/** Partnerebene → Integrationen (V2): Webhooks und Mail-Berichte. */
+/** Partnerebene → Benachrichtigungen: Webhooks, Mail-Alarme (je mit Ereignisauswahl) und Mail-Berichte. */
 export default function IntegrationsPage() {
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as Tab) || 'webhooks';
   const set = (t: Tab) => setParams({ tab: t }, { replace: true });
   return (
     <>
-      <PageHeader title="Integrationen" subtitle="Partnerebene: Ereignisse und Berichte an andere Systeme geben. Die Plattform sendet nur, sie nimmt hier nichts entgegen." />
+      <PageHeader title="Benachrichtigungen" subtitle="Partnerebene: festlegen, welche Ereignisse per Webhook oder Mail gemeldet werden, und regelmäßige Berichte verschicken." />
       <div className="tabs" role="tablist">
         <button className={tab === 'webhooks' ? 'selected' : ''} onClick={() => set('webhooks')}>Webhooks</button>
+        <button className={tab === 'alerts' ? 'selected' : ''} onClick={() => set('alerts')}>Mail-Alarme</button>
         <button className={tab === 'mail' ? 'selected' : ''} onClick={() => set('mail')}>Mail-Berichte</button>
       </div>
-      {tab === 'webhooks' && <Webhooks />}
+      {tab === 'webhooks' && <Webhooks key="webhook" channel="Webhook" />}
+      {tab === 'alerts' && <Webhooks key="mail" channel="Mail" />}
       {tab === 'mail' && <MailReports />}
     </>
   );
@@ -27,7 +29,8 @@ export default function IntegrationsPage() {
 
 // ---------------- Webhooks ----------------
 
-interface WebhookRow { id: string; name: string; url: string; events: string[]; allTenants: boolean; tenantIds: string[]; isActive: boolean; createdAt: string; lastDeliveryAt?: string | null; lastDeliverySucceeded?: boolean | null; lastError?: string | null }
+type Channel = 'Webhook' | 'Mail';
+interface WebhookRow { id: string; name: string; channel: Channel; url: string; recipients: string[]; events: string[]; allTenants: boolean; tenantIds: string[]; isActive: boolean; createdAt: string; lastDeliveryAt?: string | null; lastDeliverySucceeded?: boolean | null; lastError?: string | null }
 interface EventType { type: string; group: string; label: string }
 interface Delivery { id: string; eventType: string; status: 'Pending' | 'Delivered' | 'Failed'; attempts: number; lastStatusCode?: number | null; lastError?: string | null; createdAt: string; deliveredAt?: string | null; nextAttemptAt: string; payload: string }
 
@@ -36,8 +39,10 @@ function useActiveTenants() {
   return (data ?? []).filter((t) => t.status === 'Active');
 }
 
-function Webhooks() {
-  const { data, error, reload } = useApi<WebhookRow[]>('/api/integrations/webhooks');
+function Webhooks({ channel }: { channel: Channel }) {
+  const mail = channel === 'Mail';
+  const { data: all, error, reload } = useApi<WebhookRow[]>('/api/integrations/webhooks');
+  const data = all?.filter((w) => (w.channel ?? 'Webhook') === channel);
   const { data: events } = useApi<EventType[]>('/api/integrations/webhooks/events');
   const [editing, setEditing] = useState<WebhookRow | 'new' | null>(null);
   const [secret, setSecret] = useState<string>();
@@ -47,7 +52,7 @@ function Webhooks() {
   const test = async (w: WebhookRow) => {
     try {
       const r = await api.post<{ success: boolean; statusCode?: number; error?: string }>(`/api/integrations/webhooks/${w.id}/test`);
-      if (r.success) toast.ok(`Testereignis zugestellt (HTTP ${r.statusCode}).`); else toast.error(`Zustellung fehlgeschlagen: ${r.error ?? 'HTTP ' + r.statusCode}`);
+      if (r.success) toast.ok(mail ? `Testmail an ${w.recipients.join(', ')} verschickt.` : `Testereignis zugestellt (HTTP ${r.statusCode}).`); else toast.error(`Zustellung fehlgeschlagen: ${r.error ?? 'HTTP ' + r.statusCode}`);
       reload();
     } catch (e) { toast.error((e as Error).message); }
   };
@@ -57,35 +62,37 @@ function Webhooks() {
     setSecret(r.secret);
   };
   const remove = async (w: WebhookRow) => {
-    if (!await confirm({ title: 'Webhook löschen?', message: `„${w.name}“ bekommt keine Ereignisse mehr.`, confirmLabel: 'Löschen', danger: true })) return;
+    if (!await confirm({ title: mail ? 'Mail-Alarm löschen?' : 'Webhook löschen?', message: `„${w.name}“ bekommt keine Ereignisse mehr.`, confirmLabel: 'Löschen', danger: true })) return;
     await api.del(`/api/integrations/webhooks/${w.id}`);
     reload();
   };
   return (
     <>
-      <Card title="Webhooks" actions={<button className="primary" onClick={() => setEditing('new')}>Webhook anlegen</button>}>
-        <p className="small muted" style={{ marginTop: 0 }}>
+      <Card title={mail ? 'Mail-Alarme' : 'Webhooks'} actions={<button className="primary" onClick={() => setEditing('new')}>{mail ? 'Mail-Alarm anlegen' : 'Webhook anlegen'}</button>}>
+        {mail ? <p className="small muted" style={{ marginTop: 0 }}>
+          Bei ausgewählten Ereignissen (z. B. Key gesperrt, Sync fehlgeschlagen, Freigabe beantragt) geht sofort eine Mail an die Empfänger. Versand über den Mailserver aus dem Reiter „Mail-Berichte“; fehlgeschlagene Mails werden wie Webhooks wiederholt.
+        </p> : <p className="small muted" style={{ marginTop: 0 }}>
           Bei Ereignissen (Key registriert, gesperrt, ToDo erledigt …) schickt die Plattform ein JSON per <code>POST</code>. Jede Zustellung ist signiert:
           <code> X-YLM-Signature: sha256=HMAC(Geheimnis, X-YLM-Timestamp + "." + Body)</code>. Fehlgeschlagene Zustellungen werden nach 1 und 5 Minuten, 30 Minuten, 2 und 6 Stunden wiederholt.
-        </p>
+        </p>}
         {secret && <Info tone="ok">Geheimnis, nur jetzt sichtbar: <code style={{ wordBreak: 'break-all' }}>{secret}</code> <button className="link" onClick={() => void navigator.clipboard?.writeText(secret)}>Kopieren</button></Info>}
         <ErrorBox error={error} />
         {!data && <Spinner />}
-        {data && data.length === 0 && <Empty>Noch kein Webhook.</Empty>}
+        {data && data.length === 0 && <Empty>{mail ? 'Noch kein Mail-Alarm.' : 'Noch kein Webhook.'}</Empty>}
         {data && data.length > 0 && (
           <table>
             <thead><tr><th>Name</th><th>Ereignisse</th><th>Letzte Zustellung</th><th /></tr></thead>
             <tbody>
               {data.map((w) => (
                 <tr key={w.id} style={{ opacity: w.isActive ? 1 : 0.6 }}>
-                  <td><strong>{w.name}</strong>{!w.isActive && <> <Badge>pausiert</Badge></>}<div className="small muted mono" style={{ wordBreak: 'break-all' }}>{w.url}</div></td>
+                  <td><strong>{w.name}</strong>{!w.isActive && <> <Badge>pausiert</Badge></>}<div className="small muted mono" style={{ wordBreak: 'break-all' }}>{mail ? w.recipients.join(', ') : w.url}</div></td>
                   <td className="small">{w.events.length === 0 ? 'Alle' : `${w.events.length} ausgewählt`}<div className="muted">{w.allTenants ? 'alle Tenants' : `${w.tenantIds.length} Tenant(s)`}</div></td>
                   <td className="small">{w.lastDeliveryAt ? <>{w.lastDeliverySucceeded ? <Badge tone="ok">ok</Badge> : <Badge tone="error">Fehler</Badge>} {fmtDate(w.lastDeliveryAt)}{w.lastError && <div className="muted">{w.lastError}</div>}</> : '–'}</td>
                   <td className="actions">
                     <button className="small" onClick={() => test(w)}>Testen</button>
                     <button className="small" onClick={() => setLog(w)}>Protokoll</button>
                     <button className="small" onClick={() => setEditing(w)}>Bearbeiten</button>
-                    <button className="small ghost" onClick={() => rotate(w)}>Neues Geheimnis</button>
+                    {!mail && <button className="small ghost" onClick={() => rotate(w)}>Neues Geheimnis</button>}
                     <button className="small danger" onClick={() => remove(w)}>Löschen</button>
                   </td>
                 </tr>
@@ -94,17 +101,19 @@ function Webhooks() {
           </table>
         )}
       </Card>
-      {editing && <WebhookModal hook={editing === 'new' ? undefined : editing} events={events ?? []} onClose={() => setEditing(null)} onSaved={(s) => { setEditing(null); if (s) setSecret(s); reload(); }} />}
+      {editing && <WebhookModal channel={channel} hook={editing === 'new' ? undefined : editing} events={events ?? []} onClose={() => setEditing(null)} onSaved={(s) => { setEditing(null); if (s) setSecret(s); reload(); }} />}
       {log && <DeliveryLog hook={log} onClose={() => setLog(null)} />}
     </>
   );
 }
 
-function WebhookModal({ hook, events, onClose, onSaved }: { hook?: WebhookRow; events: EventType[]; onClose: () => void; onSaved: (secret?: string) => void }) {
+function WebhookModal({ channel, hook, events, onClose, onSaved }: { channel: Channel; hook?: WebhookRow; events: EventType[]; onClose: () => void; onSaved: (secret?: string) => void }) {
+  const mail = channel === 'Mail';
   const tenants = useActiveTenants();
   const [name, setName] = useState(hook?.name ?? '');
   const [url, setUrl] = useState(hook?.url ?? 'https://');
-  const [all, setAll] = useState(hook ? hook.events.length === 0 : true);
+  const [recipients, setRecipients] = useState((hook?.recipients ?? []).join(', '));
+  const [all, setAll] = useState(hook ? hook.events.length === 0 : !mail);
   const [selected, setSelected] = useState<string[]>(hook?.events ?? []);
   const [allTenants, setAllTenants] = useState(hook?.allTenants ?? true);
   const [tenantIds, setTenantIds] = useState<string[]>(hook?.tenantIds ?? []);
@@ -112,15 +121,17 @@ function WebhookModal({ hook, events, onClose, onSaved }: { hook?: WebhookRow; e
   const { busy, error, run } = useAction();
   const groups = [...new Set(events.map((e) => e.group))];
   const save = () => run(async () => {
-    const body = { name, url, events: all ? [] : selected, allTenants, tenantIds: allTenants ? [] : tenantIds, isActive: active };
+    const body = { name, channel, url: mail ? null : url, recipients: mail ? [recipients] : null, events: all ? [] : selected, allTenants, tenantIds: allTenants ? [] : tenantIds, isActive: active };
     if (hook) { await api.put(`/api/integrations/webhooks/${hook.id}`, body); onSaved(); }
-    else { const r = await api.post<{ secret: string }>('/api/integrations/webhooks', body); onSaved(r.secret); }
+    else { const r = await api.post<{ secret?: string | null }>('/api/integrations/webhooks', body); onSaved(r.secret ?? undefined); }
   });
   return (
-    <Modal title={hook ? `Webhook „${hook.name}“` : 'Webhook anlegen'} onClose={onClose}
-      footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy || !name.trim() || !url.trim() || (!all && selected.length === 0)} onClick={save}>Speichern</button></>}>
-      <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="z. B. Ticketsystem" /></Field>
-      <Field label="URL" hint="Empfänger, möglichst mit https://"><input value={url} onChange={(e) => setUrl(e.target.value)} /></Field>
+    <Modal title={hook ? `${mail ? 'Mail-Alarm' : 'Webhook'} „${hook.name}“` : mail ? 'Mail-Alarm anlegen' : 'Webhook anlegen'} onClose={onClose}
+      footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy || !name.trim() || (mail ? !recipients.includes('@') : !url.trim()) || (!all && selected.length === 0)} onClick={save}>Speichern</button></>}>
+      <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder={mail ? 'z. B. Sicherheitsereignisse an IT-Leitung' : 'z. B. Ticketsystem'} /></Field>
+      {mail
+        ? <Field label="Empfänger" hint="Mehrere Adressen mit Komma trennen"><input value={recipients} onChange={(e) => setRecipients(e.target.value)} placeholder="it@firma.de, leitung@firma.de" /></Field>
+        : <Field label="URL" hint="Empfänger, möglichst mit https://"><input value={url} onChange={(e) => setUrl(e.target.value)} /></Field>}
       <div className="field-group">
         <span className="field-label">Ereignisse</span>
         <label className="check"><input type="radio" checked={all} onChange={() => setAll(true)} /> Alle Ereignisse, auch künftige</label>

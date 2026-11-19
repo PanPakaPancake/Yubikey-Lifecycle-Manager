@@ -1,4 +1,4 @@
-/* Öffentliche Passkey-Infoseiten (/passkey, /passkey/anleitung). Nutzt die Design-Tokens aus styles.css. */
+/* Öffentliche Passkey-Infoseite (/passkey, Ansichten Endbenutzer und Techniker). Nutzt die Design-Tokens aus styles.css. */
 
 .pk {
   --pk-accent: var(--accent);
@@ -31,9 +31,9 @@
 .pk-brand img { max-height: 34px; max-width: 140px; object-fit: contain; }
 .pk-brand span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pk-tabs { display: flex; gap: 4px; margin: 0 auto; padding: 4px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; }
-.pk-tabs a { padding: 6px 14px; border-radius: 999px; color: var(--muted); font-weight: 600; font-size: .9rem; white-space: nowrap; transition: background .2s, color .2s; }
-.pk-tabs a:hover { text-decoration: none; color: var(--ink); }
-.pk-tabs a.active { background: var(--surface); color: var(--pk-accent); box-shadow: 0 1px 3px rgba(16, 24, 40, .12); }
+.pk-tabs a, .pk-tabs button { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; cursor: pointer; padding: 6px 14px; border-radius: 999px; color: var(--muted); font-weight: 600; font-size: .9rem; white-space: nowrap; transition: background .2s, color .2s; }
+.pk-tabs a:hover, .pk-tabs button:hover { text-decoration: none; color: var(--ink); background: transparent; }
+.pk-tabs a.active, .pk-tabs button.active, .pk-tabs button.active:hover { background: var(--surface); color: var(--pk-accent); box-shadow: 0 1px 3px rgba(16, 24, 40, .12); }
 .pk-top-actions { display: flex; align-items: center; gap: 6px; }
 
 .pk-main { max-width: 1080px; margin: 0 auto; padding: 0 20px 40px; animation: page-in .35s ease both; }
@@ -193,6 +193,9 @@
 .pk-table td.good { background: color-mix(in srgb, var(--ok-soft) 60%, transparent); }
 .pk-table td.good svg { color: var(--ok); }
 .pk-table tr:last-child td { border-bottom: 0; }
+.pk-table.cmp td:not(:first-child) { white-space: nowrap; }
+.pk-table.cmp th:last-child, .pk-table.cmp td:last-child { font-weight: 650; }
+.pk h3 { font-size: 1.05rem; margin: 22px 0 6px; }
 
 /* Anleitung */
 .pk-steps { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }

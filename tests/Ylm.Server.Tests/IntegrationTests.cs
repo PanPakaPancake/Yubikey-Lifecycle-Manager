@@ -188,6 +188,50 @@ public sealed class IntegrationTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Mail_alerts_send_only_selected_events()
+    {
+        // Ohne Empfänger geht es nicht.
+        Assert.Equal(HttpStatusCode.BadRequest, (await _owner.PostAsJsonAsync("/api/integrations/webhooks",
+            new { name = "x", channel = "Mail", recipients = Array.Empty<string>(), allTenants = true })).StatusCode);
+        var created = await Json(await _owner.PostAsJsonAsync("/api/integrations/webhooks",
+            new { name = "Sicherheit", channel = "Mail", recipients = new[] { "it@contoso.com; chef@contoso.com" }, events = new[] { "approval.requested" }, allTenants = true }));
+        Assert.Equal(JsonValueKind.Null, created.GetProperty("secret").ValueKind);
+        var alertId = created.GetProperty("webhook").GetProperty("id").GetGuid();
+        Assert.Equal("Mail", created.GetProperty("webhook").GetProperty("channel").GetString());
+        Assert.Equal(HttpStatusCode.BadRequest, (await _owner.PostAsync($"/api/integrations/webhooks/{alertId}/secret", null)).StatusCode);
+
+        // Ohne Mailserver: Zustellung schlägt mit verständlicher Meldung fehl und wird wiederholt.
+        await Json(await _owner.PostAsJsonAsync($"/api/tenants/{_tenantId}/approvals", new { entraUserIds = new[] { "u-ben" }, custodian = "Tresor", reason = "Notfallkonto" }));
+        await RunWebhooksAsync();
+        Assert.Empty(_app.Mail.Sent);
+        var pending = (await Json(await _owner.GetAsync($"/api/integrations/webhooks/{alertId}/deliveries")))[0];
+        Assert.Equal("Pending", pending.GetProperty("status").GetString());
+        Assert.Contains("Mailserver", pending.GetProperty("lastError").GetString());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await _owner.PutAsJsonAsync("/api/integrations/smtp",
+            new { host = "smtp.contoso.com", port = 587, security = "StartTls", fromAddress = "ylm@contoso.com" })).StatusCode);
+        var retry = await Json(await _owner.PostAsync($"/api/integrations/webhooks/deliveries/{pending.GetProperty("id").GetGuid()}/retry", null));
+        Assert.True(retry.GetProperty("success").GetBoolean());
+        Assert.True(_app.Mail.Sent.TryDequeue(out var alert));
+        Assert.Equal(["it@contoso.com", "chef@contoso.com"], alert.Mail.To);
+        Assert.Contains("Freigabe beantragt", alert.Mail.Subject);
+        Assert.Contains("Contoso GmbH", alert.Mail.Subject);
+        Assert.Contains("Notfallkonto", alert.Mail.Text);
+
+        // Nicht ausgewähltes Ereignis: keine Mail. Der Webhook-Weg bekommt nichts.
+        await Json(await _owner.PostAsJsonAsync($"/api/tenants/{_tenantId}/todos", new { userPrincipalName = "anna@contoso.com" }));
+        await RunWebhooksAsync();
+        Assert.Empty(_app.Mail.Sent);
+        Assert.Empty(_app.Http.Calls);
+
+        // Test-Knopf schickt eine Testmail.
+        var test = await Json(await _owner.PostAsync($"/api/integrations/webhooks/{alertId}/test", null));
+        Assert.True(test.GetProperty("success").GetBoolean());
+        Assert.True(_app.Mail.Sent.TryDequeue(out var testMail));
+        Assert.Contains("Testereignis", testMail.Mail.Subject);
+    }
+
+    [Fact]
     public async Task Mail_reports_are_scheduled_and_sent_with_pdf()
     {
         var schedule = new { name = "Wochenbericht", recipients = new[] { "it@contoso.com; chef@contoso.com" }, allTenants = true, frequency = "Weekly", dayOfWeek = 1, dayOfMonth = 1, hour = 7, timeZone = "Europe/Berlin", includeCsv = true };

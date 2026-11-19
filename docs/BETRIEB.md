@@ -251,11 +251,12 @@ API-Schlüssel legen Owner unter „Plattform“ an. Ein Schlüssel gilt für al
 
 Einzige Schreibfunktion ist die ToDo-Liste (`GET/POST/DELETE /api/v1/todos`). Dafür braucht der Schlüssel das Häkchen „ToDo-Liste schreiben“. `POST` legt für eine Person (`tenant`, `userPrincipalName`, optional `ticketId`, `ticketUrl`, `note`, `profile`, `dueDate`) ein offenes ToDo an; gibt es schon eines, kommt es mit `200` zurück statt `201`.
 
-## 5a. Integrationen
+## 5a. Benachrichtigungen
 
-Unter „Integrationen“ (Partnerebene, Recht „API und Integrationen“):
+Unter „Benachrichtigungen“ (Partnerebene, Recht „API und Integrationen“) legt man pro Empfänger fest, welche Ereignisse gemeldet werden (alle oder nur ausgewählte, alle oder ausgewählte Tenants):
 
 - **Webhooks**: JSON per `POST` bei ausgewählten Ereignissen, signiert mit `X-YLM-Signature: sha256=HMAC-SHA256(Geheimnis, X-YLM-Timestamp + "." + Body)`. Fehlschläge werden bis zu fünfmal wiederholt (1 min bis 6 h). Der Server braucht ausgehenden Zugriff auf die Ziel-URLs.
+- **Mail-Alarme**: sofortige Mail an feste Empfänger bei ausgewählten Ereignissen, über den SMTP-Server der Mail-Berichte. Gleiche Warteschlange und Wiederholungen wie bei Webhooks.
 - **Mail-Berichte**: SMTP-Server eintragen (Passwort wird verschlüsselt gespeichert), dann Berichte täglich, wöchentlich oder monatlich mit Dashboard-PDF und optional Keys-CSV.
 - **NinjaRMM**: keine eigene Anbindung; Ereignisse gehen über einen Webhook an NinjaOne bzw. an ein Zwischensystem, das sie dort verarbeitet.
 

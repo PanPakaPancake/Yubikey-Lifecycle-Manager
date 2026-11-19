@@ -1187,6 +1187,9 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<bool>("AllTenants")
                         .HasColumnType("boolean");
 
+                    b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -1212,6 +1215,10 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.PrimitiveCollection<List<string>>("Recipients")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<string>("SecretProtected")
                         .IsRequired()
