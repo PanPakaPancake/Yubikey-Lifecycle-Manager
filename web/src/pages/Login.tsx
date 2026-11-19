@@ -59,6 +59,7 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
         <div className="brand"><BrandMark size={38} /><div>Yubikey Lifecycle Manager</div></div>
         <div>
           <HeroKey />
+          <span className="eyebrow">YubiKeys im Griff</span>
           <h2>Jeder Key an der richtigen Stelle.</h2>
           <p>Ausgeben, registrieren, sperren und nachverfolgen, für alle Ihre Entra-Tenants an einem Ort.</p>
           <ul>
