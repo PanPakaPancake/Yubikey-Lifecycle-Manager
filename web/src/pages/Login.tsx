@@ -60,7 +60,7 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
         </div>
         {!setupComplete && <div className="alert warn">Die Einrichtung ist noch nicht abgeschlossen. <a href="/setup">Zur Einrichtung</a></div>}
         {err && <ErrorBox error={errorTexts[err] ?? decodeURIComponent(err)} />}
-        <p className="muted">Melden Sie sich mit Ihrem YubiKey an.</p>
+        <p className="muted">Melden Sie sich mit Ihrem YubiKey an. <a href="/passkey">Was ist ein Passkey?</a></p>
         <div className="login-buttons">
           {methods.entraSso && (
             <a className="btn primary" href={'/auth/login?returnUrl=' + encodeURIComponent(returnUrl)}>Mit Microsoft anmelden</a>

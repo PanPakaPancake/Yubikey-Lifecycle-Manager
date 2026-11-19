@@ -38,6 +38,7 @@ public sealed class RegistrationService(
     AuditService audit,
     IDataProtectionProvider dataProtection,
     PinLetterStore letters,
+    Microsoft.Extensions.Options.IOptions<YlmOptions> ylmOptions,
     ILogger<RegistrationService> logger)
 {
     public const string FixedPinPurpose = "Ylm.Profile.FixedPin";
@@ -271,7 +272,8 @@ public sealed class RegistrationService(
             using var brandScope = Theme.Use(brand);
             var pdf = PinLetterPdf.Create(new PinLetterData(
                 brand.CompanyName ?? settings.OrganizationName, tenant.DisplayName, user.DisplayName ?? user.UserPrincipalName, user.UserPrincipalName, pin,
-                key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now));
+                key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now,
+                InfoUrl: PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, ylmOptions.Value, ct: ct), tenantId)));
             job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief {user.UserPrincipalName} {key.SerialNumber}.pdf",
                 job.BatchItemId is null ? null : PinLetterStore.BatchLifetime);
             job.Step = "Registrierung abgeschlossen";

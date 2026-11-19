@@ -29,6 +29,7 @@ import ApprovalsPage from './pages/Approvals';
 import TodosPage from './pages/Todos';
 import IdentifyPage from './pages/Identify';
 import IntegrationsPage from './pages/Integrations';
+import PasskeyInfoPage from './pages/PasskeyInfo';
 import { isRegisterPath } from './register';
 import { ChooseTenant, TenantProvider, TenantSwitcher, useTenant } from './tenant';
 
@@ -53,6 +54,8 @@ export default function App() {
 
   useEffect(() => { void reload(); }, [reload]);
 
+  // Öffentliche Infoseiten für Endnutzer (Link im PIN-Brief): ohne Anmeldung, ohne Navigation der Plattform.
+  if (location.pathname === '/passkey' || location.pathname.startsWith('/passkey/')) return <PasskeyInfoPage authenticated={!!me?.authenticated} />;
   if (!me) return <div className="center-page"><Spinner label="Wird geladen …" /></div>;
 
   if (location.pathname.startsWith('/setup')) return <SetupPage />;
@@ -123,6 +126,9 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           {can('ManageApiKeys') && item('/partner/integrations', 'plug', 'Integrationen')}
           {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
           {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
+
+          <div className="section">Hilfe</div>
+          {item('/passkey', 'info', 'Passkeys erklärt')}
         </nav>
         <div className="sidebar-foot">
           <NavLink to="/account" className="account-link">

@@ -15,11 +15,28 @@ public sealed record PinLetterData(
     bool PinChangeForced,
     DateTime CreatedAt,
     /// <summary>Geteilter Key: Konten auf dem Key. Der Brief geht dann an den Verwahrer (UserDisplayName).</summary>
-    IReadOnlyList<string>? SharedAccounts = null);
+    IReadOnlyList<string>? SharedAccounts = null,
+    /// <summary>Link zur öffentlichen Passkey-Infoseite; ohne Adresse der Plattform entfällt der Hinweis.</summary>
+    string? InfoUrl = null);
 
 /// <summary>PIN letter for the end user with a simple illustrated guide (planning 6.2).</summary>
 public static class PinLetterPdf
 {
+    /// <summary>Öffentliche Adresse der Plattform: Konfiguration (Ylm__PublicBaseUrl), sonst Setup, sonst die aktuelle Anfrage.</summary>
+    public static async Task<string?> BaseUrlAsync(Data.YlmDbContext db, Infrastructure.YlmOptions options, HttpRequest? request = null, CancellationToken ct = default)
+    {
+        var url = options.PublicBaseUrl;
+        if (string.IsNullOrWhiteSpace(url))
+            url = (await Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.FirstOrDefaultAsync(
+                Microsoft.EntityFrameworkCore.EntityFrameworkQueryableExtensions.AsNoTracking(db.Installation), ct))?.PublicBaseUrl;
+        if (string.IsNullOrWhiteSpace(url) && request is not null) url = $"{request.Scheme}://{request.Host}";
+        return string.IsNullOrWhiteSpace(url) ? null : url.TrimEnd('/');
+    }
+
+    /// <summary>Link zur Infoseite, mit Tenant für dessen Erscheinungsbild.</summary>
+    public static string? InfoUrl(string? baseUrl, Guid? tenantId) =>
+        baseUrl is null ? null : $"{baseUrl}/passkey/anleitung" + (tenantId is { } t ? $"?t={t}" : "");
+
     public static byte[] Create(PinLetterData d)
     {
         YlmFontResolver.Install();
@@ -31,14 +48,23 @@ public static class PinLetterPdf
         page.Height = XUnit.FromMillimeter(297);
         using (var g = XGraphics.FromPdfPage(page))
         {
-            Draw(g, d, page.Width.Point);
+            var infoY = Draw(g, d, page.Width.Point);
+            if (d.InfoUrl is { } url && infoY is { } iy)
+            {
+                // Klickbarer Bereich über dem Hinweis auf die Infoseite.
+                var rect = g.Transformer.WorldToDefaultPage(new XRect(InfoBoxX, iy, page.Width.Point - 2 * InfoBoxX, InfoBoxH));
+                page.AddWebLink(new PdfRectangle(rect), url);
+            }
         }
         using var ms = new MemoryStream();
         doc.Save(ms, false);
         return ms.ToArray();
     }
 
-    private static void Draw(XGraphics g, PinLetterData d, double pageWidth)
+    private const double InfoBoxX = 48, InfoBoxH = 46;
+
+    /// <returns>Oberkante des Hinweises auf die Infoseite, falls gezeichnet.</returns>
+    private static double? Draw(XGraphics g, PinLetterData d, double pageWidth)
     {
         const double m = 48;
         var w = pageWidth - 2 * m;
@@ -122,9 +148,21 @@ public static class PinLetterPdf
             y += 17;
         }
 
+        double? infoY = null;
+        if (d.InfoUrl is { } info)
+        {
+            y += 10;
+            infoY = y;
+            g.DrawRoundedRectangle(new XPen(Accent, 0.8), new XSolidBrush(AccentSoft), m, y, w, InfoBoxH, 8, 8);
+            Text(g, "Was ist ein Passkey? Anleitung und Erklärung:", F(10, true), Accent, m + 14, y + 9, w - 28, 14);
+            var shown = info.Split('?')[0].Replace("https://", "").Replace("http://", "");
+            Text(g, shown, F(10), Ink, m + 14, y + 25, w - 28, 14);
+        }
+
         g.DrawLine(new XPen(Line, 0.6), m, 800, m + w, 800);
         Text(g, $"{d.OrganizationName} · {d.TenantName} · {Brand.Footer ?? "Erstellt mit dem Yubikey Lifecycle Manager."} Die PIN wurde nicht gespeichert.",
             F(7.5), Muted, m, 806, w, 12);
+        return infoY;
     }
 
     private static string Shorten(string s, int max) => s.Length <= max ? s : s[..(max - 1)] + "…";
