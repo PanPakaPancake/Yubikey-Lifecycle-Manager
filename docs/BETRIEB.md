@@ -1,47 +1,187 @@
 # Betrieb und Installation
 
-## 1. Server (Docker)
+## 1. Server installieren
 
-Voraussetzungen: Linux-Host mit Docker und Docker Compose, ein DNS-Name und ein Reverse Proxy mit TLS (z. B. Caddy, Traefik oder nginx).
+Die Plattform läuft als kleiner Docker-Compose-Stapel aus fertigen Images. Gebaut wird nichts, es braucht nur Docker.
+
+| Dienst | Aufgabe |
+|---|---|
+| `server` | Plattform (Web-Oberfläche, API, Agent-Verbindung) |
+| `db` | PostgreSQL |
+| `backup` | tägliche Datensicherung nach `backups/` (nutzt das PostgreSQL-Image, kein zusätzlicher Download) |
+| `updater` | Update per Klick aus der Oberfläche |
+| `caddy` | nur auf Servern: HTTPS mit automatischem Let's-Encrypt-Zertifikat |
+
+Ressourcen: 1 vCPU, 1 GB RAM und 10 GB Platte reichen für den Anfang. Die Images gibt es für `linux/amd64` und `linux/arm64` (ab dem nächsten Release).
+
+### Welche Variante?
+
+| | Lokal auf dem Admin-PC | Server/VPS mit eigener Domain | Server hinter vorhandenem Reverse Proxy |
+|---|---|---|---|
+| Adresse | `http://localhost:8080` | `https://ylm.example.com` | `https://ylm.example.com` |
+| HTTPS | nicht nötig (`localhost` ist erlaubt) | automatisch (Caddy, Let's Encrypt) | macht der vorhandene Proxy |
+| Voraussetzung | Docker Desktop | Linux mit Docker, DNS-Eintrag, Ports 80/443 offen | Linux mit Docker, Proxy-Konfiguration |
+| Agents anderer PCs | nein, nur dieser PC | ja | ja |
+| Installation | `install.ps1` | `install.sh` (Auswahl 1) | `install.sh` (Auswahl 2) |
+
+Passkeys und Entra funktionieren außerhalb von `localhost` nur über HTTPS. Deshalb gibt es auf einem Server immer HTTPS.
+
+### 1.1 Lokal auf dem Admin-PC (Windows)
+
+Voraussetzung: [Docker Desktop](https://www.docker.com/products/docker-desktop/) ist installiert und gestartet. Dann in PowerShell (keine Adminrechte nötig):
+
+```powershell
+irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
+```
+
+Das Skript legt `%USERPROFILE%\YubikeyLifecycleManager` an, erzeugt dort die `.env` mit zufälligem Datenbank-Passwort und Updater-Geheimnis, lädt die Images, startet alles und zeigt am Ende das **Setup-Token**. Der Browser öffnet `http://localhost:8080/setup`; weiter mit [Abschnitt 2](#2-einrichtung-einmalig).
+
+Anderer Ordner: `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1))) -Dir D:\ylm`
+
+### 1.2 Server/VPS mit eigener Domain (empfohlen für den Dauerbetrieb)
+
+Voraussetzungen:
+
+- Linux-Server (z. B. Debian 12/13 oder Ubuntu 24.04), Zugang per SSH mit `sudo`
+- DNS-Eintrag (A und ggf. AAAA) für die Domain, z. B. `ylm.example.com`, zeigt auf den Server
+- Ports **80** und **443** (TCP, für HTTP/3 auch 443/UDP) sind in der Firewall des Anbieters offen
+- Docker muss nicht vorinstalliert sein; das Skript bietet die Installation über `get.docker.com` an
 
 ```bash
-git clone https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager.git
-cd Yubikey-Lifecycle-Manager
-cp .env.example .env        # Passwort, öffentliche Adresse und UPDATER_TOKEN eintragen
-docker compose up -d        # fertige Images aus den Releases; mit --build lokal aus dem Quellcode
-docker compose logs server | grep Setup-Token
+curl -fsSL https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.sh | sudo bash
 ```
 
-Die Plattform lauscht nur auf `127.0.0.1:8080`. Der Reverse Proxy leitet HTTPS dorthin weiter und setzt `X-Forwarded-Proto` und `X-Forwarded-Host`. Beispiel für Caddy:
+Das Skript fragt nach der Variante (1 = eigene Domain) und der Domain, legt `/opt/ylm` mit `.env` an (Rechte `600`), prüft DNS und Ports, startet die Dienste samt Caddy und zeigt das Setup-Token. Caddy holt das Zertifikat beim ersten Aufruf selbst und verlängert es automatisch. Danach `https://ylm.example.com/setup` öffnen und mit [Abschnitt 2](#2-einrichtung-einmalig) weitermachen.
 
-```
-ylm.example.com {
-    reverse_proxy 127.0.0.1:8080
+Ohne Rückfragen: `curl -fsSL …/install.sh | sudo bash -s -- --domain ylm.example.com --yes`
+
+Weitere Optionen: `--dir PFAD`, `--version v0.3.0`, `--mode local|https|proxy`, `--url https://…`.
+
+Empfehlungen für einen VPS:
+
+- Nur die Ports 22, 80 und 443 freigeben. Die Plattform selbst lauscht nur auf `127.0.0.1:8080`, die Datenbank gar nicht nach außen.
+- SSH nur mit Schlüssel, automatische Sicherheitsupdates des Betriebssystems einschalten (z. B. `unattended-upgrades`).
+- Die Sicherungen in `/opt/ylm/backups` regelmäßig auf einen anderen Rechner kopieren (siehe [1.6](#16-datensicherung-und-wiederherstellung)).
+
+### 1.3 Server hinter einem vorhandenen Reverse Proxy
+
+Läuft auf dem Server schon nginx, Traefik o. ä., im Skript Variante 2 wählen (oder `--url https://ylm.example.com`). Caddy bleibt dann aus. Der Proxy leitet HTTPS auf `127.0.0.1:8080` weiter, setzt `X-Forwarded-Proto` und `X-Forwarded-Host` und lässt WebSockets durch (Agent-Verbindung unter `/hubs/`). Beispiel nginx:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $connection_upgrade;   # map $http_upgrade $connection_upgrade { default upgrade; '' close; }
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    proxy_read_timeout 300s;
 }
 ```
 
-> Der Server vertraut den Forwarded-Headern jedes vorgeschalteten Proxys. Port 8080 darf deshalb nicht direkt aus dem Netz erreichbar sein.
+Läuft der Proxy auf einem anderen Rechner, in `.env` z. B. `YLM_BIND=10.0.0.5:8080` setzen (interne Adresse).
+
+> Der Server vertraut den Forwarded-Headern des vorgeschalteten Proxys. Port 8080 darf deshalb nie direkt aus dem Internet erreichbar sein.
+
+### 1.4 Ohne Skript installieren
+
+```bash
+mkdir -p /opt/ylm/deploy && cd /opt/ylm
+base=https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main
+for f in docker-compose.yml deploy/Caddyfile deploy/backup.sh .env.example; do curl -fsSL "$base/$f" -o "$f"; done
+cp .env.example .env && nano .env   # POSTGRES_PASSWORD, UPDATER_TOKEN (openssl rand -hex 32), YLM_PUBLIC_URL, ggf. COMPOSE_PROFILES=https und YLM_DOMAIN
+docker compose up -d
+docker compose logs server | grep Setup-Token
+```
 
 Beim ersten Start einer leeren Datenbank meldet Entity Framework einmal einen Fehler beim Lesen der Migrationstabelle. Das ist normal; danach werden die Tabellen angelegt.
 
-### Datensicherung
+### 1.5 Eigene Anpassungen
 
-| Was | Wo | Hinweis |
-|---|---|---|
-| Datenbank | Volume `db` | z. B. täglich `docker compose exec db pg_dump -U ylm ylm` |
-| App-Zertifikat und Data-Protection-Schlüssel | Volume `data` (`/data`) | **Unbedingt sichern.** Ohne diese Schlüssel sind Zertifikat, feste Profil-PINs und Anmelde-Cookies nicht mehr lesbar. |
+`docker-compose.yml`, `deploy/Caddyfile` und `deploy/backup.sh` gehören zur Version und werden beim erneuten Ausführen des Installationsskripts ersetzt (die alte Fassung bleibt als `.bak`). Bitte dort nichts ändern:
 
-### Einstellungen (Umgebungsvariablen)
+- **Einstellungen** in `.env` (Erklärung aller Werte in `.env.example`), danach `docker compose up -d`.
+- **Ergänzungen** in `docker-compose.override.yml` im selben Ordner; Docker Compose liest sie automatisch mit. Beispiel:
+
+  ```yaml
+  services:
+    server:
+      environment:
+        Ylm__RequirePhishingResistantSignIn: "false"
+  ```
+
+- **Eigenes Zertifikat** statt Let's Encrypt (z. B. internes Netz ohne öffentliches DNS): eigene Caddyfile mit `tls /certs/cert.pem /certs/key.pem` anlegen und per Override einbinden (`./my.Caddyfile:/etc/caddy/Caddyfile:ro` und `./certs:/certs:ro` unter `caddy.volumes`).
+
+Den Ordner der Installation nicht umbenennen, wenn `.env` kein `COMPOSE_PROJECT_NAME` enthält: Docker leitet die Namen der Volumes sonst vom Ordnernamen ab und startet mit leeren Daten.
+
+### 1.6 Datensicherung und Wiederherstellung
+
+Der Dienst `backup` sichert täglich um 02:30 (`BACKUP_TIME`) die Datenbank und das Volume `data` in **ein** Archiv `backups/ylm-JJJJMMTT-HHMMSS.tar.gz` und löscht Sicherungen, die älter als 14 Tage sind (`BACKUP_KEEP_DAYS`). Das Volume `data` enthält App-Zertifikat, Data-Protection-Schlüssel und Geheimnisse. Ohne diese Schlüssel sind Zertifikat, feste Profil-PINs, SMTP-Passwort und Anmelde-Cookies nicht mehr lesbar. Deshalb gehören beide Teile immer zusammen, und das Archiv ist so schützenswert wie der Server.
+
+```bash
+docker compose exec backup sh /backup.sh now        # sofort sichern
+docker compose exec backup sh /backup.sh list       # vorhandene Sicherungen
+```
+
+Wiederherstellen (gleiche oder neuere Version der Plattform):
+
+```bash
+docker compose stop server
+docker compose exec backup sh /backup.sh restore ylm-20261119-023000.tar.gz
+docker compose start server
+```
+
+Eine Sicherung von einem anderen Rechner vorher nach `backups/` kopieren. Kopie außer Haus, z. B. per Cron auf einem anderen Rechner: `rsync -a root@vps:/opt/ylm/backups/ /srv/ylm-backups/`.
+
+### 1.7 Umzug, z. B. vom Admin-PC auf einen VPS
+
+1. Alte Installation: `docker compose exec backup sh /backup.sh now`, Archiv aus `backups\` kopieren.
+2. Neue Installation per Skript anlegen (1.2) und das Archiv nach `/opt/ylm/backups/` kopieren.
+3. Wiederherstellen wie in 1.6. Die Plattform läuft danach mit allen Daten unter der neuen Adresse aus `YLM_PUBLIC_URL`.
+4. **Entra:** In der App-Registrierung der Plattform (Heim-Tenant → App-Registrierungen → „Yubikey Lifecycle Manager <Organisation>“ → Authentifizierung) die neuen Umleitungs-URIs `https://<neu>/signin-oidc` und `https://<neu>/api/tenants/consent-callback` ergänzen.
+5. **Lokale Benutzer** mit Passkey brauchen einen neuen Einrichtungslink (Passkeys gehören zur Adresse), **Agents** einen neuen Kopplungscode.
+6. Alte Installation stoppen: `docker compose down` (Volumes bleiben erhalten, bis sie mit `down -v` gelöscht werden).
+
+### 1.8 Einstellungen (Umgebungsvariablen)
+
+In `.env`:
 
 | Variable | Standard | Bedeutung |
 |---|---|---|
-| `Ylm__PublicBaseUrl` | aus der Einrichtung | Öffentliche HTTPS-Adresse |
+| `POSTGRES_PASSWORD` | – | Datenbank-Passwort (Pflicht, nach der Installation nicht mehr ändern) |
+| `YLM_PUBLIC_URL` | aus der Einrichtung | öffentliche Adresse für Browser, Entra und Agents |
+| `COMPOSE_PROFILES` | leer | `https` schaltet Caddy ein |
+| `YLM_DOMAIN` | – | Domain für Caddy |
+| `YLM_BIND` | `127.0.0.1:8080` | Adresse, auf der der Server-Port lauscht |
+| `UPDATER_TOKEN` | leer | Geheimnis für das Update per Klick; leer = aus |
+| `YLM_VERSION` | `latest` | Version des Server-Images festhalten |
+| `BACKUP_TIME`, `BACKUP_KEEP_DAYS`, `BACKUP_DIR` | `02:30`, `14`, `./backups` | Datensicherung (`BACKUP_TIME=off` schaltet sie ab) |
+| `TZ` | `Europe/Berlin` | Zeitzone |
+
+Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services.server.environment`):
+
+| Variable | Standard | Bedeutung |
+|---|---|---|
 | `Ylm__DefaultSyncIntervalMinutes` | 60 | Sync-Intervall für neue Tenants |
 | `Ylm__OffboardingRetentionDays` | 30 | Aufbewahrung nach dem Offboarding |
 | `Ylm__RequirePhishingResistantSignIn` | true | Anmeldung nur mit Passkey/YubiKey (Claim `amr` = `fido`) |
 | `Ylm__UpdateCheckEnabled` | true | Auf GitHub nach neuen Versionen suchen |
-| `YLM_VERSION` (in `.env`) | latest | Version des Server-Images festhalten |
-| `UPDATER_TOKEN` (in `.env`) | leer | Geheimnis für das Update per Klick; leer = aus |
+
+### 1.9 Updates
+
+**Globale Einstellungen → Version und Updates** zeigt die installierte und die neueste Version (GitHub-Releases, Prüfung alle 6 Stunden). Ein Punkt neben „Globale Einstellungen“ weist Owner auf ein Update hin.
+
+- **Update per Klick:** Der Container `updater` holt das neue Server-Image und startet den Server neu (`docker compose pull server` und `up -d server`). Nur dieser Container hat Zugriff auf den Docker-Socket, der Server selbst nicht. Das Installationsskript setzt dafür `UPDATER_TOKEN`; ohne Token nimmt der Updater keine Aufträge an.
+- **Installationsdateien auffrischen:** Neue Versionen können auch `docker-compose.yml` und die Dateien in `deploy/` ändern (z. B. neue Dienste). Dafür das Installationsskript gelegentlich erneut ausführen; es behält `.env` und aktualisiert Dateien und alle Images. Ohne Skript: `docker compose pull && docker compose up -d`.
+- **Agents:** Jedes Server-Image bringt das passende Agent-MSI mit. „Mein Agent“ bietet es zum Download an, und verbundene Agents installieren neue Versionen innerhalb von 4 Stunden selbst (still per msiexec, Prüfsumme wird geprüft). Abschalten pro PC mit `"Agent": { "AutoUpdate": false }` in der `appsettings.json` des Agents.
+- Die Updateprüfung lässt sich mit `Ylm__UpdateCheckEnabled=false` abschalten (z. B. ohne Internetzugang).
+- Nicht `docker compose up --build` verwenden: Das ersetzt das Release-Image durch einen lokalen Build und blockiert so spätere Updates. Lokale Builds nur in der Entwicklung (Abschnitt 6).
+
+### 1.10 Alte Installation aus einem Git-Checkout
+
+Wer bisher im geklonten Repository installiert hat, kann dort bleiben: `git pull`, dann `docker compose up -d`. Damit kommen die Datensicherung und (bei Bedarf) Caddy dazu. Eigene Änderungen an `docker-compose.yml` vorher in `docker-compose.override.yml` bzw. `.env` verschieben (`git stash` hilft beim Aufräumen). Für einen Wechsel in einen eigenen Ordner wie oben: sichern, per Skript neu installieren, wiederherstellen (1.7, Schritte 1 bis 3; Adresse und Entra bleiben gleich).
 
 ## 2. Einrichtung (einmalig)
 
@@ -54,15 +194,6 @@ Beim ersten Start einer leeren Datenbank meldet Entity Framework einmal einen Fe
 Ausweichweg, z. B. wenn Conditional Access die Code-Anmeldung sperrt: Im Assistenten „Alternativ: per PowerShell-Skript oder manuell anlegen“ aufklappen, das Skript als Globaler Administrator im Heim-Tenant ausführen (oder die App nach der Anleitung von Hand anlegen) und Client-ID und Tenant-ID eintragen.
 
 Benötigte Anwendungsberechtigungen (Microsoft Graph): `UserAuthenticationMethod.ReadWrite.All`, `User.Read.All`, `GroupMember.Read.All`, `Policy.Read.All`, `Policy.ReadWrite.AuthenticationMethod`, `AuditLog.Read.All`, `Organization.Read.All`.
-
-### Updates
-
-**Globale Einstellungen → Version und Updates** zeigt die installierte und die neueste Version (GitHub-Releases, Prüfung alle 6 Stunden). Ein Punkt neben „Globale Einstellungen“ weist Owner auf ein Update hin.
-
-- **Update per Klick:** Der Container `updater` holt das neue Server-Image und startet den Server neu (`docker compose pull server` und `up -d server`). Nur dieser Container hat Zugriff auf den Docker-Socket, der Server selbst nicht. Dafür in `.env` ein langes Geheimnis setzen, z. B. `UPDATER_TOKEN=$(openssl rand -hex 32)`, danach `docker compose up -d`. Ohne Token nimmt der Updater keine Aufträge an.
-- **Von Hand:** `docker compose pull && docker compose up -d`.
-- **Agents:** Jedes Server-Image bringt das passende Agent-MSI mit. „Mein Agent“ bietet es zum Download an, und verbundene Agents installieren neue Versionen innerhalb von 4 Stunden selbst (still per msiexec, Prüfsumme wird geprüft). Abschalten pro PC mit `"Agent": { "AutoUpdate": false }` in der `appsettings.json` des Agents.
-- Die Updateprüfung lässt sich mit `Ylm__UpdateCheckEnabled=false` abschalten (z. B. ohne Internetzugang).
 
 ### Neue Version veröffentlichen (Entwicklung)
 
@@ -136,3 +267,12 @@ dotnet test
 ```
 
 Im Development-Modus gibt es auf der Login-Seite eine Entwicklungs-Anmeldung ohne Entra (`AuthMode=Development`).
+
+Den kompletten Stapel aus dem Quellcode bauen (statt die Release-Images zu laden):
+
+```bash
+cp .env.example .env
+docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+# zurück zu den Release-Images
+docker compose pull && docker compose up -d
+```

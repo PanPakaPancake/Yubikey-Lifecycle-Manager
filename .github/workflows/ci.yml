@@ -45,14 +45,49 @@ jobs:
         run: dotnet test YubikeyLifecycleManager.slnx -c Release --no-build --logger "console;verbosity=normal"
 
   docker:
-    name: Docker-Image
+    name: Docker-Images und Installation
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Image bauen
-        run: docker build -t yubikey-lifecycle-manager:ci .
-      - name: Updater-Image bauen
-        run: docker build -t yubikey-lifecycle-manager-updater:ci ./updater
+      - name: Shell-Skripte (shellcheck)
+        run: shellcheck install.sh && shellcheck -s sh deploy/backup.sh
+      - name: Compose-Datei (lokal und mit HTTPS-Profil)
+        run: |
+          cp .env.example .env
+          docker compose config -q
+          COMPOSE_PROFILES=https YLM_DOMAIN=ylm.example.com docker compose config -q
+          docker compose -f docker-compose.yml -f docker-compose.build.yml config -q
+      - name: Caddyfile
+        run: docker run --rm -e YLM_DOMAIN=ylm.example.com -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - name: Installation lokal (Skript, Sicherung, Wiederherstellung)
+        run: |
+          rm .env
+          # Images aus diesem Stand bauen und per Override verwenden, damit der Test nicht von Releases abhängt.
+          docker build -t ylm-ci/server .
+          docker build -t ylm-ci/updater ./updater
+          mkdir -p "$RUNNER_TEMP/ylm" "$RUNNER_TEMP/raw"
+          printf 'services:\n  server:\n    image: ylm-ci/server\n  updater:\n    image: ylm-ci/updater\n' > "$RUNNER_TEMP/ylm/docker-compose.override.yml"
+          ln -s "$GITHUB_WORKSPACE" "$RUNNER_TEMP/raw/main"
+          YLM_RAW_URL="file://$RUNNER_TEMP/raw" bash install.sh --dir "$RUNNER_TEMP/ylm" --mode local --version main --yes
+          cd "$RUNNER_TEMP/ylm"
+          docker compose exec -T backup sh /backup.sh now
+          docker compose stop server
+          docker compose exec -T backup sh /backup.sh restore "$(ls backups | head -n1)"
+          docker compose start server
+          docker compose ps
+
+  installer-ps1:
+    name: install.ps1 (Syntax)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parsen mit Windows PowerShell 5.1 und PowerShell 7
+        shell: pwsh
+        run: |
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile("$PWD/install.ps1", [ref]$null, [ref]$errors) | Out-Null
+          if ($errors) { $errors; exit 1 }
+          powershell -NoProfile -Command "`$e=`$null; [System.Management.Automation.Language.Parser]::ParseFile('$PWD\install.ps1',[ref]`$null,[ref]`$e) | Out-Null; if (`$e) { `$e; exit 1 }"
 
   agent:
     name: Agent, Tray-App und MSI

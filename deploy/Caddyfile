@@ -1,0 +1,14 @@
+# Reverse Proxy mit automatischem HTTPS (Let's Encrypt) vor der Plattform.
+# Die Domain kommt aus .env (YLM_DOMAIN). Diese Datei bitte nicht ändern;
+# für eigene Zertifikate o. ä. eine eigene Datei per docker-compose.override.yml einbinden (docs/BETRIEB.md).
+{$YLM_DOMAIN} {
+	encode zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+	# Setzt X-Forwarded-For/-Proto/-Host; WebSockets (Agent-Verbindung) laufen ohne weitere Einstellung.
+	reverse_proxy server:8080
+}

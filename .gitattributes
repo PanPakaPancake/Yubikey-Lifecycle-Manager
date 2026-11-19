@@ -1,0 +1,6 @@
+# Skripte und Konfiguration, die in Linux-Containern laufen, immer mit LF auschecken (auch unter Windows).
+*.sh text eol=lf
+deploy/* text eol=lf
+docker-compose*.yml text eol=lf
+.env.example text eol=lf
+*.ps1 text eol=crlf
