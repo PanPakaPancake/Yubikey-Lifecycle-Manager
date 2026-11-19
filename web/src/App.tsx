@@ -5,6 +5,7 @@ import { AuthContext } from './auth';
 import { Empty, PageHeader, Spinner, useApi } from './ui';
 import { Icon, type IconName } from './icons';
 import { ThemeToggle } from './theme';
+import { BrandMark } from './brand';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
 import AccountSetupPage from './pages/AccountSetup';
@@ -31,6 +32,9 @@ import IdentifyPage from './pages/Identify';
 import IntegrationsPage from './pages/Integrations';
 import { isRegisterPath } from './register';
 import { ChooseTenant, TenantProvider, TenantSwitcher, useTenant } from './tenant';
+
+// Seitenleiste: 'sidebar-dark' (dunkel, kontrastreich) oder 'sidebar-light'.
+const SidebarStyle = 'sidebar-dark';
 
 const roleLabel: Record<string, string> = { Owner: 'Owner', Operator: 'Operator', Helpdesk: 'Helpdesk', Auditor: 'Auditor' };
 
@@ -91,7 +95,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
     <NavLink to={to} end={end}><Icon name={icon} />{label}</NavLink>
   );
   return (
-    <div className={'shell' + (menuOpen ? ' menu-open' : '')}>
+    <div className={'shell ' + SidebarStyle + (menuOpen ? ' menu-open' : '')}>
       <header className="mobilebar">
         <button type="button" className="icon-btn" aria-label="Menü öffnen" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" size={22} /></button>
         <span className="mobilebar-title">Lifecycle Manager</span>
@@ -99,7 +103,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
       <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />
       <aside className="sidebar">
         <div className="brand">
-          <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden><rect x="21" y="12" width="9" height="8" fill="#b8bec7" /><rect className="brand-body" x="2" y="8" width="22" height="16" rx="6" /><circle cx="11" cy="16" r="5" fill="#d4a52a" /></svg>
+          <BrandMark />
           <div>Lifecycle Manager<small>{me.organizationName || 'YubiKeys'}</small></div>
           <button type="button" className="icon-btn sidebar-close" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}><Icon name="x" size={20} /></button>
         </div>

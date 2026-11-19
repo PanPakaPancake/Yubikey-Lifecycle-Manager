@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { fmtDate, usageLabels, type KeyUsage } from '../api';
 import { useCan } from '../auth';
-import { Badge, download, Empty, ErrorBox, formatSort, LiveSearchInput, MenuButton, PageHeader, parseSort, SortTh, Spinner, useApi, type SortState } from '../ui';
+import { Badge, CountUp, download, Empty, ErrorBox, formatSort, LiveSearchInput, MenuButton, PageHeader, parseSort, SortTh, Spinner, useApi, type SortState } from '../ui';
 import { Icon, type IconName } from '../icons';
 import { useTenant } from '../tenant';
 
@@ -225,7 +225,7 @@ function KpiTile({ icon, label, value, sub, tone, active, onClick }: { icon: Ico
     <span className={'kpi-icon' + (tone ? ' tone-' + tone : '')}><Icon name={icon} size={18} /></span>
     <span className="kpi-text">
       <span className="label">{label}</span>
-      <span className={'value' + (tone === 'warn' ? ' tone-text-warn' : '')}>{value}</span>
+      <span className={'value' + (tone === 'warn' ? ' tone-text-warn' : '')}><CountUp value={value} /></span>
       {sub && <span className="sub">{sub}</span>}
     </span>
   </>;

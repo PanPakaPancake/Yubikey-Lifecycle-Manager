@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { fmtDate, statusLabels, type KeyStatus } from '../api';
 import { useCan } from '../auth';
 import type { ReactNode } from 'react';
-import { Badge, Card, Donut, download, Empty, ErrorBox, MenuButton, PageHeader, Spinner, useApi } from '../ui';
+import { Badge, Card, CountUp, Donut, download, Empty, ErrorBox, MenuButton, PageHeader, Spinner, useApi } from '../ui';
 import { Icon } from '../icons';
 import { useTenant } from '../tenant';
 
@@ -133,7 +133,7 @@ const statusColor: Record<KeyStatus, string> = { Active: 'var(--ok)', InStock: '
 function Kpi({ label, value, sub, to, tone, children, aside }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode; aside?: ReactNode }) {
   const text = <>
     <div className="label">{label}</div>
-    <div className={'value' + (tone ? ' tone-text-' + tone : '')}>{value}</div>
+    <div className={'value' + (tone ? ' tone-text-' + tone : '')}><CountUp value={value} /></div>
     <div className="sub">{sub}</div>
     {children}
   </>;

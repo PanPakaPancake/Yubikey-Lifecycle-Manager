@@ -4,7 +4,9 @@ import { BrowserRouter } from 'react-router';
 import App from './App';
 import { FeedbackProvider } from './feedback';
 import { applyStoredTheme } from './theme';
+import '@fontsource-variable/inter/wght.css';
 import './styles.css';
+import './design.css';
 
 applyStoredTheme();
 
