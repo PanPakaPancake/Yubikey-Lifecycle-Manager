@@ -414,3 +414,9 @@ a.badge:hover { text-decoration: none; filter: brightness(.97); }
   .step.current .step-name { display: inline; }
   .live-search { min-width: 0; flex: 1 1 100%; }
 }
+
+.tenant-options button.kb-active { background: var(--surface-2); outline: 1px solid var(--line); }
+.tenant-options button.selected.kb-active { background: var(--accent-soft); outline-color: var(--accent); }
+.tenant-current > span[aria-hidden] { transition: transform .15s; }
+.tenant-current[aria-expanded="true"] > span[aria-hidden] { transform: rotate(180deg); }
+.tenant-menu { animation: modal-in .15s ease-out; }
