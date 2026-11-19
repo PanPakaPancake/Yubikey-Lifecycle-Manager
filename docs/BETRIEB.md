@@ -114,6 +114,16 @@ Für Tests ohne Key: `YlmAgent.exe --simulate` startet den Agent mit einem simul
 
 API-Schlüssel legen Owner unter „Plattform“ an. Ein Schlüssel gilt für alle Tenants (auch künftig angebundene) oder nur für ausgewählte; die Auswahl lässt sich später ändern. Aufruf mit Header `X-Api-Key: ylm_…`. `GET /api/v1/tenants` listet die Tenants des Schlüssels; die anderen Endpunkte liefern ohne Parameter alle diese Tenants, mit `?tenant=` (Plattform-ID, Entra-Tenant-ID oder Standard-Domain) nur einen. Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`, die interaktive Dokumentation unter `/api/docs`.
 
+Einzige Schreibfunktion ist die ToDo-Liste (`GET/POST/DELETE /api/v1/todos`). Dafür braucht der Schlüssel das Häkchen „ToDo-Liste schreiben“. `POST` legt für eine Person (`tenant`, `userPrincipalName`, optional `ticketId`, `ticketUrl`, `note`, `profile`, `dueDate`) ein offenes ToDo an; gibt es schon eines, kommt es mit `200` zurück statt `201`.
+
+## 5a. Integrationen
+
+Unter „Integrationen“ (Partnerebene, Recht „API und Integrationen“):
+
+- **Webhooks**: JSON per `POST` bei ausgewählten Ereignissen, signiert mit `X-YLM-Signature: sha256=HMAC-SHA256(Geheimnis, X-YLM-Timestamp + "." + Body)`. Fehlschläge werden bis zu fünfmal wiederholt (1 min bis 6 h). Der Server braucht ausgehenden Zugriff auf die Ziel-URLs.
+- **Mail-Berichte**: SMTP-Server eintragen (Passwort wird verschlüsselt gespeichert), dann Berichte täglich, wöchentlich oder monatlich mit Dashboard-PDF und optional Keys-CSV.
+- **NinjaOne**: API-App mit Client Credentials (Scopes Monitoring, Management), Organisations-Custom-Fields anlegen, Tenants Organisationen zuordnen. Die Plattform schreibt die Kennzahlen im eingestellten Intervall.
+
 ## 6. Entwicklung
 
 ```bash

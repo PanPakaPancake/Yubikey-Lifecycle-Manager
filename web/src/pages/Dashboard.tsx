@@ -11,7 +11,7 @@ interface DashboardData {
   targetUsers?: number; usersWithKey: number; coveragePercent?: number;
   issuedPerMonth: { month: string; count: number }[];
   firmware: { firmware: string; count: number; advisories: string[]; vulnerable: boolean }[];
-  vulnerableKeys: number; forcePinChangeUnsupported: number;
+  vulnerableKeys: number; forcePinChangeUnsupported: number; openTodos: number; pendingApprovals: number;
   tenants: { id: string; displayName: string; lastSyncAt?: string; lastSyncSucceeded?: boolean; targetUserCount?: number; active: number; inStock: number; usersWithKey: number; checksFailed: number }[];
 }
 
@@ -144,7 +144,9 @@ function ActionItems({ data, keysLink }: { data: DashboardData; keysLink: (s: Ke
   }
   if ((data.byStatus.Locked ?? 0) > 0) items.push({ tone: 'warn', text: <>{data.byStatus.Locked} gesperrte(r) Key(s)</>, to: keysLink('Locked'), cta: 'Im Inventar' });
   if (data.vulnerableKeys > 0) items.push({ tone: 'warn', text: <>{data.vulnerableKeys} Key(s) mit Firmware-Sicherheitshinweis</>, to: '#firmware', cta: 'Firmware-Stände' });
-  if (data.needsDetails > 0) items.push({ tone: 'info', text: <>{data.needsDetails} selbst registrierte Key(s) ohne Seriennummer/Firmware</>, to: '/keys?needsDetails=1', cta: 'Nacherfassen' });
+  if (data.pendingApprovals > 0) items.push({ tone: 'warn', text: <>{data.pendingApprovals} Breakglass-Antrag/Anträge warten auf Freigabe</>, to: '/approvals', cta: 'Freigaben' });
+  if (data.openTodos > 0) items.push({ tone: 'info', text: <>{data.openTodos} offene(s) ToDo(s): Personen, die einen Key bekommen sollen</>, to: '/todos', cta: 'ToDo-Liste' });
+  if (data.needsDetails > 0) items.push({ tone: 'info', text: <>{data.needsDetails} selbst registrierte Key(s) ohne Seriennummer/Firmware</>, to: '/keys/identify', cta: 'Nacherfassen' });
 
   if (items.length === 0) return (
     <div className="action-items all-good"><span className="ai-icon tone-ok"><Icon name="check" size={16} /></span>Kein Handlungsbedarf. Alle Prüfungen und Synchronisationen sind in Ordnung.</div>

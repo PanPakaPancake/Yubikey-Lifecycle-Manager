@@ -5,7 +5,7 @@ import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinne
 import { JobProgress } from './KeyDetail';
 import { useTenant } from '../tenant';
 
-interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number; entraPasskeys?: { displayName?: string; model?: string; isYubiKey: boolean }[] | null }
+export interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number; entraPasskeys?: { displayName?: string; model?: string; isYubiKey: boolean }[] | null }
 export interface Violation { code: string; message: string; canOverride: boolean; resolvedByReset: boolean }
 export interface Preview {
   key: KeyInfo; violations: Violation[]; resetRequired: boolean; resetPlanned: boolean; willForcePinChange: boolean; displayName: string;
@@ -76,11 +76,11 @@ export default function WizardPage() {
 
   return (
     <>
-      <PageHeader title="Key registrieren" subtitle="Einzelregistrierung im Auftrag einer Person (Registrierung on Behalf)" actions={step > 0 ? <button onClick={restart}>Neu beginnen</button> : <Link className="btn" to="/batches">Viele Personen? Stapelregistrierung</Link>} />
+      <PageHeader title="Key registrieren" subtitle="Einzelregistrierung im Auftrag einer Person (Registrierung on Behalf)" actions={step > 0 ? <button onClick={restart}>Neu beginnen</button> : <><Link className="btn" to="/register/shared">Mehrere Konten auf einem Key? Geteilter Key</Link><Link className="btn" to="/batches">Viele Personen? Stapelregistrierung</Link></>} />
       <Steps names={stepNames} current={step} />
       <ErrorBox error={error} />
 
-      {step === 0 && <PersonStep tenantId={tenantId} onPick={(u) => { setUser(u); setStep(1); void suggestProfile(u); }} />}
+      {step === 0 && <PersonStep tenantId={tenantId} initialQuery={params.get('q') ?? ''} onPick={(u) => { setUser(u); setStep(1); void suggestProfile(u); }} />}
 
       {step === 1 && <KeyStep agentId={agentId} setAgentId={setAgentId} onNext={() => setStep(2)} onBack={() => setStep(0)} />}
 
@@ -122,8 +122,8 @@ export default function WizardPage() {
   );
 }
 
-function PersonStep({ tenantId, onPick }: { tenantId: string; onPick: (u: EntraUser) => void }) {
-  const [q, setQ] = useState('');
+function PersonStep({ tenantId, onPick, initialQuery = '' }: { tenantId: string; onPick: (u: EntraUser) => void; initialQuery?: string }) {
+  const [q, setQ] = useState(initialQuery);
   const { results: users, busy, error } = useLiveSearch<EntraUser>(tenantId ? (term) => `/api/tenants/${tenantId}/users?q=${encodeURIComponent(term)}` : null, q);
   return (
     <Card title="Für wen wird der Key registriert?">
@@ -164,7 +164,7 @@ function PersonKeys({ u }: { u: EntraUser }) {
   return <>{parts}</>;
 }
 
-function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; setAgentId: (v: string) => void; onNext: () => void; onBack: () => void }) {
+export function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; setAgentId: (v: string) => void; onNext: () => void; onBack: () => void }) {
   const { data: agents, error, reload } = useApi<AgentInfo[]>('/api/agents');
   usePolling(reload, 2000);
   const online = agents?.filter((a) => a.online) ?? [];
@@ -219,7 +219,7 @@ function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: string; set
   );
 }
 
-function ProfileStep({ tenantId, profileId, setProfileId, suggestion, children }: {
+export function ProfileStep({ tenantId, profileId, setProfileId, suggestion, children }: {
   tenantId: string; profileId: string; setProfileId: (v: string) => void; suggestion?: { profileId?: string | null; groupName?: string | null }; children: ReactNode;
 }) {
   const { data: profiles, error } = useApi<Profile[]>('/api/profiles?tenantId=' + tenantId, [tenantId]);
@@ -277,7 +277,7 @@ export function PreviewDetails({ preview, overrides, setOverrides, performReset,
       {preview.userActiveKeys > 0 && <Info tone="warn">{preview.user.displayName} hat bereits {preview.userActiveKeys} aktive(n) Key(s). Die Registrierung fügt einen weiteren hinzu.</Info>}
       {preview.inventoryKey && (
         preview.inventoryKey.activeRegistrations.length > 0
-          ? <Info tone="error">Dieser Key ist bereits registriert für {preview.inventoryKey.activeRegistrations.join(', ')}. Bitte zuerst <Link to={'/keys/' + preview.inventoryKey.id}>zurücksetzen</Link>. Geteilte Keys folgen in Version 1.1.</Info>
+          ? <Info tone="error">Dieser Key ist bereits registriert für {preview.inventoryKey.activeRegistrations.join(', ')}. Bitte zuerst <Link to={'/keys/' + preview.inventoryKey.id}>zurücksetzen</Link> oder weitere Konten über <Link to="/register/shared">Geteilter Key</Link> hinzufügen.</Info>
           : <Info>Key ist im Inventar ({preview.inventoryKey.tenantName ?? 'Partnerlager, wird diesem Tenant zugewiesen'}, Status {preview.inventoryKey.status}) und wird zugewiesen.</Info>
       )}
       {preview.violations.length === 0 ? <Info tone="ok">Der Key erfüllt das Profil.</Info> : (

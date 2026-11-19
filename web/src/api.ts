@@ -85,6 +85,7 @@ export interface Tenant {
   consentedAt?: string; consentedBy?: string; targetIncludeGroups: GroupRef[]; targetExcludeGroups: GroupRef[]; syncIntervalMinutes: number;
   lastSyncAt?: string; lastSyncSucceeded?: boolean; lastSyncMessage?: string; targetUserCount?: number; lastCheckAt?: string;
   checks: TenantCheck[]; offboardedAt?: string; dataDeletionDueAt?: string;
+  requireBreakglassApproval: boolean; ninjaOrganizationId?: number | null; ninjaOrganizationName?: string | null;
 }
 
 export interface Registration {
@@ -99,6 +100,7 @@ export interface YubiKey {
   aaGuid?: string; isFips: boolean; status: KeyStatus; statusLabel: string; lockReason?: string; statusNote?: string; source: string;
   needsDetails: boolean; tags: string[]; customFields: Record<string, string | null>; notes?: string; profileId?: string;
   pinChangeForced?: boolean; createdAt: string; updatedAt: string; statusChangedAt: string; advisories: Advisory[];
+  usage: KeyUsage; custodian?: string | null; identifiedAt?: string | null;
   nextStates: KeyStatus[]; registrations: Registration[];
 }
 
@@ -177,3 +179,22 @@ export interface BatchCandidate {
 
 export const batchStatusLabels: Record<BatchStatus, string> = { Open: 'Offen', Completed: 'Abgeschlossen', Cancelled: 'Abgebrochen' };
 export const batchItemLabels: Record<BatchItemStatus, string> = { Pending: 'Offen', Running: 'Läuft', Done: 'Registriert', Failed: 'Fehlgeschlagen', Skipped: 'Übersprungen' };
+
+export type KeyUsage = 'Personal' | 'Shared' | 'Breakglass';
+export const usageLabels: Record<KeyUsage, string> = { Personal: 'Persönlich', Shared: 'Geteilter Key', Breakglass: 'Breakglass' };
+
+export type ApprovalStatus = 'Pending' | 'Approved' | 'Rejected' | 'Used' | 'Cancelled';
+export const approvalLabels: Record<ApprovalStatus, string> = { Pending: 'Wartet auf Freigabe', Approved: 'Freigegeben', Rejected: 'Abgelehnt', Used: 'Verwendet', Cancelled: 'Zurückgezogen' };
+export interface Approval {
+  id: string; tenantId: string; usage: KeyUsage; entraUserIds: string[]; userPrincipalNames: string[]; custodian?: string | null; reason: string; status: ApprovalStatus;
+  requestedById: string; requestedByName: string; requestedAt: string; decidedByName?: string | null; decidedAt?: string | null; decisionNote?: string | null;
+  validUntil?: string | null; usedAt?: string | null; keyId?: string | null; expired: boolean;
+}
+
+export type TodoStatus = 'Open' | 'Done' | 'Cancelled';
+export const todoLabels: Record<TodoStatus, string> = { Open: 'Offen', Done: 'Erledigt', Cancelled: 'Zurückgezogen' };
+export interface Todo {
+  id: string; tenantId: string; tenantName?: string | null; entraUserId: string; userPrincipalName: string; userDisplayName?: string | null; department?: string | null;
+  ticketId?: string | null; ticketUrl?: string | null; note?: string | null; profileId?: string | null; profileName?: string | null; dueDate?: string | null;
+  status: TodoStatus; source: string; createdAt: string; createdByName?: string | null; completedAt?: string | null; completedByName?: string | null; keyId?: string | null; cancelReason?: string | null;
+}

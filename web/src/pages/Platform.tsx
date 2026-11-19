@@ -32,6 +32,7 @@ export default function PlatformPage() {
       {can('ManageSettings') && <LoginSettingsCard />}
       <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
       {can('ManageApiKeys') && <ApiKeysCard />}
+      {can('ManageApiKeys') && <Info>Webhooks, Mail-Berichte und NinjaOne stehen unter <Link to="/partner/integrations">Integrationen</Link>.</Info>}
     </>
   );
 }
@@ -95,10 +96,10 @@ function GlobalFieldsCard({ editable }: { editable: boolean }) {
 
 interface ApiKeyRow {
   id: string; name: string; prefix: string; createdAt: string; createdBy: string; lastUsedAt?: string; expiresAt?: string; revokedAt?: string;
-  allTenants: boolean; tenants: { id: string; displayName: string }[];
+  allTenants: boolean; allowTodoWrite: boolean; tenants: { id: string; displayName: string }[];
 }
 
-function ScopeEditor({ allTenants, setAllTenants, tenantIds, setTenantIds, tenants, canAll }: {
+export function ScopeEditor({ allTenants, setAllTenants, tenantIds, setTenantIds, tenants, canAll }: {
   allTenants: boolean; setAllTenants: (v: boolean) => void; tenantIds: string[]; setTenantIds: (v: string[]) => void; tenants: Tenant[]; canAll: boolean;
 }) {
   return (
@@ -131,23 +132,25 @@ function ApiKeysCard() {
   const [days, setDays] = useState(365);
   const [all, setAll] = useState(canAll);
   const [ids, setIds] = useState<string[]>([]);
+  const [todoWrite, setTodoWrite] = useState(false);
   const [created, setCreated] = useState<string>();
   const [editing, setEditing] = useState<ApiKeyRow | null>(null);
   const { busy, error, run } = useAction();
 
   const create = () => run(async () => {
-    const r = await api.post<{ apiKey: string }>('/api/api-keys', { name, expiresInDays: days || null, allTenants: all, tenantIds: all ? [] : ids });
+    const r = await api.post<{ apiKey: string }>('/api/api-keys', { name, expiresInDays: days || null, allTenants: all, tenantIds: all ? [] : ids, allowTodoWrite: todoWrite });
     setCreated(r.apiKey);
     setName('');
     setIds([]);
+    setTodoWrite(false);
     reload();
   });
   const revoke = (id: string) => run(async () => { await api.del(`/api/api-keys/${id}`); reload(); });
 
   return (
-    <Card title={<span id="api">API-Schlüssel (Lese-API)</span>} className="mt" actions={<a className="small" href="/api/docs" target="_blank" rel="noreferrer">API-Dokumentation</a>}>
+    <Card title={<span id="api">API-Schlüssel</span>} className="mt" actions={<a className="small" href="/api/docs" target="_blank" rel="noreferrer">API-Dokumentation</a>}>
       <p className="muted small" style={{ marginTop: 0 }}>
-        Externe Tools (z. B. Ticketsystem, RMM) lesen Inventar und Kennzahlen über <code>/api/v1</code> mit dem Header <code>X-Api-Key</code>. Die API kann nichts ändern.
+        Externe Tools (z. B. Ticketsystem, RMM) lesen Inventar und Kennzahlen über <code>/api/v1</code> mit dem Header <code>X-Api-Key</code>. Die API ändert keine Keys. Einzige Schreibfunktion ist die <Link to="/todos">ToDo-Liste</Link>: ein Ticketsystem trägt Personen ein, die einen Key bekommen sollen. Das muss am Schlüssel ausdrücklich erlaubt werden.
         Ein Schlüssel gilt für alle Tenants oder nur für ausgewählte; mit dem Parameter <code>tenant</code> (ID oder Domain) fragt ein Tool gezielt einen Tenant ab.
       </p>
       {created && <Info tone="ok">Neuer Schlüssel, nur jetzt sichtbar: <code style={{ wordBreak: 'break-all' }}>{created}</code> <button className="link" onClick={() => void navigator.clipboard?.writeText(created)}>Kopieren</button></Info>}
@@ -159,6 +162,7 @@ function ApiKeysCard() {
           </select>
         </div>
         <ScopeEditor allTenants={all} setAllTenants={setAll} tenantIds={ids} setTenantIds={setIds} tenants={tenants} canAll={canAll} />
+        <label className="check" style={{ marginBottom: 10 }}><input type="checkbox" checked={todoWrite} onChange={(e) => setTodoWrite(e.target.checked)} /> Darf Personen auf die ToDo-Liste setzen (POST /api/v1/todos)</label>
         <button type="submit" className="primary" disabled={!name.trim() || busy || (!all && ids.length === 0)}>Schlüssel erstellen</button>
       </form>
       <ErrorBox error={error} />
@@ -171,14 +175,14 @@ function ApiKeysCard() {
               <tr key={k.id} style={{ opacity: k.revokedAt ? 0.55 : 1 }}>
                 <td>{k.name}</td>
                 <td className="mono">ylm_{k.prefix}_…</td>
-                <td className="small">{k.allTenants ? <Badge tone="info">Alle Tenants</Badge> : k.tenants.map((t) => t.displayName).join(', ') || <span className="muted">kein Tenant</span>}</td>
+                <td className="small">{k.allTenants ? <Badge tone="info">Alle Tenants</Badge> : k.tenants.map((t) => t.displayName).join(', ') || <span className="muted">kein Tenant</span>}{k.allowTodoWrite && <div><Badge tone="warn">ToDo schreiben</Badge></div>}</td>
                 <td className="small">{fmtDate(k.createdAt, false)} · {k.createdBy}</td>
                 <td className="small">{fmtDate(k.lastUsedAt)}</td>
                 <td className="small">{k.expiresAt ? fmtDate(k.expiresAt, false) : 'unbegrenzt'}</td>
                 <td>
                   {k.revokedAt ? <Badge>widerrufen</Badge> : (
                     <span style={{ display: 'inline-flex', gap: 10 }}>
-                      <button className="link" onClick={() => setEditing(k)}>Geltung ändern</button>
+                      <button className="link" onClick={() => setEditing(k)}>Rechte ändern</button>
                       <button className="link" onClick={() => revoke(k.id)}>Widerrufen</button>
                     </span>
                   )}
@@ -196,12 +200,14 @@ function ApiKeysCard() {
 function ScopeModal({ keyRow, tenants, canAll, onClose, onSaved }: { keyRow: ApiKeyRow; tenants: Tenant[]; canAll: boolean; onClose: () => void; onSaved: () => void }) {
   const [all, setAll] = useState(keyRow.allTenants);
   const [ids, setIds] = useState(keyRow.tenants.map((t) => t.id));
+  const [todoWrite, setTodoWrite] = useState(keyRow.allowTodoWrite);
   const { busy, error, run } = useAction();
-  const save = () => run(async () => { await api.put(`/api/api-keys/${keyRow.id}/scope`, { allTenants: all, tenantIds: all ? [] : ids }); onSaved(); });
+  const save = () => run(async () => { await api.put(`/api/api-keys/${keyRow.id}/scope`, { allTenants: all, tenantIds: all ? [] : ids, allowTodoWrite: todoWrite }); onSaved(); });
   return (
     <Modal title={`Geltung von „${keyRow.name}“`} onClose={onClose}
       footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy || (!all && ids.length === 0)} onClick={save}>Speichern</button></>}>
       <ScopeEditor allTenants={all} setAllTenants={setAll} tenantIds={ids} setTenantIds={setIds} tenants={tenants} canAll={canAll} />
+      <label className="check"><input type="checkbox" checked={todoWrite} onChange={(e) => setTodoWrite(e.target.checked)} /> Darf Personen auf die ToDo-Liste setzen</label>
       <ErrorBox error={error} />
     </Modal>
   );
