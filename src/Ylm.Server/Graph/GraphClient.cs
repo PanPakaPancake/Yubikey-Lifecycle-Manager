@@ -30,6 +30,19 @@ public interface IGraphClient
     Task DeleteFido2MethodAsync(string userId, string methodId, CancellationToken ct = default);
     Task<CreationOptions> GetCreationOptionsAsync(string userId, int challengeTimeoutMinutes = 5, CancellationToken ct = default);
     Task<GraphFido2Method> RegisterFido2MethodAsync(string userId, string displayName, NewFido2Credential credential, CancellationToken ct = default);
+
+    // ---- Passkey-Rollout ----
+    /// <summary>Registrierte Methoden aller Benutzer: Bericht userRegistrationDetails, ohne Entra ID P1 pro Benutzer abgefragt.</summary>
+    Task<GraphRegistrationResult> ListUserRegistrationDetailsAsync(CancellationToken ct = default);
+    /// <summary>Alle Benutzer mit Status, Typ und (mit Entra ID P1) letzter Anmeldung.</summary>
+    Task<IReadOnlyList<GraphDirectoryUser>> ListDirectoryUsersAsync(CancellationToken ct = default);
+    Task<IReadOnlyList<GraphAuthMethod>> ListAuthenticationMethodsAsync(string userId, CancellationToken ct = default);
+    /// <param name="kind">Typ wie in <see cref="GraphAuthMethod.Kind"/>; nur Typen aus <see cref="AuthMethodCatalog.RemovablePaths"/>.</param>
+    Task DeleteAuthenticationMethodAsync(string userId, string kind, string methodId, CancellationToken ct = default);
+    Task<GraphTapPolicy> GetTapPolicyAsync(CancellationToken ct = default);
+    /// <summary>Schaltet die Methode „Befristeter Zugriffspass“ ein (ohne Ziel: für alle Benutzer).</summary>
+    Task EnableTapPolicyAsync(CancellationToken ct = default);
+    Task<GraphTemporaryAccessPass> CreateTemporaryAccessPassAsync(string userId, DateTimeOffset? startDateTime, int? lifetimeInMinutes, bool? isUsableOnce, CancellationToken ct = default);
 }
 
 public interface IGraphClientFactory
@@ -419,5 +432,155 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
         };
         using var doc = await SendAsync(HttpMethod.Post, $"{Beta}/users/{Uri.EscapeDataString(userId)}/authentication/fido2Methods", ct, body);
         return ToMethod(doc!.RootElement);
+    }
+
+    // ---- Passkey-Rollout ----
+
+    private const string TapPolicyPath = "/policies/authenticationMethodsPolicy/authenticationMethodConfigurations/TemporaryAccessPass";
+
+    private static bool Bool(JsonElement e, string name) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.True;
+    private static int Int(JsonElement e, string name, int fallback) => e.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.Number && v.TryGetInt32(out var i) ? i : fallback;
+    private static DateTimeOffset? Date(JsonElement e, string name) => DateTimeOffset.TryParse(Str(e, name), out var d) ? d : null;
+
+    private async IAsyncEnumerable<JsonElement> PagesAsync(string url, [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        string? next = url;
+        while (next is not null)
+        {
+            using var doc = await SendAsync(HttpMethod.Get, next, ct);
+            foreach (var row in doc!.RootElement.GetProperty("value").EnumerateArray()) yield return row.Clone();
+            next = Str(doc.RootElement, "@odata.nextLink");
+        }
+    }
+
+    public async Task<GraphRegistrationResult> ListUserRegistrationDetailsAsync(CancellationToken ct = default)
+    {
+        var url = $"{V1}/reports/authenticationMethods/userRegistrationDetails?$top=999";
+        var rows = new List<GraphUserRegistration>();
+        try
+        {
+            await foreach (var u in PagesAsync(url, ct))
+            {
+                var methods = u.TryGetProperty("methodsRegistered", out var m) && m.ValueKind == JsonValueKind.Array
+                    ? m.EnumerateArray().Select(x => x.GetString()).Where(x => !string.IsNullOrEmpty(x)).Select(x => x!).ToList()
+                    : [];
+                rows.Add(new GraphUserRegistration(Str(u, "id")!, Str(u, "userPrincipalName"), Str(u, "userDisplayName"), Str(u, "userType"),
+                    Bool(u, "isAdmin"), methods, Str(u, "defaultMfaMethod") is { } d && d != "none" ? d : null, Date(u, "lastUpdatedDateTime")));
+            }
+            return new GraphRegistrationResult(rows, true);
+        }
+        catch (GraphException ex) when (ex.StatusCode == 403 && IsMissingPremiumLicense(ex))
+        {
+            // Ohne Entra ID P1/P2 gibt es den Bericht nicht: jeden Benutzer einzeln abfragen (langsamer).
+        }
+
+        var users = await ListDirectoryUsersAsync(ct);
+        var result = new GraphUserRegistration[users.Count];
+        using var gate = new SemaphoreSlim(8);
+        await Task.WhenAll(users.Select(async (u, i) =>
+        {
+            await gate.WaitAsync(ct);
+            try
+            {
+                var methods = await ListAuthenticationMethodsAsync(u.Id, ct);
+                result[i] = new GraphUserRegistration(u.Id, u.UserPrincipalName, u.DisplayName, u.UserType, false,
+                    methods.Select(x => x.ReportName).Distinct().ToList(), null, DateTimeOffset.UtcNow);
+            }
+            finally { gate.Release(); }
+        }));
+        return new GraphRegistrationResult(result, false);
+    }
+
+    public async Task<IReadOnlyList<GraphDirectoryUser>> ListDirectoryUsersAsync(CancellationToken ct = default)
+    {
+        const string fields = "id,userPrincipalName,displayName,mail,department,accountEnabled,userType";
+        static GraphDirectoryUser Map(JsonElement u) => new(
+            Str(u, "id")!, Str(u, "userPrincipalName") ?? "", Str(u, "displayName"), Str(u, "mail"), Str(u, "department"),
+            !u.TryGetProperty("accountEnabled", out var en) || en.ValueKind != JsonValueKind.False, Str(u, "userType"),
+            u.TryGetProperty("signInActivity", out var s) && s.ValueKind == JsonValueKind.Object
+                ? new[] { Date(s, "lastSignInDateTime"), Date(s, "lastNonInteractiveSignInDateTime") }.Max()
+                : null);
+
+        var users = new List<GraphDirectoryUser>();
+        try
+        {
+            // signInActivity braucht Entra ID P1 und AuditLog.Read.All; Seitengröße dann höchstens 500.
+            await foreach (var u in PagesAsync($"{V1}/users?$select={fields},signInActivity&$top=500", ct)) users.Add(Map(u));
+            return users;
+        }
+        catch (GraphException ex) when (ex.StatusCode is 403 or 400)
+        {
+            users.Clear();
+        }
+        await foreach (var u in PagesAsync($"{V1}/users?$select={fields}&$top=999", ct)) users.Add(Map(u));
+        return users;
+    }
+
+    public static GraphAuthMethod ParseAuthMethod(JsonElement m)
+    {
+        var type = Str(m, "@odata.type") ?? "";
+        var kind = type.Replace("#microsoft.graph.", "").Replace("AuthenticationMethod", "");
+        string? detail = kind switch
+        {
+            "phone" => Str(m, "phoneNumber"),
+            "email" => Str(m, "emailAddress"),
+            "fido2" => Str(m, "model"),
+            "microsoftAuthenticator" => Str(m, "deviceTag") is { } tag && tag != "SoftwareTokenActivated" ? tag : Str(m, "phoneAppVersion"),
+            "windowsHelloForBusiness" => Str(m, "keyStrength"),
+            "temporaryAccessPass" => Bool(m, "isUsable") ? "gültig" : Str(m, "methodUsabilityReason") ?? "nicht nutzbar",
+            "platformCredential" => Str(m, "platform"),
+            _ => null,
+        };
+        return new GraphAuthMethod(Str(m, "id") ?? "", kind, AuthMethodCatalog.ReportNameFor(kind, Str(m, "phoneType")),
+            Str(m, "displayName"), detail, Date(m, "createdDateTime"));
+    }
+
+    public async Task<IReadOnlyList<GraphAuthMethod>> ListAuthenticationMethodsAsync(string userId, CancellationToken ct = default)
+    {
+        using var doc = await SendAsync(HttpMethod.Get, $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/methods", ct);
+        return doc!.RootElement.GetProperty("value").EnumerateArray().Select(ParseAuthMethod).ToList();
+    }
+
+    public async Task DeleteAuthenticationMethodAsync(string userId, string kind, string methodId, CancellationToken ct = default)
+    {
+        if (!AuthMethodCatalog.RemovablePaths.TryGetValue(kind, out var segment))
+            throw new ArgumentException($"Methodentyp {kind} kann hier nicht entfernt werden.", nameof(kind));
+        using var _ = await SendAsync(HttpMethod.Delete,
+            $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/{segment}/{Uri.EscapeDataString(methodId)}", ct, allowNotFound: true);
+    }
+
+    public async Task<GraphTapPolicy> GetTapPolicyAsync(CancellationToken ct = default)
+    {
+        using var doc = await SendAsync(HttpMethod.Get, V1 + TapPolicyPath, ct);
+        var p = doc!.RootElement;
+        var targets = p.TryGetProperty("includeTargets", out var t) && t.ValueKind == JsonValueKind.Array ? t.GetArrayLength() : 0;
+        var once = Bool(p, "isUsableOnce");
+        return new GraphTapPolicy(Str(p, "state") == "enabled", Int(p, "defaultLifetimeInMinutes", 60), Int(p, "minimumLifetimeInMinutes", 60),
+            Int(p, "maximumLifetimeInMinutes", 480), once, once, targets);
+    }
+
+    public async Task EnableTapPolicyAsync(CancellationToken ct = default)
+    {
+        var current = await GetTapPolicyAsync(ct);
+        var patch = new JsonObject
+        {
+            ["@odata.type"] = "#microsoft.graph.temporaryAccessPassAuthenticationMethodConfiguration",
+            ["state"] = "enabled",
+        };
+        if (current.TargetCount == 0)
+            patch["includeTargets"] = new JsonArray(new JsonObject { ["targetType"] = "group", ["id"] = PolicyTarget.AllUsers, ["isRegistrationRequired"] = false });
+        using var _ = await SendAsync(HttpMethod.Patch, V1 + TapPolicyPath, ct, patch);
+    }
+
+    public async Task<GraphTemporaryAccessPass> CreateTemporaryAccessPassAsync(string userId, DateTimeOffset? startDateTime, int? lifetimeInMinutes, bool? isUsableOnce, CancellationToken ct = default)
+    {
+        var body = new JsonObject();
+        if (startDateTime is { } s) body["startDateTime"] = s.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ss.fffZ");
+        if (lifetimeInMinutes is { } l) body["lifetimeInMinutes"] = l;
+        if (isUsableOnce is { } o) body["isUsableOnce"] = o;
+        using var doc = await SendAsync(HttpMethod.Post, $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/temporaryAccessPassMethods", ct, body);
+        var r = doc!.RootElement;
+        return new GraphTemporaryAccessPass(Str(r, "id") ?? "", Str(r, "temporaryAccessPass") ?? "", Date(r, "startDateTime"),
+            Int(r, "lifetimeInMinutes", lifetimeInMinutes ?? 60), Bool(r, "isUsableOnce"));
     }
 }

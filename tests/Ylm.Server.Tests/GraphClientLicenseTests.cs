@@ -57,3 +57,53 @@ public sealed class GraphClientLicenseTests
         Assert.Single(handler.Requests);
     }
 }
+
+public sealed class GraphClientRolloutTests
+{
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        public List<string> Requests { get; } = [];
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            Requests.Add(request.Method + " " + request.RequestUri!.PathAndQuery);
+            return Task.FromResult(respond(request));
+        }
+    }
+
+    private static HttpResponseMessage Json(HttpStatusCode code, string body) =>
+        new(code) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+    [Fact]
+    public async Task Without_premium_registration_details_come_from_each_user()
+    {
+        var handler = new StubHandler(req =>
+        {
+            var path = req.RequestUri!.AbsolutePath;
+            var query = req.RequestUri.Query;
+            if (path.Contains("/reports/") || query.Contains("signInActivity"))
+                return Json(HttpStatusCode.Forbidden, """{"error":{"code":"Authentication_RequestFromNonPremiumTenantOrB2CTenant","message":"Tenant is not a B2C tenant and doesn't have premium license"}}""");
+            if (path.EndsWith("/v1.0/users"))
+                return Json(HttpStatusCode.OK, """{"value":[{"id":"u1","userPrincipalName":"a@x","accountEnabled":true,"userType":"Member"},{"id":"u2","userPrincipalName":"b@x"}]}""");
+            if (path.EndsWith("/users/u1/authentication/methods"))
+                return Json(HttpStatusCode.OK, """{"value":[{"@odata.type":"#microsoft.graph.passwordAuthenticationMethod","id":"pw"},{"@odata.type":"#microsoft.graph.phoneAuthenticationMethod","id":"3179e48a","phoneNumber":"+49 1","phoneType":"office"}]}""");
+            return Json(HttpStatusCode.OK, """{"value":[{"@odata.type":"#microsoft.graph.fido2AuthenticationMethod","id":"f","model":"YubiKey 5"}]}""");
+        });
+        var graph = new GraphClient(new HttpClient(handler), _ => Task.FromResult("x.e30.x"), "https://graph.test");
+
+        var result = await graph.ListUserRegistrationDetailsAsync();
+
+        Assert.False(result.FromReport);
+        Assert.Equal(["password", "officePhone"], result.Users.Single(u => u.Id == "u1").MethodsRegistered);
+        Assert.Equal(["passKeyDeviceBound"], result.Users.Single(u => u.Id == "u2").MethodsRegistered);
+    }
+
+    [Fact]
+    public async Task Deleting_uses_the_path_of_the_method_type()
+    {
+        var handler = new StubHandler(_ => new HttpResponseMessage(HttpStatusCode.NoContent));
+        var graph = new GraphClient(new HttpClient(handler), _ => Task.FromResult("x.e30.x"), "https://graph.test");
+        await graph.DeleteAuthenticationMethodAsync("u1", "microsoftAuthenticator", "m1");
+        Assert.Equal("DELETE /v1.0/users/u1/authentication/microsoftAuthenticatorMethods/m1", handler.Requests.Single());
+        await Assert.ThrowsAsync<ArgumentException>(() => graph.DeleteAuthenticationMethodAsync("u1", "password", "pw"));
+    }
+}

@@ -563,6 +563,19 @@ curl -X POST https://<plattform>/api/v1/todos -H "X-Api-Key: ylm_…" -H "Conten
 3. In den **Tenant-Einstellungen** eines Tenants nur den Firmennamen ändern. Erwartung: alle anderen Werte kommen weiter vom Partner.
 4. Einen Key registrieren bzw. den Bericht (PDF) und die Key-Zuweisungen (PDF) dieses Tenants herunterladen: das Tenant-Erscheinungsbild wird verwendet. Über alle Tenants gilt das des Partners.
 
+### 5.18 Passkey-Rollout (MFA-Stand, TAP, andere Methoden entfernen)
+
+Voraussetzung: Tenant gewählt. Rolle Owner oder Operator (TAP erzeugen und Methoden entfernen); Auditor sieht nur die Übersicht. Am besten mit einer Testperson, deren Methoden man gefahrlos ändern kann.
+
+1. Links unter **Kunde** auf **Passkey-Rollout** klicken. Erwartung: Kopf mit „x von y Personen sind am Ziel“, Ringdiagramm und vier Stufen **Keine MFA**, **Nur klassische MFA**, **Anderer Passkey**, **Sicherheitsschlüssel**. Unter dem Titel steht, ob die Daten aus dem Entra-Registrierungsbericht kommen (Entra ID P1) oder pro Benutzer abgefragt wurden.
+2. Stufe **Keine MFA** anklicken: die Liste zeigt nur diese Personen. Schalter **Nur Zielgruppe**, **Gäste**, **Deaktivierte Konten** ändern Zahlen und Liste.
+3. In **Andere Methoden im Einsatz** z. B. „SMS / Anruf (Mobil)“ anklicken: die Liste filtert auf Personen mit SMS.
+4. Eine Person anklicken. Erwartung: Methoden live aus Entra mit **Entfernen** (nicht bei Kennwort und Passkeys auf Sicherheitsschlüsseln). Bei der Testperson eine Methode entfernen, im Entra Admin Center prüfen, dass sie weg ist. Audit-Log: `authmethod.removed` mit gekürzter Telefonnummer.
+5. Ist der befristete Zugriffspass im Tenant aus, erscheint ein Hinweis mit **Jetzt aktivieren** (nur mit „Tenants verwalten“). Aktivieren und im Admin Center prüfen.
+6. Testperson auswählen (Haken) → unten **TAP erzeugen** → Gültigkeit wählen → **Erzeugen**. Erwartung: Code wird einmal angezeigt (kopieren, bei mehreren als CSV). Mit dem TAP auf https://aka.ms/mysecurityinfo anmelden. Audit-Log: `authmethod.tap_created` ohne Code.
+7. Mehrere Personen auswählen → **Methoden entfernen** → „SMS / Anruf“. Mit **Nur bei Personen, die danach noch einen Passkey haben** werden Personen ohne Passkey übersprungen; ohne diesen Schutz muss `ENTFERNEN` eingetippt werden.
+8. **Exportieren** → Excel/CSV: gleiche Auswahl wie die Stufen- und Schalterfilter.
+
 ## 6. Benachrichtigungen (ab V2)
 
 Alles unter **Benachrichtigungen** (Partnerebene, Recht „API und Integrationen“; früher „Integrationen“).

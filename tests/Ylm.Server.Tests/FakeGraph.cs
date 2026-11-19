@@ -133,6 +133,57 @@ public sealed class FakeGraph : IGraphClient
         Registered.Add((userId, credential));
         return Task.FromResult(method);
     }
+
+    // ---- Passkey-Rollout ----
+    /// <summary>Weitere Methoden pro Benutzer (zusätzlich zu den FIDO2-Methoden aus <see cref="Methods"/>).</summary>
+    public ConcurrentDictionary<string, List<GraphAuthMethod>> OtherMethods { get; } = new();
+    public bool ReportAvailable { get; set; } = true;
+    public GraphTapPolicy TapPolicy { get; set; } = new(true, 60, 60, 480, false, false, 1);
+    public List<(string UserId, string Pass)> Taps { get; } = [];
+
+    private List<GraphAuthMethod> AllMethods(string userId) =>
+    [
+        new GraphAuthMethod("pw", "password", "password", null, null, null),
+        .. (Methods.GetValueOrDefault(userId) ?? []).Select(m => new GraphAuthMethod(m.Id, "fido2", "passKeyDeviceBound", m.DisplayName, m.Model, m.CreatedDateTime)),
+        .. OtherMethods.GetValueOrDefault(userId) ?? [],
+    ];
+
+    public Task<GraphRegistrationResult> ListUserRegistrationDetailsAsync(CancellationToken ct = default) =>
+        Task.FromResult(new GraphRegistrationResult(Users.Select(u => new GraphUserRegistration(u.Id, u.UserPrincipalName, u.DisplayName, "member", false,
+            AllMethods(u.Id).Select(m => m.ReportName).Distinct().ToList(), null, DateTimeOffset.UtcNow)).ToList(), ReportAvailable));
+
+    public Task<IReadOnlyList<GraphDirectoryUser>> ListDirectoryUsersAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<GraphDirectoryUser>>(Users.Select(u => new GraphDirectoryUser(u.Id, u.UserPrincipalName, u.DisplayName, u.Mail, u.Department, u.AccountEnabled, "Member", null)).ToList());
+
+    public Task<IReadOnlyList<GraphAuthMethod>> ListAuthenticationMethodsAsync(string userId, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<GraphAuthMethod>>(AllMethods(userId));
+
+    public Task DeleteAuthenticationMethodAsync(string userId, string kind, string methodId, CancellationToken ct = default)
+    {
+        if (!AuthMethodCatalog.IsRemovable(kind)) throw new ArgumentException(kind);
+        OtherMethods.GetValueOrDefault(userId)?.RemoveAll(m => m.Id == methodId);
+        return Task.CompletedTask;
+    }
+
+    public Task<GraphTapPolicy> GetTapPolicyAsync(CancellationToken ct = default) => Task.FromResult(TapPolicy);
+
+    public Task EnableTapPolicyAsync(CancellationToken ct = default)
+    {
+        TapPolicy = TapPolicy with { Enabled = true, TargetCount = Math.Max(1, TapPolicy.TargetCount) };
+        return Task.CompletedTask;
+    }
+
+    public Task<GraphTemporaryAccessPass> CreateTemporaryAccessPassAsync(string userId, DateTimeOffset? startDateTime, int? lifetimeInMinutes, bool? isUsableOnce, CancellationToken ct = default)
+    {
+        if (!TapPolicy.Enabled) throw new GraphException("Microsoft Graph meldet 400: Temporary Access Pass policy is not enabled", 400, "badRequest");
+        if (OtherMethods.GetValueOrDefault(userId)?.Any(m => m.Kind == "temporaryAccessPass") == true)
+            throw new GraphException("Microsoft Graph meldet 400: User already has a Temporary Access Pass", 400, "badRequest");
+        var id = "tap-" + Guid.NewGuid().ToString("N")[..8];
+        var pass = "Tap" + Guid.NewGuid().ToString("N")[..8];
+        OtherMethods.GetOrAdd(userId, _ => []).Add(new GraphAuthMethod(id, "temporaryAccessPass", "temporaryAccessPass", null, "gültig", DateTimeOffset.UtcNow));
+        Taps.Add((userId, pass));
+        return Task.FromResult(new GraphTemporaryAccessPass(id, pass, startDateTime ?? DateTimeOffset.UtcNow, lifetimeInMinutes ?? TapPolicy.DefaultLifetimeInMinutes, isUsableOnce ?? false));
+    }
 }
 
 public sealed class FakeGraphFactory : IGraphClientFactory
