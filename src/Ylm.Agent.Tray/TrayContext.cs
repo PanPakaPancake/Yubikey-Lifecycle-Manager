@@ -18,11 +18,15 @@ internal sealed class TrayContext : ApplicationContext
     private TrayStatus _status = new();
     private bool _pipeConnected;
     private PairForm? _pairForm;
+    private SettingsForm? _settingsForm;
+    private bool _announceUpdate;
+    private bool _exiting;
     private TaskCompletionSource<(bool, string)>? _pairResult;
     private Icon? _currentIcon;
 
-    public TrayContext()
+    public TrayContext(bool justUpdated = false)
     {
+        _announceUpdate = justUpdated;
         _ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
         var version = typeof(TrayContext).Assembly.GetName().Version?.ToString(3);
         var menu = new ContextMenuStrip();
@@ -33,6 +37,7 @@ internal sealed class TrayContext : ApplicationContext
         menu.Items.Add(_openWeb);
         menu.Items.Add(_pair);
         menu.Items.Add(_unpair);
+        menu.Items.Add("Einstellungen …", null, (_, _) => ShowSettings());
         menu.Items.Add("Logs öffnen", null, (_, _) => OpenLogs());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(new ToolStripMenuItem($"Version {version}") { Enabled = false });
@@ -79,6 +84,11 @@ internal sealed class TrayContext : ApplicationContext
                 var previousKey = _status.Key?.SerialNumber;
                 _status = m.Status;
                 Render();
+                if (_announceUpdate)
+                {
+                    _announceUpdate = false;
+                    _icon.ShowBalloonTip(5000, "Agent aktualisiert", $"Der Agent läuft jetzt mit Version {m.Status.AgentVersion}.", ToolTipIcon.Info);
+                }
                 // While the agent is connected the web UI shows every step, so the tray stays quiet (no balloons, no
                 // window popping up). An already open status window is still updated by Render(). Without a server
                 // connection only the key balloon remains.
@@ -96,11 +106,25 @@ internal sealed class TrayContext : ApplicationContext
             case TrayMessageType.PairResult:
                 _pairResult?.TrySetResult((!m.IsError, m.Text ?? ""));
                 break;
+            case TrayMessageType.CommandResult:
+                if (_settingsForm is { IsDisposed: false, Visible: true }) _settingsForm.ShowResult(m.Text ?? "", m.IsError);
+                else _icon.ShowBalloonTip(5000, "Yubikey Lifecycle Manager", string.IsNullOrEmpty(m.Text) ? " " : m.Text, m.IsError ? ToolTipIcon.Error : ToolTipIcon.Info);
+                break;
+            case TrayMessageType.UpdateInstalling:
+                // Der Dienst installiert ein Update und startet die Tray-App danach neu. Sofort beenden, damit YlmTray.exe ersetzt werden kann.
+                if (_exiting) break;
+                _exiting = true;
+                _icon.ShowBalloonTip(3000, "Agent wird aktualisiert",
+                    $"Version {m.Text ?? "neu"} wird installiert. Das Tray-Symbol ist in etwa einer Minute wieder da.", ToolTipIcon.Info);
+                var timer = new System.Windows.Forms.Timer { Interval = 1500 };
+                timer.Tick += (_, _) => { timer.Dispose(); ExitThread(); };
+                timer.Start();
+                break;
         }
     }
 
     /// <summary>Connected to the server: the web UI is the place for hints, the tray only shows its icon.</summary>
-    private bool Quiet => _pipeConnected && _status.Connection == BackendConnectionState.Connected;
+    private bool Quiet => !TraySettings.Notifications || (_pipeConnected && _status.Connection == BackendConnectionState.Connected);
 
     private void Render()
     {
@@ -117,6 +141,27 @@ internal sealed class TrayContext : ApplicationContext
         _icon.Icon = _currentIcon;
         old?.Dispose();
         if (_statusForm.Visible) _statusForm.Show(_status, _pipeConnected);
+        if (_settingsForm is { IsDisposed: false }) _settingsForm.Render(_status, _pipeConnected);
+    }
+
+    private void ShowSettings()
+    {
+        if (_settingsForm is { IsDisposed: false }) { _settingsForm.Activate(); return; }
+        _settingsForm = new SettingsForm();
+        _settingsForm.AutoUpdateChanged += async enabled =>
+        {
+            if (!await _pipe.SendAsync(new TrayMessage { Type = TrayMessageType.SetAutoUpdate, Enabled = enabled }))
+                _settingsForm?.ShowResult("Der Agent-Dienst ist nicht erreichbar.", true);
+        };
+        _settingsForm.CheckRequested += async () =>
+        {
+            if (!await _pipe.SendAsync(new TrayMessage { Type = TrayMessageType.CheckForUpdate }))
+                _settingsForm?.ShowResult("Der Agent-Dienst ist nicht erreichbar.", true);
+        };
+        _settingsForm.PairRequested += ShowPairing;
+        _settingsForm.LogsRequested += OpenLogs;
+        _settingsForm.Render(_status, _pipeConnected);
+        _settingsForm.Show();
     }
 
     private void ShowStatus()

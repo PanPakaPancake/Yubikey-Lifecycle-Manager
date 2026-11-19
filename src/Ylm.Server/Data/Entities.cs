@@ -16,6 +16,8 @@ public sealed class InstallationSettings
     public bool IsSetupComplete => SetupCompletedAt is not null;
     /// <summary>Anmeldung mit Entra-Konten aus dem Heim-Tenant erlaubt (Standard). Lokale Konten gehen immer.</summary>
     public bool EntraSsoEnabled { get; set; } = true;
+    /// <summary>Vorgabe für automatische Agent-Updates (Globale Einstellungen).</summary>
+    public Ylm.Contracts.AgentUpdatePolicy AgentUpdatePolicy { get; set; }
 }
 
 /// <summary>Wie sich ein Plattform-Benutzer anmeldet.</summary>
@@ -297,6 +299,10 @@ public sealed class Agent
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
     public DateTimeOffset? LastSeenAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
+    /// <summary>Wirksame Auto-Update-Einstellung, wie der Agent sie meldet (null: Agent vor 0.5).</summary>
+    public bool? AutoUpdate { get; set; }
+    /// <summary>Fehler des letzten Updateversuchs, null wenn in Ordnung.</summary>
+    public string? UpdateError { get; set; }
     public PlatformUser? PlatformUser { get; set; }
 }
 

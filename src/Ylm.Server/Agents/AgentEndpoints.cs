@@ -27,7 +27,7 @@ public static class AgentEndpoints
                 var live = registry.Get(a.Id);
                 return new
                 {
-                    a.Id, a.MachineName, a.AgentVersion, a.CreatedAt, a.LastSeenAt,
+                    a.Id, a.MachineName, a.AgentVersion, a.CreatedAt, a.LastSeenAt, a.AutoUpdate, a.UpdateError,
                     Online = live is not null,
                     Key = live?.CurrentKey,
                     Busy = live?.BusyWith,
@@ -43,6 +43,16 @@ public static class AgentEndpoints
             if (agent.CurrentKey is null && agent.BusyWith is null)
                 gateway.Progress(agent, new AgentProgress("YubiKey einstecken", "Bitte jetzt den YubiKey einstecken, der registriert werden soll.", Done: true));
             return Results.NoContent();
+        });
+
+        // "Jetzt aktualisieren": Der Agent sucht sofort nach einem Update und installiert es (auch bei abgeschaltetem Auto-Update).
+        g.MapPost("/{id:guid}/update", async (Guid id, CurrentUser cu, AgentGateway gateway, AuditService audit, CancellationToken ct) =>
+        {
+            var user = await cu.GetAsync();
+            var agent = gateway.Require(id, user.Id);
+            var result = await gateway.CallAsync(agent, (c, t) => c.CheckForUpdate(t), TimeSpan.FromSeconds(40), ct);
+            await audit.WriteAsync(AuditService.User(user), AuditActions.AgentUpdateRequested, target: agent.MachineName, details: new { agent.AgentId, result });
+            return Results.Ok(new { message = result });
         });
 
         // Short-lived code the admin types into the tray app ("Agent koppeln").

@@ -16,9 +16,37 @@ public sealed record TrayStatus
     public AgentProgress? Operation { get; init; }
     public string AgentVersion { get; init; } = "";
     public string? LastError { get; init; }
+    public AgentUpdateState? Update { get; init; }
 }
 
-public enum TrayMessageType { Status, Notification, PairRequest, PairResult, Unpair, GetStatus }
+/// <summary>Stand des Auto-Updates, den die Tray-App in den Einstellungen anzeigt.</summary>
+public sealed record AgentUpdateState
+{
+    /// <summary>Wirksam: installiert der Agent Updates selbst?</summary>
+    public bool AutoUpdate { get; init; } = true;
+    /// <summary>Lokale Einstellung dieses PCs (gilt, solange der Server nichts vorgibt).</summary>
+    public bool LocalAutoUpdate { get; init; } = true;
+    public AgentUpdatePolicy Policy { get; init; }
+    public DateTimeOffset? LastCheckAt { get; init; }
+    /// <summary>Neuere Version auf dem Server, falls vorhanden.</summary>
+    public string? AvailableVersion { get; init; }
+    public string? LastResult { get; init; }
+    public bool LastResultIsError { get; init; }
+    public bool Installing { get; init; }
+}
+
+public enum TrayMessageType
+{
+    Status, Notification, PairRequest, PairResult, Unpair, GetStatus,
+    /// <summary>Tray → Dienst: automatische Updates an/aus (<see cref="TrayMessage.Enabled"/>), nur für Administratoren.</summary>
+    SetAutoUpdate,
+    /// <summary>Tray → Dienst: jetzt nach Updates suchen und ein gefundenes installieren.</summary>
+    CheckForUpdate,
+    /// <summary>Dienst → Tray: Antwort auf SetAutoUpdate/CheckForUpdate (<see cref="TrayMessage.Text"/>, <see cref="TrayMessage.IsError"/>).</summary>
+    CommandResult,
+    /// <summary>Dienst → Tray: Update wird installiert, bitte beenden (der Dienst startet die Tray-App danach neu).</summary>
+    UpdateInstalling,
+}
 
 public sealed record TrayMessage
 {
@@ -29,6 +57,7 @@ public sealed record TrayMessage
     public bool IsError { get; init; }
     public string? ServerUrl { get; init; }
     public string? PairingCode { get; init; }
+    public bool? Enabled { get; init; }
 }
 
 public static class TrayPipe

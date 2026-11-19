@@ -20,7 +20,9 @@ internal sealed class PipeClient : IDisposable
         {
             try
             {
-                await using var pipe = new NamedPipeClientStream(".", TrayPipe.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous);
+                await using var pipe = new NamedPipeClientStream(".", TrayPipe.PipeName, PipeDirection.InOut, PipeOptions.Asynchronous,
+                    // Identification: Der Dienst darf nachsehen, wer verbunden ist (Adminprüfung), aber nicht in unserem Namen handeln.
+                    System.Security.Principal.TokenImpersonationLevel.Identification);
                 await pipe.ConnectAsync(5000, _cts.Token);
                 using var reader = new StreamReader(pipe);
                 _writer = new StreamWriter(pipe) { AutoFlush = true };

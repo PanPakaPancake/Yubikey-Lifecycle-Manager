@@ -68,6 +68,8 @@ public sealed class AgentHub(AgentRegistry registry, YlmDbContext db, ILogger<Ag
         agent.AgentVersion = hello.AgentVersion;
         agent.MachineName = hello.MachineName;
         agent.LastSeenAt = DateTimeOffset.UtcNow;
+        agent.AutoUpdate = hello.AutoUpdate;
+        agent.UpdateError = hello.UpdateError is { Length: > 500 } e ? e[..500] : hello.UpdateError;
         await db.SaveChangesAsync();
         if (registry.Get(AgentId) is { } a) registry.Connected(a with { MachineName = hello.MachineName, Version = hello.AgentVersion });
     }

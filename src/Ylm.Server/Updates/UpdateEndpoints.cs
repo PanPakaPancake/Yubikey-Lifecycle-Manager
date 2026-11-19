@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
+using Ylm.Contracts;
 using Ylm.Core;
 using Ylm.Server.Audit;
 using Ylm.Server.Data;
+using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
 
 namespace Ylm.Server.Updates;
@@ -9,17 +11,22 @@ namespace Ylm.Server.Updates;
 public static class UpdateEndpoints
 {
     public sealed record ApplyRequest(string? Version);
+    public sealed record AgentPolicyRequest(AgentUpdatePolicy Policy);
 
     public static void MapUpdates(this IEndpointRouteBuilder app)
     {
         var g = app.MapGroup("/api/platform/updates").RequireAuthorization();
 
-        g.MapGet("", async (bool? refresh, CurrentUser cu, UpdateService updates, YlmDbContext db, CancellationToken ct) =>
+        g.MapGet("", async (bool? refresh, CurrentUser cu, UpdateService updates, YlmDbContext db, Setup.SetupService setup, Agents.AgentRegistry registry, CancellationToken ct) =>
         {
             await cu.RequireAsync(Permission.ManageSettings);
             var check = await updates.CheckAsync(refresh == true, ct);
             var package = updates.GetAgentPackage();
-            var agents = await db.Agents.AsNoTracking().Where(a => a.RevokedAt == null).Select(a => a.AgentVersion).ToListAsync(ct);
+            var settings = await setup.GetSettingsAsync();
+            var agents = await db.Agents.AsNoTracking().Where(a => a.RevokedAt == null)
+                .OrderBy(a => a.MachineName)
+                .Select(a => new { a.Id, a.MachineName, a.AgentVersion, a.AutoUpdate, a.UpdateError, a.LastSeenAt, owner = a.PlatformUser!.DisplayName })
+                .ToListAsync(ct);
             return Results.Ok(new
             {
                 currentVersion = UpdateService.CurrentVersion,
@@ -36,9 +43,29 @@ public static class UpdateEndpoints
                     bundledVersion = package?.Version,
                     latestVersion = check.Latest?.Version,
                     agents = agents.Count,
-                    outdated = package is null ? 0 : agents.Count(v => UpdateService.IsNewer(package.Version, v)),
+                    outdated = package is null ? 0 : agents.Count(a => UpdateService.IsNewer(package.Version, a.AgentVersion)),
+                    autoUpdateOff = agents.Count(a => a.AutoUpdate == false),
+                    failed = agents.Count(a => a.UpdateError != null),
+                    policy = settings.AgentUpdatePolicy,
+                    list = agents.Select(a => new
+                    {
+                        a.Id, a.MachineName, a.AgentVersion, a.AutoUpdate, a.UpdateError, a.LastSeenAt, a.owner,
+                        online = registry.Get(a.Id) is not null,
+                        outdated = package is not null && UpdateService.IsNewer(package.Version, a.AgentVersion),
+                    }),
                 },
             });
+        });
+
+        g.MapPut("/agent-policy", async (AgentPolicyRequest body, CurrentUser cu, Setup.SetupService setup, YlmDbContext db, AuditService audit) =>
+        {
+            var user = await cu.RequireAsync(Permission.ManageSettings);
+            if (!Enum.IsDefined(body.Policy)) throw ApiException.BadRequest("invalid_policy", "Unbekannte Vorgabe.");
+            var s = await setup.GetSettingsAsync();
+            audit.Add(AuditService.User(user), AuditActions.AgentUpdatePolicyChanged, details: new { before = s.AgentUpdatePolicy.ToString(), after = body.Policy.ToString() });
+            s.AgentUpdatePolicy = body.Policy;
+            await db.SaveChangesAsync();
+            return Results.Ok(new { policy = s.AgentUpdatePolicy });
         });
 
         g.MapGet("/status", async (CurrentUser cu, UpdateService updates, CancellationToken ct) =>
@@ -80,11 +107,19 @@ public static class UpdateEndpoints
         }).RequireAuthorization();
 
         // ----- Auto-Update des Agents (Agent-Token) -----
-        app.MapGet("/api/agent/update", (string? current, UpdateService updates) =>
+        // info=1 (Agent ab 0.5): immer 200 mit Vorgabe, der Agent entscheidet selbst. Ohne info (ältere Agents): 204 = nichts zu tun,
+        // denn diese installieren jede gemeldete Version sofort. Bei der Vorgabe "Nie" bekommen sie daher kein Update angeboten.
+        app.MapGet("/api/agent/update", async (string? current, string? info, UpdateService updates, Setup.SetupService setup) =>
         {
+            var policy = (await setup.GetSettingsAsync()).AgentUpdatePolicy;
             var p = updates.GetAgentPackage();
-            if (p is null || !UpdateService.IsNewer(p.Version, current)) return Results.NoContent();
-            return Results.Ok(new { p.Version, p.Sha256, p.Size, url = "/api/agent/package" });
+            var available = p is not null && UpdateService.IsNewer(p.Version, current);
+            if (info is "1" or "true")
+                return Results.Ok(available
+                    ? new AgentUpdateInfo(true, p!.Version, p.Sha256, p.Size, "/api/agent/package", policy)
+                    : new AgentUpdateInfo(false, p?.Version, null, null, null, policy));
+            if (!available || policy == AgentUpdatePolicy.Never) return Results.NoContent();
+            return Results.Ok(new { p!.Version, p.Sha256, p.Size, url = "/api/agent/package" });
         }).RequireAuthorization(pb => pb.AddAuthenticationSchemes(AuthSchemes.Agent).RequireAuthenticatedUser());
 
         app.MapGet("/api/agent/package", (UpdateService updates) =>
