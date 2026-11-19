@@ -1,11 +1,12 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { api, fmtDate, lockReasons, usageLabels, type AgentInfo, type AuditEntry, type CustomField, type Job, type YubiKey } from '../api';
+import { api, fmtDate, lockReasons, usageLabels, type AgentInfo, type AuditEntry, type CustomField, type Job, type Registration, type YubiKey } from '../api';
 import { useCan } from '../auth';
 import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, StatusBadge, useAction, useApi, usePolling } from '../ui';
 import { CustomFieldInput } from './Keys';
 import { useTenant } from '../tenant';
 import { useConfirm, useToast } from '../feedback';
+import { Icon } from '../icons';
 
 const sourceLabels: Record<string, string> = {
   Platform: 'Über die Plattform registriert', EntraSync: 'Aus Entra übernommen (selbst registriert)', StockIntake: 'Wareneingang', Import: 'CSV-Import',
@@ -56,6 +57,13 @@ export default function KeyDetailPage() {
           {key.advisories.map((a) => <div key={a.id}><strong>{a.id}</strong>: {a.title} <a href={a.url} target="_blank" rel="noreferrer">Details</a></div>)}
         </Info>
       )}
+      <AccountsCard keyItem={key} active={active} onRemove={can('LockKeys') && key.usage !== 'Personal' ? async (r) => {
+        if (!await confirm({ title: 'Konto entfernen?', message: `Der Passkey von ${r.userPrincipalName} wird in Entra gelöscht. Die anderen Konten auf dem Key bleiben.`, confirmLabel: 'Entfernen', danger: true })) return;
+        try { await api.del(`/api/keys/${key.id}/registrations/${r.id}`); toast.ok('Konto entfernt.'); reload(); } catch (e) { toast.error((e as Error).message); }
+      } : undefined}>
+        {active.length === 0 && key.status === 'InStock' && key.tenantId && can('RegisterKeys') && <p className="actions"><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link><Link className="btn" to={`/register/shared?tenantId=${key.tenantId}`}>Als geteilten Key registrieren</Link></p>}
+        {key.inPartnerStock && key.status === 'InStock' && <p className="muted small">Keys aus dem Partnerlager werden bei der Registrierung automatisch dem Tenant zugewiesen.</p>}
+      </AccountsCard>
       <div className="grid cols-2">
         <Card title="Key">
           <table>
@@ -82,33 +90,6 @@ export default function KeyDetailPage() {
           </table>
         </Card>
       </div>
-      <Card title="Registrierungen" className="mt">
-        {key.registrations.length === 0 ? <p className="muted">Keine Registrierung.</p> : (
-          <table>
-            <thead><tr><th>Person</th><th>Anzeigename in Entra</th><th>Registriert</th><th>Durch</th><th>Status</th>{key.usage !== 'Personal' && can('LockKeys') && <th />}</tr></thead>
-            <tbody>
-              {key.registrations.map((r) => (
-                <tr key={r.id}>
-                  <td>{r.userDisplayName ?? r.userPrincipalName}<div className="small muted">{r.userPrincipalName}</div></td>
-                  <td>{r.displayName ?? '–'}</td>
-                  <td>{fmtDate(r.registeredAt)}</td>
-                  <td>{r.registeredByName ?? (r.source === 'EntraSync' ? 'Selbst registriert' : '–')}</td>
-                  <td>{r.removedAt ? <span className="small muted">entfernt {fmtDate(r.removedAt)}{r.removedReason ? ` (${r.removedReason})` : ''}</span> : <Badge tone="ok">aktiv</Badge>}</td>
-                  {key.usage !== 'Personal' && can('LockKeys') && <td>{!r.removedAt && (
-                    <button className="small danger" onClick={async () => {
-                      if (!await confirm({ title: 'Konto entfernen?', message: `Der Passkey von ${r.userPrincipalName} wird in Entra gelöscht. Die anderen Konten auf dem Key bleiben.`, confirmLabel: 'Entfernen', danger: true })) return;
-                      try { await api.del(`/api/keys/${key.id}/registrations/${r.id}`); toast.ok('Konto entfernt.'); reload(); } catch (e) { toast.error((e as Error).message); }
-                    }}>Entfernen</button>
-                  )}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        {active.length === 0 && key.status === 'InStock' && key.tenantId && can('RegisterKeys') && <p className="actions"><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link><Link className="btn" to={`/register/shared?tenantId=${key.tenantId}`}>Als geteilten Key registrieren</Link></p>}
-        {key.usage !== 'Personal' && key.status === 'Active' && key.tenantId && can('RegisterKeys') && <p><Link className="btn" to={`/register/shared?tenantId=${key.tenantId}&usage=${key.usage}&custodian=${encodeURIComponent(key.custodian ?? '')}`}>Weitere Konten hinzufügen</Link></p>}
-        {key.inPartnerStock && key.status === 'InStock' && <p className="muted small">Keys aus dem Partnerlager werden bei der Registrierung automatisch dem Tenant zugewiesen.</p>}
-      </Card>
       {history && history.length > 0 && (
         <Card title="Verlauf" className="mt">
           <table>
@@ -310,4 +291,63 @@ function DeleteModal({ keyItem, onClose }: { keyItem: YubiKey; onClose: () => vo
       <ErrorBox error={error} />
     </Modal>
   );
+}
+
+/** Konten auf dem Key: aktive als Karten (bei geteilten Keys mit Verwahrer), frühere eingeklappt. */
+function AccountsCard({ keyItem: key, active, onRemove, children }: { keyItem: YubiKey; active: Registration[]; onRemove?: (r: Registration) => void; children?: ReactNode }) {
+  const can = useCan();
+  const removed = key.registrations.filter((r) => r.removedAt);
+  const shared = key.usage !== 'Personal';
+  return (
+    <Card className="accounts-card" title={<>Konten auf diesem Key <span className="count-pill">{active.length}</span></>}
+      actions={shared && key.status === 'Active' && key.tenantId && can('RegisterKeys') && <Link className="btn" to={`/register/shared?tenantId=${key.tenantId}&usage=${key.usage}&custodian=${encodeURIComponent(key.custodian ?? '')}`}>Weitere Konten hinzufügen</Link>}>
+      {shared && (
+        <div className={'custodian-bar ' + (key.usage === 'Breakglass' ? 'tone-error' : 'tone-info')}>
+          <Icon name={key.usage === 'Breakglass' ? 'shield' : 'share'} />
+          <span><strong>{usageLabels[key.usage]}</strong> · physisch bei <strong>{key.custodian ?? 'unbekannt (Verwahrer fehlt)'}</strong></span>
+          <span className="muted small push-right">{active.length === 1 ? '1 Konto' : `${active.length} Konten`} melden sich mit diesem Key an</span>
+        </div>
+      )}
+      {active.length === 0 ? <p className="muted">Auf diesem Key ist kein Konto registriert.</p> : (
+        <div className="account-grid">
+          {active.map((r, i) => (
+            <div key={r.id} className="account-tile" style={{ animationDelay: i * 50 + 'ms' }}>
+              <span className="avatar" aria-hidden>{initials(r.userDisplayName ?? r.userPrincipalName)}</span>
+              <div className="account-main">
+                <strong>{r.userDisplayName ?? r.userPrincipalName}</strong>
+                <div className="small muted">{r.userPrincipalName}</div>
+                <div className="account-meta small">
+                  <span title="Anzeigename des Passkeys in Entra"><Icon name="key" size={13} />{r.displayName ?? '–'}</span>
+                  <span><Icon name="check" size={13} />{fmtDate(r.registeredAt, false)} · {r.registeredByName ?? (r.source === 'EntraSync' ? 'selbst registriert' : '–')}</span>
+                </div>
+              </div>
+              {onRemove && <button className="small danger" onClick={() => onRemove(r)}>Entfernen</button>}
+            </div>
+          ))}
+        </div>
+      )}
+      {removed.length > 0 && (
+        <details className="removed-accounts">
+          <summary>Frühere Registrierungen ({removed.length})</summary>
+          <table>
+            <tbody>
+              {removed.map((r) => (
+                <tr key={r.id}>
+                  <td>{r.userDisplayName ?? r.userPrincipalName}<div className="small muted">{r.userPrincipalName}</div></td>
+                  <td className="small">registriert {fmtDate(r.registeredAt, false)}</td>
+                  <td className="small muted">entfernt {fmtDate(r.removedAt, false)}{r.removedReason ? ` (${r.removedReason})` : ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      )}
+      {children}
+    </Card>
+  );
+}
+
+function initials(name: string) {
+  const parts = name.replace(/@.*/, '').replace(/[^\p{L}\p{N}\s.-]/gu, ' ').trim().split(/[\s.-]+/).filter(Boolean);
+  return ((parts[0]?.[0] ?? '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase() || '?';
 }

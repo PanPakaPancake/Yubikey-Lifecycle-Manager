@@ -236,3 +236,23 @@ tbody tr:last-child td { border-bottom: 0; }
 .section-title { margin: 26px 0 12px; font-size: 1.05rem; }
 .profile-origin { margin: -8px 0 10px; }
 @media (max-width: 600px) { .kpi-row .kpi-icon { display: none; } .kpi-row { padding: 14px; } }
+
+/* ---- Konten auf einem Key ---- */
+.count-pill { display: inline-grid; place-items: center; min-width: 24px; height: 22px; padding: 0 7px; margin-left: 6px; border-radius: 999px; font-size: .78rem; font-weight: 700;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; vertical-align: 1px; }
+.custodian-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-radius: var(--radius-sm); margin-bottom: 14px; }
+.custodian-bar.tone-info { background: var(--accent-soft); color: var(--ink); }
+.custodian-bar.tone-error { background: var(--error-soft); color: var(--ink); }
+.custodian-bar .icon { color: var(--accent); }
+.custodian-bar.tone-error .icon { color: var(--error); }
+.account-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 10px; }
+.account-tile { display: flex; gap: 12px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2);
+  animation: rise .4s var(--ease) both; transition: border-color .2s, box-shadow .2s; }
+.account-tile:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); box-shadow: var(--shadow); }
+.account-main { flex: 1; min-width: 0; }
+.account-main strong, .account-main .muted { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.account-meta { display: flex; flex-direction: column; gap: 2px; margin-top: 6px; color: var(--muted); }
+.account-meta span { display: inline-flex; align-items: center; gap: 5px; }
+.removed-accounts { margin-top: 14px; }
+.removed-accounts table { margin-top: 8px; }
+@media (prefers-reduced-motion: reduce) { .account-tile { animation: none; } }
