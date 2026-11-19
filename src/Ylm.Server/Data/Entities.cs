@@ -440,11 +440,18 @@ public sealed class RegistrationTodo
 }
 
 /// <summary>Webhook (V2): Ereignisse aus dem Audit-Log werden signiert an eine URL geschickt.</summary>
+public enum WebhookChannel { Webhook = 0, Mail = 1 }
+
+/// <summary>Empfänger von Ereignissen: ein Webhook (HTTP POST) oder ein Mail-Alarm (über den SMTP-Server der Mail-Berichte).</summary>
 public sealed class WebhookSubscription
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = "";
+    public WebhookChannel Channel { get; set; } = WebhookChannel.Webhook;
+    /// <summary>Nur bei Channel = Webhook.</summary>
     public string Url { get; set; } = "";
+    /// <summary>Nur bei Channel = Mail.</summary>
+    public List<string> Recipients { get; set; } = [];
     /// <summary>Geheimnis für die HMAC-Signatur, mit Data Protection verschlüsselt.</summary>
     public string SecretProtected { get; set; } = "";
     /// <summary>Ereignistypen; leer = alle.</summary>

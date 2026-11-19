@@ -12,7 +12,8 @@ namespace Ylm.Server.Integrations;
 /// <summary>Partnerebene → Integrationen: Webhooks und Mail-Berichte (V2). Nur mit „API und Integrationen“ (Owner).</summary>
 public static class IntegrationEndpoints
 {
-    public sealed record WebhookRequest(string Name, string Url, List<string>? Events, bool AllTenants, List<Guid>? TenantIds, bool IsActive = true);
+    public sealed record WebhookRequest(string Name, string? Url, List<string>? Events, bool AllTenants, List<Guid>? TenantIds, bool IsActive = true,
+        WebhookChannel Channel = WebhookChannel.Webhook, List<string>? Recipients = null);
     public sealed record SmtpRequest(string? Host, int Port, SmtpSecurity Security, string? Username, string? Password, bool ClearPassword, string? FromAddress, string? FromName);
     public sealed record TestMailRequest(string To);
     public sealed record ScheduleRequest(string Name, List<string> Recipients, bool AllTenants, List<Guid>? TenantIds, ReportFrequency Frequency, int DayOfWeek, int DayOfMonth, int Hour,
@@ -20,7 +21,7 @@ public static class IntegrationEndpoints
 
     private static object WebhookDto(WebhookSubscription w) => new
     {
-        w.Id, w.Name, w.Url, w.Events, w.AllTenants, w.TenantIds, w.IsActive, w.CreatedAt, w.CreatedBy, w.LastDeliveryAt, w.LastDeliverySucceeded, w.LastError,
+        w.Id, w.Name, Channel = w.Channel.ToString(), w.Url, w.Recipients, w.Events, w.AllTenants, w.TenantIds, w.IsActive, w.CreatedAt, w.CreatedBy, w.LastDeliveryAt, w.LastDeliverySucceeded, w.LastError,
     };
 
     private static object ScheduleDto(ReportSchedule s) => new
@@ -79,16 +80,19 @@ public static class IntegrationEndpoints
         {
             var user = await cu.RequireAsync(Permission.ManageApiKeys);
             if (string.IsNullOrWhiteSpace(body.Name)) throw ApiException.BadRequest("invalid", "Bitte einen Namen angeben.");
-            var secret = "whsec_" + TokenHashing.NewSecret();
+            var isMail = body.Channel == WebhookChannel.Mail;
+            var secret = isMail ? null : "whsec_" + TokenHashing.NewSecret();
             var w = new WebhookSubscription
             {
-                Name = body.Name.Trim(), Url = ValidateUrl(body.Url), SecretProtected = hooks.Protect(secret),
+                Name = body.Name.Trim(), Channel = body.Channel,
+                Url = isMail ? "" : ValidateUrl(body.Url ?? ""), Recipients = isMail ? ValidateRecipients(body.Recipients) : [],
+                SecretProtected = secret is null ? "" : hooks.Protect(secret),
                 Events = (body.Events ?? []).Where(e => WebhookService.Catalog.Any(c => c.Type == e)).Distinct().ToList(),
                 AllTenants = body.AllTenants, TenantIds = await ValidateTenantsAsync(db, body.AllTenants, body.TenantIds), IsActive = body.IsActive, CreatedBy = user.Upn,
             };
             await hooks.EnsureCursorAsync();
             db.Webhooks.Add(w);
-            audit.Add(AuditService.User(user), AuditActions.WebhookCreated, target: w.Name, details: new { w.Url, w.Events, w.AllTenants, w.TenantIds });
+            audit.Add(AuditService.User(user), AuditActions.WebhookCreated, target: w.Name, details: new { channel = w.Channel.ToString(), w.Url, w.Recipients, w.Events, w.AllTenants, w.TenantIds });
             await db.SaveChangesAsync();
             return Results.Ok(new { webhook = WebhookDto(w), secret });
         });
@@ -99,12 +103,13 @@ public static class IntegrationEndpoints
             var w = await db.Webhooks.FindAsync(id) ?? throw ApiException.NotFound("Webhook");
             if (string.IsNullOrWhiteSpace(body.Name)) throw ApiException.BadRequest("invalid", "Bitte einen Namen angeben.");
             w.Name = body.Name.Trim();
-            w.Url = ValidateUrl(body.Url);
+            if (w.Channel == WebhookChannel.Mail) w.Recipients = ValidateRecipients(body.Recipients);
+            else w.Url = ValidateUrl(body.Url ?? "");
             w.Events = (body.Events ?? []).Where(e => WebhookService.Catalog.Any(c => c.Type == e)).Distinct().ToList();
             w.TenantIds = await ValidateTenantsAsync(db, body.AllTenants, body.TenantIds);
             w.AllTenants = body.AllTenants;
             w.IsActive = body.IsActive;
-            audit.Add(AuditService.User(user), AuditActions.WebhookUpdated, target: w.Name, details: new { w.Url, w.Events, w.AllTenants, w.TenantIds, w.IsActive });
+            audit.Add(AuditService.User(user), AuditActions.WebhookUpdated, target: w.Name, details: new { channel = w.Channel.ToString(), w.Url, w.Recipients, w.Events, w.AllTenants, w.TenantIds, w.IsActive });
             await db.SaveChangesAsync();
             return Results.Ok(WebhookDto(w));
         });
@@ -113,6 +118,7 @@ public static class IntegrationEndpoints
         {
             var user = await cu.RequireAsync(Permission.ManageApiKeys);
             var w = await db.Webhooks.FindAsync(id) ?? throw ApiException.NotFound("Webhook");
+            if (w.Channel == WebhookChannel.Mail) throw ApiException.BadRequest("invalid", "Mail-Alarme haben kein Geheimnis.");
             var secret = "whsec_" + TokenHashing.NewSecret();
             w.SecretProtected = hooks.Protect(secret);
             audit.Add(AuditService.User(user), AuditActions.WebhookUpdated, target: w.Name, details: new { secretRotated = true });
@@ -125,7 +131,7 @@ public static class IntegrationEndpoints
             var user = await cu.RequireAsync(Permission.ManageApiKeys);
             var w = await db.Webhooks.FindAsync(id) ?? throw ApiException.NotFound("Webhook");
             db.Webhooks.Remove(w);
-            audit.Add(AuditService.User(user), AuditActions.WebhookDeleted, target: w.Name, details: new { w.Url });
+            audit.Add(AuditService.User(user), AuditActions.WebhookDeleted, target: w.Name, details: new { channel = w.Channel.ToString(), w.Url, w.Recipients });
             await db.SaveChangesAsync();
             return Results.NoContent();
         });

@@ -34,7 +34,7 @@ export default function PlatformPage() {
       <BrandingCard editable={!!can('ManageSettings')} />
       <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
       {can('ManageApiKeys') && <ApiKeysCard />}
-      {can('ManageApiKeys') && <Info>Webhooks und Mail-Berichte stehen unter <Link to="/partner/integrations">Integrationen</Link>.</Info>}
+      {can('ManageApiKeys') && <Info>Webhooks, Mail-Alarme und Mail-Berichte stehen unter <Link to="/partner/notifications">Benachrichtigungen</Link>.</Info>}
     </>
   );
 }
