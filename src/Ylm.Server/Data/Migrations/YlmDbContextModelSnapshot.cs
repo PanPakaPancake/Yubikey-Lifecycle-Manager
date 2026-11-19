@@ -172,6 +172,46 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("audit_log", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.Branding", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccentColor")
+                        .HasColumnType("text");
+
+                    b.Property<string>("CompanyName")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Contact")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Footer")
+                        .HasColumnType("text");
+
+                    b.Property<byte[]>("Logo")
+                        .HasColumnType("bytea");
+
+                    b.Property<string>("LogoContentType")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("TenantId"), false);
+
+                    b.ToTable("brandings", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.CustomFieldDefinition", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1280,6 +1320,14 @@ namespace Ylm.Server.Data.Migrations
                         .IsRequired();
 
                     b.Navigation("PlatformUser");
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.Branding", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade);
                 });
 
             modelBuilder.Entity("Ylm.Server.Data.CustomFieldDefinition", b =>

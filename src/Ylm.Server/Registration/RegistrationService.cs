@@ -267,8 +267,10 @@ public sealed class RegistrationService(
             job.PinChangeForced = forced;
 
             var settings = await db.Installation.AsNoTracking().FirstAsync(ct);
+            var brand = await new Setup.BrandingService(db).ResolveAsync(tenantId, ct);
+            using var brandScope = Theme.Use(brand);
             var pdf = PinLetterPdf.Create(new PinLetterData(
-                settings.OrganizationName, tenant.DisplayName, user.DisplayName ?? user.UserPrincipalName, user.UserPrincipalName, pin,
+                brand.CompanyName ?? settings.OrganizationName, tenant.DisplayName, user.DisplayName ?? user.UserPrincipalName, user.UserPrincipalName, pin,
                 key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now));
             job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief {user.UserPrincipalName} {key.SerialNumber}.pdf",
                 job.BatchItemId is null ? null : PinLetterStore.BatchLifetime);

@@ -516,6 +516,13 @@ curl -X POST https://<plattform>/api/v1/todos -H "X-Api-Key: ylm_…" -H "Conten
 4. Kachel **Auffälligkeiten** anklicken: es bleiben Keys ohne Konto, geteilte Keys ohne Verwahrer usw.
 5. **Excel**, **CSV** und **PDF** herunterladen. Erwartung: gleiche Auswahl wie in der Ansicht, Excel mit Filterzeile, PDF im Querformat.
 
+### 5.17 Erscheinungsbild der Dokumente (Whitelabeling)
+
+1. **Globale Einstellungen** → Karte **Erscheinungsbild der Dokumente**: Firmenname, Akzentfarbe, Kontakt, Fußzeile eintragen und ein Logo (PNG/JPEG) hochladen. Die Vorschau rechts folgt den Eingaben sofort.
+2. **Muster-PIN-Brief** herunterladen. Erwartung: Logo oben rechts, Farbe im Balken und PIN-Kasten, Kontakt beim Hinweis „Key gesperrt“, Fußzeile statt „Erstellt mit dem Yubikey Lifecycle Manager“.
+3. In den **Tenant-Einstellungen** eines Tenants nur den Firmennamen ändern. Erwartung: alle anderen Werte kommen weiter vom Partner.
+4. Einen Key registrieren bzw. den Bericht (PDF) und die Key-Zuweisungen (PDF) dieses Tenants herunterladen: das Tenant-Erscheinungsbild wird verwendet. Über alle Tenants gilt das des Partners.
+
 ## 6. Integrationen (ab V2)
 
 Alles unter **Integrationen** (Partnerebene, Recht „API und Integrationen“).

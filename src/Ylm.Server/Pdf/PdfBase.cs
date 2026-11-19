@@ -37,8 +37,58 @@ internal static class Theme
     public const string Font = "Segoe WP";
     public static readonly XColor Ink = XColor.FromArgb(0x1d, 0x23, 0x2e);
     public static readonly XColor Muted = XColor.FromArgb(0x5b, 0x65, 0x75);
-    public static readonly XColor Accent = XColor.FromArgb(0x1f, 0x5f, 0xbf);
-    public static readonly XColor AccentSoft = XColor.FromArgb(0xe8, 0xf0, 0xfb);
+    public static readonly XColor DefaultAccent = XColor.FromArgb(0x1f, 0x5f, 0xbf);
+    private static readonly AsyncLocal<PdfBrand?> CurrentBrand = new();
+
+    /// <summary>Erscheinungsbild des Dokuments, das gerade erzeugt wird (siehe <see cref="Use"/>).</summary>
+    public static PdfBrand Brand => CurrentBrand.Value ?? PdfBrand.Default;
+    public static XColor Accent => Brand.Accent;
+    /// <summary>Akzentfarbe, stark aufgehellt (Flächen hinter Text).</summary>
+    public static XColor AccentSoft => Mix(Brand.Accent, 0.1);
+
+    /// <summary>Setzt das Erscheinungsbild für alle PDFs, die im aktuellen Ablauf erzeugt werden.</summary>
+    public static IDisposable Use(PdfBrand? brand)
+    {
+        var before = CurrentBrand.Value;
+        CurrentBrand.Value = brand;
+        return new Restore(() => CurrentBrand.Value = before);
+    }
+
+    private sealed class Restore(Action undo) : IDisposable
+    {
+        public void Dispose() => undo();
+    }
+
+    private static XColor Mix(XColor c, double share) => XColor.FromArgb(
+        (int)(255 - (255 - c.R) * share), (int)(255 - (255 - c.G) * share), (int)(255 - (255 - c.B) * share));
+
+    /// <summary>Logo rechtsbündig in das Feld zeichnen (Seitenverhältnis bleibt). Gibt false zurück, wenn kein Logo da ist.</summary>
+    public static bool DrawLogo(XGraphics g, double right, double top, double maxWidth, double maxHeight)
+    {
+        if (Brand.Logo is not { Length: > 0 } bytes) return false;
+        try
+        {
+            using var ms = new MemoryStream(bytes);
+            using var img = XImage.FromStream(ms);
+            var scale = Math.Min(maxWidth / img.PointWidth, maxHeight / img.PointHeight);
+            var w = img.PointWidth * scale;
+            var h = img.PointHeight * scale;
+            g.DrawImage(img, right - w, top + (maxHeight - h) / 2, w, h);
+            return true;
+        }
+        catch (Exception)
+        {
+            return false; // defektes Bild: Dokument trotzdem erzeugen
+        }
+    }
+
+    /// <summary>Kontakt und Fußzeile des Erscheinungsbilds unten auf die Seite.</summary>
+    public static void DrawBrandFooter(XGraphics g, double x, double bottom, double width)
+    {
+        var parts = new[] { Brand.Contact, Brand.Footer }.Where(p => !string.IsNullOrWhiteSpace(p)).ToList();
+        if (parts.Count == 0) return;
+        Text(g, string.Join("  ·  ", parts), F(7.5), Muted, x, bottom - 10, width, 10);
+    }
     public static readonly XColor Line = XColor.FromArgb(0xd6, 0xdb, 0xe3);
     public static readonly XColor Warn = XColor.FromArgb(0xb4, 0x5f, 0x06);
     public static readonly XColor WarnSoft = XColor.FromArgb(0xfd, 0xf3, 0xe2);
@@ -52,4 +102,10 @@ internal static class Theme
         var tf = new XTextFormatter(g);
         tf.DrawString(text, font, new XSolidBrush(color), new XRect(x, y, w, h), XStringFormats.TopLeft);
     }
+}
+
+/// <summary>Erscheinungsbild eines Dokuments (Whitelabeling).</summary>
+public sealed record PdfBrand(string? CompanyName, XColor Accent, byte[]? Logo, string? Contact, string? Footer)
+{
+    public static readonly PdfBrand Default = new(null, Theme.DefaultAccent, null, null, null);
 }

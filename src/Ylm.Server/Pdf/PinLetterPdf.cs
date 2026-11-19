@@ -25,7 +25,7 @@ public static class PinLetterPdf
         YlmFontResolver.Install();
         using var doc = new PdfDocument();
         doc.Info.Title = "PIN für Ihren YubiKey";
-        doc.Info.Creator = "Yubikey Lifecycle Manager";
+        doc.Info.Creator = Brand.CompanyName ?? "Yubikey Lifecycle Manager";
         var page = doc.AddPage();
         page.Width = XUnit.FromMillimeter(210);
         page.Height = XUnit.FromMillimeter(297);
@@ -45,7 +45,8 @@ public static class PinLetterPdf
 
         // Kopf
         g.DrawRectangle(new XSolidBrush(Accent), 0, 0, pageWidth, 8);
-        Text(g, d.OrganizationName, F(10, true), Muted, m, 30, w, 14);
+        var hasLogo = DrawLogo(g, m + w, 20, 150, 40);
+        Text(g, d.OrganizationName, F(10, true), Muted, m, 30, hasLogo ? w - 160 : w, 14);
         Text(g, "Ihr YubiKey und Ihre PIN", F(22, true), Ink, m, 46, w, 30);
         Text(g, d.SharedAccounts is { Count: > 0 }
                 ? $"Für den Verwahrer {d.UserDisplayName} · {d.UserPrincipalName} für {d.SharedAccounts.Count} Konto/Konten: {Shorten(string.Join(", ", d.SharedAccounts), 110)}"
@@ -110,7 +111,7 @@ public static class PinLetterPdf
         string[] hints =
         [
             "Geben Sie Ihre PIN niemals weiter. Die IT wird Sie nie danach fragen.",
-            "Nach 8 Fehleingaben wird der Key gesperrt. Wenden Sie sich dann an die IT.",
+            "Nach 8 Fehleingaben wird der Key gesperrt. Wenden Sie sich dann an die IT" + (Brand.Contact is { } c ? $": {c}." : "."),
             "Key verloren oder gestohlen? Melden Sie es sofort der IT, damit er gesperrt wird.",
             "Bewahren Sie diesen Brief nicht zusammen mit dem Key auf und vernichten Sie ihn, sobald Sie die PIN geändert haben.",
         ];
@@ -122,7 +123,7 @@ public static class PinLetterPdf
         }
 
         g.DrawLine(new XPen(Line, 0.6), m, 800, m + w, 800);
-        Text(g, $"{d.OrganizationName} · {d.TenantName} · Erstellt mit dem Yubikey Lifecycle Manager. Die PIN wurde nicht gespeichert.",
+        Text(g, $"{d.OrganizationName} · {d.TenantName} · {Brand.Footer ?? "Erstellt mit dem Yubikey Lifecycle Manager."} Die PIN wurde nicht gespeichert.",
             F(7.5), Muted, m, 806, w, 12);
     }
 

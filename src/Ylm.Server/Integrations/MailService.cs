@@ -124,7 +124,10 @@ public sealed class ReportMailService(YlmDbContext db, IMailSender sender, Dashb
             var d = await dashboards.BuildAsync(ids, ct: ct);
             var openTodos = await db.Todos.CountAsync(t => ids.Contains(t.TenantId) && t.Status == TodoStatus.Open, ct);
             var pendingApprovals = await db.Approvals.CountAsync(a => ids.Contains(a.TenantId) && a.Status == ApprovalStatus.Pending, ct);
-            var attachments = new List<MailAttachment> { new($"yubikey-bericht-{DateTime.Today:yyyy-MM-dd}.pdf", "application/pdf", ReportPdf.Create(org, scope, d)) };
+            var brand = await new Setup.BrandingService(db).ResolveAsync(ids.Count == 1 ? ids[0] : null, ct);
+            byte[] reportPdf;
+            using (Pdf.Theme.Use(brand)) reportPdf = ReportPdf.Create(brand.CompanyName ?? org, scope, d);
+            var attachments = new List<MailAttachment> { new($"yubikey-bericht-{DateTime.Today:yyyy-MM-dd}.pdf", "application/pdf", reportPdf) };
             if (s.IncludeCsv) attachments.Add(new($"yubikeys-{DateTime.Today:yyyy-MM-dd}.csv", "text/csv", await exports.KeysCsvAsync(ids, ct)));
             var rows = new List<(string Label, string Value)>
             {
