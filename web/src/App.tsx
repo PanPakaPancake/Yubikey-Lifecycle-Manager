@@ -94,6 +94,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   // Close the mobile menu on every navigation.
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
   const { data: updates } = useApi<{ updateAvailable: boolean; latestVersion?: string }>(can('ManageSettings') ? '/api/platform/updates' : null);
+  useReveal(location.pathname);
   const item = (to: string, icon: IconName, label: ReactNode, end = false) => (
     <NavLink to={to} end={end}><Icon name={icon} />{label}</NavLink>
   );
@@ -227,6 +228,37 @@ function TenantRoute() {
   useEffect(() => { if (id && known && id !== tenantId) setTenantId(id); }, [id, known, tenantId, setTenantId]);
   if (id && known && id === tenantId) return <Navigate to={'/tenant' + location.search} replace />;
   return <TenantDetailPage id={id} />;
+}
+
+/**
+ * Karten blenden beim Hineinscrollen ein (wie auf der Passkey-Seite). Sichtbare Karten bekommen sofort „in“;
+ * nachgeladene Karten werden über einen MutationObserver erfasst. Ohne IntersectionObserver bleibt alles sichtbar.
+ */
+function useReveal(path: string) {
+  useEffect(() => {
+    const page = document.querySelector('.page');
+    if (!page || typeof IntersectionObserver === 'undefined' || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    const root = document.documentElement;
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const el = e.target as HTMLElement;
+        el.classList.add('in');
+        io.unobserve(el);
+        setTimeout(() => { el.style.transitionDelay = ''; }, 800);
+      }
+    }, { rootMargin: '0px 0px -40px 0px' });
+    const scan = () => page.querySelectorAll('.card:not(.in):not([data-reveal])').forEach((el, i) => {
+      el.setAttribute('data-reveal', '');
+      (el as HTMLElement).style.transitionDelay = Math.min(i, 4) * 60 + 'ms';
+      io.observe(el);
+    });
+    scan();
+    root.classList.add('reveal-on');
+    const mo = new MutationObserver(scan);
+    mo.observe(page, { childList: true, subtree: true });
+    return () => { mo.disconnect(); io.disconnect(); root.classList.remove('reveal-on'); };
+  }, [path]);
 }
 
 function initials(name?: string) {
