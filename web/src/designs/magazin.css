@@ -1,0 +1,134 @@
+/* ==========================================================================
+   Vorschlag 3 · Magazin
+   Keine Seitenleiste: Kopf mit Marke und Navigation als Pill-Leiste (wie die Tabs der Passkey-Seite),
+   Partner-Menü klappt auf. Warme Papierfarben mit Terrakotta, Serifen-Überschriften, große Zahlen,
+   Linien statt Kästen, Unterstrich- und Einblend-Animationen.
+   ========================================================================== */
+
+:root[data-design="magazin"] {
+  --bg: #f7f3ec; --surface: #fffdf9; --surface-2: #f2ece2; --ink: #1c1917; --muted: #78716c; --line: #e6ddcf;
+  --accent: #c2410c; --accent-2: #ea580c; --accent-ink: #fff; --accent-soft: #fbeadf; --gold: #b7791f;
+  --ok: #3f7d4e; --ok-soft: #e7f0e6; --warn: #b45309; --warn-soft: #fbf0dc; --error: #b91c1c; --error-soft: #fbe7e4;
+  --radius: 10px; --radius-sm: 8px; --shadow: none; --shadow-lg: 0 18px 40px -12px rgba(28, 25, 23, .25);
+  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design="magazin"]:not([data-theme="light"]) { --bg: #161311; --surface: #1d1916; --surface-2: #26211d; --ink: #f2ebe2; --muted: #a8a097; --line: #352e28; --accent: #fb8a4c; --accent-soft: #3a2418; --accent-ink: #1c1917; }
+}
+:root[data-design="magazin"][data-theme="dark"] { --bg: #161311; --surface: #1d1916; --surface-2: #26211d; --ink: #f2ebe2; --muted: #a8a097; --line: #352e28; --accent: #fb8a4c; --accent-soft: #3a2418; --accent-ink: #1c1917; }
+
+[data-design="magazin"] body { background: var(--bg); }
+[data-design="magazin"] h1, [data-design="magazin"] .card-head h2, [data-design="magazin"] .kpi .value, [data-design="magazin"] .dash-hero-title, [data-design="magazin"] .brand > div {
+  font-family: var(--serif); font-weight: 600; letter-spacing: -0.01em;
+}
+[data-design="magazin"] h1 { font-size: clamp(2.1rem, 3.6vw, 3rem); font-weight: 500; }
+[data-design="magazin"] .card-head h2 { font-size: 1.3rem; font-weight: 500; }
+
+@media (min-width: 901px) {
+  /* Kopf statt Seitenleiste: Zeile 1 Marke + Konto, Zeile 2 Navigation */
+  [data-design="magazin"] .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
+  [data-design="magazin"] .shell.sidebar-dark .sidebar {
+    --sb-bg: color-mix(in srgb, var(--bg) 86%, transparent); --sb-ink: var(--ink); --sb-muted: var(--muted); --sb-hover: transparent; --sb-active-bg: var(--ink); --sb-active-ink: var(--bg); --sb-line: var(--line);
+    color-scheme: inherit; position: sticky; top: 0; z-index: 40; height: auto; overflow: visible; display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "brand . foot" "nav nav nav";
+    align-items: center; gap: 0 20px; padding: 14px max(28px, calc((100vw - 1240px) / 2)) 0; border-right: 0; border-bottom: 1px solid var(--line); backdrop-filter: saturate(1.3) blur(12px);
+  }
+  [data-design="magazin"] .brand { grid-area: brand; padding: 0; font-size: 1.25rem; }
+  [data-design="magazin"] .brand small { font-family: "Inter Variable", system-ui, sans-serif; font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; }
+  [data-design="magazin"] .nav { grid-area: nav; flex-direction: row; align-items: center; gap: 6px; padding: 12px 0; margin-top: 12px; border-top: 1px solid var(--line); }
+  [data-design="magazin"] .nav .section, [data-design="magazin"] .nav .section-sub, [data-design="magazin"] .nav a .icon, [data-design="magazin"] .nav a::before { display: none; }
+  [data-design="magazin"] .nav-group { display: flex; align-items: center; gap: 2px; }
+  [data-design="magazin"] .nav a { padding: 6px 13px; border-radius: 999px; font-weight: 550; font-size: .9rem; white-space: nowrap; }
+  [data-design="magazin"] .nav a .nav-label { position: relative; }
+  [data-design="magazin"] .nav a:not(.active) .nav-label::after { content: ""; position: absolute; left: 0; right: 0; bottom: -3px; height: 2px; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform .3s var(--ease); }
+  [data-design="magazin"] .nav a:hover .nav-label::after { transform: scaleX(1); }
+  [data-design="magazin"] .nav a.active { background: var(--ink); color: var(--bg); }
+  /* Partner und Hilfe als aufklappende Menüs rechts */
+  [data-design="magazin"] .nav-group-partner { margin-left: auto; }
+  [data-design="magazin"] .nav-group-partner, [data-design="magazin"] .nav-group-help { position: relative; }
+  [data-design="magazin"] .nav-group-partner > .section, [data-design="magazin"] .nav-group-help > .section {
+    display: inline-flex; align-items: center; gap: 6px; margin: 0; padding: 6px 13px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
+    font-size: .85rem; letter-spacing: 0; text-transform: none; font-weight: 600; color: var(--ink);
+  }
+  [data-design="magazin"] .nav-group-partner > .section::after, [data-design="magazin"] .nav-group-help > .section::after { content: "▾"; font-size: .75em; color: var(--muted); }
+  [data-design="magazin"] .nav-group-partner > a, [data-design="magazin"] .nav-group-help > a { display: none; }
+  [data-design="magazin"] .nav-group-partner:hover, [data-design="magazin"] .nav-group-partner:focus-within,
+  [data-design="magazin"] .nav-group-help:hover, [data-design="magazin"] .nav-group-help:focus-within { z-index: 5; }
+  [data-design="magazin"] .nav-group-partner:is(:hover, :focus-within) > a, [data-design="magazin"] .nav-group-help:is(:hover, :focus-within) > a { display: flex; }
+  [data-design="magazin"] .nav-group-partner:is(:hover, :focus-within)::before, [data-design="magazin"] .nav-group-help:is(:hover, :focus-within)::before {
+    content: ""; position: absolute; right: 0; top: 100%; width: 250px; height: var(--mg-h, 330px); background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-lg); margin-top: 6px; animation: menu-in .18s var(--ease);
+  }
+  [data-design="magazin"] .nav-group-help { --mg-h: 52px; }
+  [data-design="magazin"] .nav-group-partner:is(:hover, :focus-within) > a, [data-design="magazin"] .nav-group-help:is(:hover, :focus-within) > a {
+    position: absolute; right: 8px; width: 234px; z-index: 1; border-radius: 10px; animation: menu-in .18s var(--ease);
+  }
+  [data-design="magazin"] .nav-group-partner > a:nth-of-type(1) { top: calc(100% + 12px); } [data-design="magazin"] .nav-group-partner > a:nth-of-type(2) { top: calc(100% + 52px); }
+  [data-design="magazin"] .nav-group-partner > a:nth-of-type(3) { top: calc(100% + 92px); } [data-design="magazin"] .nav-group-partner > a:nth-of-type(4) { top: calc(100% + 132px); }
+  [data-design="magazin"] .nav-group-partner > a:nth-of-type(5) { top: calc(100% + 172px); } [data-design="magazin"] .nav-group-partner > a:nth-of-type(6) { top: calc(100% + 212px); }
+  [data-design="magazin"] .nav-group-partner > a:nth-of-type(7) { top: calc(100% + 252px); } [data-design="magazin"] .nav-group-partner > a:nth-of-type(8) { top: calc(100% + 292px); }
+  [data-design="magazin"] .nav-group-help > a { top: calc(100% + 12px); }
+  [data-design="magazin"] .nav-group-partner > a:hover, [data-design="magazin"] .nav-group-help > a:hover { background: var(--surface-2); }
+
+  [data-design="magazin"] .sidebar-foot { grid-area: foot; flex-direction: row; align-items: center; margin: 0; padding: 0; border: 0; gap: 4px; }
+  [data-design="magazin"] .sidebar-foot .version, [data-design="magazin"] .sidebar-foot .account-text .muted { display: none; }
+  [data-design="magazin"] .sidebar-foot .account-link { padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--line); }
+  [data-design="magazin"] .foot-actions { display: flex; gap: 2px; }
+  [data-design="magazin"] .main { max-width: 1240px; margin: 0 auto; padding: 18px 28px 64px; }
+  [data-design="magazin"] .topbar { position: static; margin: 0 0 18px; padding: 0 0 14px; background: none; backdrop-filter: none; }
+}
+[data-design="magazin"] .avatar { background: var(--accent); }
+[data-design="magazin"] .brand-mark { border-radius: 50%; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); }
+
+/* Lagebericht als Aufmacher */
+[data-design="magazin"] .dash-hero { display: grid; grid-template-columns: 1.6fr 1fr; gap: 28px; align-items: end; padding: 6px 0 26px; margin-bottom: 26px; border-bottom: 1px solid var(--line); }
+[data-design="magazin"] .dash-eyebrow { font-size: .75rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); }
+[data-design="magazin"] .dash-hero-title { font-size: clamp(2rem, 3.4vw, 2.9rem); line-height: 1.08; font-weight: 500; margin: 10px 0 10px; animation: rise .7s var(--ease) both; }
+[data-design="magazin"] .dash-hero-title b { color: var(--accent); font-weight: 600; font-style: italic; }
+[data-design="magazin"] .dash-hero-sub { font-size: 1.08rem; color: var(--muted); max-width: 52ch; animation: rise .7s .1s var(--ease) both; }
+[data-design="magazin"] .dash-hero-meter { height: 3px; border-radius: 0; max-width: none; }
+[data-design="magazin"] .dash-hero-art { justify-content: end; }
+[data-design="magazin"] .dash-hero-art .pk-float { filter: drop-shadow(0 18px 18px rgba(28, 25, 23, .18)); }
+[data-design="magazin"] .page-header { border-bottom: 2px solid var(--ink); padding-bottom: 14px; }
+[data-design="magazin"] .dash ~ * , [data-design="magazin"] .page-header + .dash { margin-top: 0; }
+
+/* Kennzahlen als Zahlenleiste mit Trennlinien statt Kästen */
+[data-design="magazin"] .dash-kpis { gap: 0; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+[data-design="magazin"] .kpi.card { background: none; border: 0; border-left: 1px solid var(--line); border-radius: 0; padding: 4px 22px 10px; box-shadow: none; }
+[data-design="magazin"] .kpi.card:first-child { border-left: 0; padding-left: 0; }
+[data-design="magazin"] .kpi .label { text-transform: uppercase; letter-spacing: .12em; font-size: .7rem; font-weight: 700; color: var(--muted); }
+[data-design="magazin"] .kpi .value { font-size: 3rem; font-weight: 500; line-height: 1.05; }
+[data-design="magazin"] .kpi-link:hover { transform: none; box-shadow: none; }
+[data-design="magazin"] .kpi-link:hover .value { color: var(--accent); }
+[data-design="magazin"] .kpi::after { display: none; }
+
+/* Karten als Rubriken */
+[data-design="magazin"] .card { background: var(--surface); border: 1px solid var(--line); border-radius: 6px; box-shadow: none; padding: 22px 24px; }
+[data-design="magazin"] .card-head { border-bottom: 1px solid var(--line); padding-bottom: 10px; }
+[data-design="magazin"] .action-items { background: var(--surface); border: 0; border-top: 3px solid var(--accent); border-radius: 0; box-shadow: none; padding: 16px 4px; }
+[data-design="magazin"] .action-items h2 { font-family: var(--serif); font-size: 1.3rem; font-weight: 500; }
+[data-design="magazin"] .action-items li { animation: rise .5s var(--ease) both; }
+[data-design="magazin"] .action-items li:nth-child(2) { animation-delay: .06s; } [data-design="magazin"] .action-items li:nth-child(3) { animation-delay: .12s; }
+[data-design="magazin"] .action-items li:nth-child(4) { animation-delay: .18s; } [data-design="magazin"] .action-items li:nth-child(5) { animation-delay: .24s; }
+[data-design="magazin"] .ai-icon { border-radius: 4px; }
+
+/* Tabellen: Zeilen blenden gestaffelt ein */
+[data-design="magazin"] th { color: var(--ink); border-bottom: 2px solid var(--ink); }
+[data-design="magazin"] tbody tr { animation: rise .45s var(--ease) both; }
+[data-design="magazin"] tbody tr:nth-child(2) { animation-delay: .03s; } [data-design="magazin"] tbody tr:nth-child(3) { animation-delay: .06s; } [data-design="magazin"] tbody tr:nth-child(4) { animation-delay: .09s; }
+[data-design="magazin"] tbody tr:nth-child(5) { animation-delay: .12s; } [data-design="magazin"] tbody tr:nth-child(6) { animation-delay: .15s; } [data-design="magazin"] tbody tr:nth-child(n+7) { animation-delay: .18s; }
+[data-design="magazin"] .bar .fill { background: var(--ink); border-radius: 2px 2px 0 0; width: 46%; }
+[data-design="magazin"] .bar:last-child .fill { background: var(--accent); }
+[data-design="magazin"] button.primary, [data-design="magazin"] .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); box-shadow: none; border-radius: 999px; }
+[data-design="magazin"] button, [data-design="magazin"] .btn { border-radius: 999px; }
+[data-design="magazin"] .view-tabs button.on { color: var(--ink); }
+
+/* Assistent: Kapitelleiste */
+[data-design="magazin"] .steps { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: 14px 0; }
+[data-design="magazin"] .step-no { border-radius: 0; background: none; border: 0; font-family: var(--serif); font-size: 1.4rem; width: auto; color: var(--muted); }
+[data-design="magazin"] .step.current .step-no, [data-design="magazin"] .step.done .step-no { background: none !important; box-shadow: none !important; color: var(--accent); }
+[data-design="magazin"] .step.current { color: var(--ink); }
+[data-design="magazin"] .step:not(:last-child)::after { height: 1px; }
+[data-design="magazin"] .step.done:not(:last-child)::after { background: var(--accent); }
+[data-design="magazin"] .pick button { border-radius: 0; border-width: 0 0 1px 0; background: transparent; padding: 14px 4px; }
+[data-design="magazin"] .pick button:hover:not(:disabled) { background: var(--surface-2); padding-left: 12px; }
+[data-design="magazin"] .pick button { transition: padding .25s var(--ease), background .2s; }
+[data-design="magazin"] .pick { gap: 0; }

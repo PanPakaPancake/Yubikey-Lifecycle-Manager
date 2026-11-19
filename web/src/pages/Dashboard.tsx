@@ -1,9 +1,10 @@
 import { Link } from 'react-router';
 import { fmtDate, statusLabels, type KeyStatus } from '../api';
-import { useCan } from '../auth';
+import { useAuth, useCan } from '../auth';
+import { KeyArt } from './PasskeyInfo';
 import type { ReactNode } from 'react';
 import { Badge, Card, CountUp, Donut, download, Empty, ErrorBox, MenuButton, PageHeader, Spinner, useApi } from '../ui';
-import { Icon } from '../icons';
+import { Icon, type IconName } from '../icons';
 import { useTenant } from '../tenant';
 
 interface DashboardData {
@@ -46,23 +47,25 @@ export default function DashboardPage() {
       {!data && loading && <Spinner label="Wird geladen …" />}
       {data && (
         <>
+          <div className="dash">
+          <DashHero data={data} />
           <ActionItems data={data} keysLink={keysLink} />
 
-          <div className="grid cols-4">
-            <Kpi label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
+          <div className="grid cols-4 dash-kpis">
+            <Kpi icon="users" className="kpi-coverage" label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
               sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to="/keys?view=people"
               aside={data.coveragePercent != null && <Donut size={64} thickness={9} parts={[
                 { key: 'with', value: Math.min(100, data.coveragePercent), color: 'var(--ok)', label: 'Mit Key' },
                 { key: 'without', value: Math.max(0, 100 - data.coveragePercent), color: 'transparent', label: 'Ohne Key' },
               ]} />} />
-            <Kpi label="Keys aktiv" value={data.byStatus.Active ?? 0} sub={`${data.total} Keys gesamt`} to={keysLink('Active')} />
-            <Kpi label="Im Lager" value={data.inStock} sub={`${data.byStatus.Locked ?? 0} gesperrt, ${data.byStatus.Retired ?? 0} ausgemustert`} to={keysLink('InStock')} />
-            <Kpi label="Firmware mit Sicherheitshinweis" value={data.vulnerableKeys} tone={data.vulnerableKeys ? 'warn' : undefined}
+            <Kpi icon="key" className="kpi-active" label="Keys aktiv" value={data.byStatus.Active ?? 0} sub={`${data.total} Keys gesamt`} to={keysLink('Active')} />
+            <Kpi icon="box" className="kpi-stock" label="Im Lager" value={data.inStock} sub={`${data.byStatus.Locked ?? 0} gesperrt, ${data.byStatus.Retired ?? 0} ausgemustert`} to={keysLink('InStock')} />
+            <Kpi icon="shield" className="kpi-firmware" label="Firmware mit Sicherheitshinweis" value={data.vulnerableKeys} tone={data.vulnerableKeys ? 'warn' : undefined}
               sub={`${data.forcePinChangeUnsupported} ohne erzwingbaren PIN-Wechsel`} to={data.vulnerableKeys ? '#firmware' : undefined} />
           </div>
 
-          <div className="grid cols-2" style={{ marginTop: 16 }}>
-            <Card title="Ausgegebene Keys pro Monat">
+          <div className="grid cols-2 dash-charts" style={{ marginTop: 16 }}>
+            <Card title="Ausgegebene Keys pro Monat" className="card-months">
               <div className="bars">
                 {data.issuedPerMonth.map((m) => (
                   <div className="bar" key={m.month} title={`${monthLabel(m.month)}: ${m.count}`}>
@@ -73,7 +76,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             </Card>
-            <Card title="Keys nach Status">
+            <Card title="Keys nach Status" className="card-status">
               <div className="status-chart">
                 <Donut parts={(Object.keys(statusLabels) as KeyStatus[]).map((s) => ({ key: s, value: data.byStatus[s] ?? 0, color: statusColor[s], label: statusLabels[s] }))}
                   center={<><strong>{data.total}</strong><span className="small muted">Keys</span></>} />
@@ -86,8 +89,8 @@ export default function DashboardPage() {
             </Card>
           </div>
 
-          <div className="grid cols-2" style={{ marginTop: 16 }}>
-            <Card title={<span id="firmware">Firmware-Stände</span>}>
+          <div className="grid cols-2 dash-tables" style={{ marginTop: 16 }}>
+            <Card title={<span id="firmware">Firmware-Stände</span>} className="card-firmware">
               {data.firmware.length === 0 ? <Empty>Noch keine Firmware-Daten.</Empty> : (
                 <table>
                   <thead><tr><th>Firmware</th><th>Keys</th><th>Hinweise</th></tr></thead>
@@ -103,7 +106,7 @@ export default function DashboardPage() {
                 </table>
               )}
             </Card>
-            <Card title="Tenants">
+            <Card title="Tenants" className="card-tenants">
               {data.tenants.length === 0 ? <Empty>Noch kein Tenant angebunden. <Link to="/tenants">Tenant hinzufügen</Link></Empty> : (
                 <table>
                   <thead><tr><th>Tenant</th><th>Aktiv</th><th>Lager</th><th>Abdeckung</th><th>Sync</th></tr></thead>
@@ -122,25 +125,53 @@ export default function DashboardPage() {
               )}
             </Card>
           </div>
+          </div>
         </>
       )}
     </>
   );
 }
 
+/**
+ * Einstieg im Stil der Passkey-Seite: Begrüßung und Lage in einem Satz. Standardmäßig ausgeblendet,
+ * die Designvorschläge blenden ihn ein (design-proposals.css).
+ */
+function DashHero({ data }: { data: DashboardData }) {
+  const { me } = useAuth();
+  const h = new Date().getHours();
+  const hello = h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend';
+  const first = me.user?.displayName?.split(/\s+/)[0];
+  const todo = data.tenants.reduce((n, t) => n + (t.checksFailed > 0 ? 1 : 0) + (t.lastSyncSucceeded === false ? 1 : 0), 0)
+    + (data.byStatus.Locked ? 1 : 0) + (data.vulnerableKeys ? 1 : 0) + (data.pendingApprovals ? 1 : 0) + (data.openTodos ? 1 : 0) + (data.needsDetails ? 1 : 0);
+  return (
+    <section className="dash-hero">
+      <div className="dash-hero-text">
+        <span className="dash-eyebrow">{hello}{first ? ', ' + first : ''}</span>
+        <p className="dash-hero-title">
+          {data.coveragePercent != null ? <><b>{data.coveragePercent.toFixed(0)} %</b> der Zielgruppe haben einen YubiKey.</> : <><b>{data.byStatus.Active ?? 0}</b> Keys sind aktiv.</>}
+        </p>
+        <p className="dash-hero-sub">{todo ? `${todo} Punkte brauchen heute Ihre Aufmerksamkeit.` : 'Alles in Ordnung, kein Handlungsbedarf.'} {data.inStock} Keys liegen bereit.</p>
+        <div className="dash-hero-meter"><span style={{ width: Math.min(100, data.coveragePercent ?? 0) + '%' }} /></div>
+      </div>
+      <div className="dash-hero-art"><span className="pk-float"><KeyArt size={190} glow /></span></div>
+    </section>
+  );
+}
+
 const statusColor: Record<KeyStatus, string> = { Active: 'var(--ok)', InStock: 'var(--accent)', Locked: 'var(--error)', Retired: 'var(--muted)' };
 
-function Kpi({ label, value, sub, to, tone, children, aside }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode; aside?: ReactNode }) {
+function Kpi({ label, value, sub, to, tone, children, aside, icon, className = '' }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode; aside?: ReactNode; icon?: IconName; className?: string }) {
   const text = <>
+    {icon && <span className="kpi-ico" aria-hidden><Icon name={icon} size={20} /></span>}
     <div className="label">{label}</div>
     <div className={'value' + (tone ? ' tone-text-' + tone : '')}><CountUp value={value} /></div>
     <div className="sub">{sub}</div>
     {children}
   </>;
   const body = aside ? <div className="kpi-gauge"><div style={{ flex: 1, minWidth: 0 }}>{text}</div>{aside}</div> : text;
-  if (!to) return <div className="card kpi">{body}</div>;
-  if (to.startsWith('#')) return <a className="card kpi kpi-link" href={to}>{body}</a>;
-  return <Link className="card kpi kpi-link" to={to}>{body}</Link>;
+  if (!to) return <div className={'card kpi ' + className}>{body}</div>;
+  if (to.startsWith('#')) return <a className={'card kpi kpi-link ' + className} href={to}>{body}</a>;
+  return <Link className={'card kpi kpi-link ' + className} to={to}>{body}</Link>;
 }
 
 /** „Handlungsbedarf“: alles, was ein Admin heute anfassen sollte, mit direktem Link. */

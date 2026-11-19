@@ -1,0 +1,93 @@
+/* ==========================================================================
+   Vorschlag 1 · Leitfaden
+   Die Passkey-Seite konsequent auf die ganze App übertragen: helle Glasflächen, Blau mit Gold,
+   ein Einstieg (Hero) mit schwebendem Key, nummerierte Abschnitte, Icon-Kacheln, sanftes Einblenden.
+   ========================================================================== */
+
+:root[data-design="leitfaden"] {
+  --bg: #f5f7fd; --surface: #ffffff; --surface-2: #f3f6fd; --line: #e2e8f4;
+  --accent: #2f5be7; --accent-2: #6d8cf5; --accent-soft: #ecf1ff; --gold: #e0b03a;
+  --radius: 16px; --radius-sm: 11px;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design="leitfaden"]:not([data-theme="light"]) { --bg: #0a0f1c; --surface: #111829; --surface-2: #172036; --line: #232f4a; --accent: #7c9bff; --accent-soft: #1a2549; }
+}
+:root[data-design="leitfaden"][data-theme="dark"] { --bg: #0a0f1c; --surface: #111829; --surface-2: #172036; --line: #232f4a; --accent: #7c9bff; --accent-soft: #1a2549; }
+
+[data-design="leitfaden"] body {
+  background:
+    radial-gradient(1000px 520px at 88% -160px, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%),
+    radial-gradient(760px 460px at 0% 6%, color-mix(in srgb, var(--gold) 14%, transparent), transparent 70%),
+    var(--bg) fixed;
+}
+
+/* Seitenleiste: hell und gläsern wie die Kopfzeile der Passkey-Seite */
+[data-design="leitfaden"] .shell.sidebar-dark .sidebar {
+  --sb-bg: color-mix(in srgb, var(--surface) 72%, transparent); --sb-ink: var(--ink); --sb-muted: var(--muted);
+  --sb-hover: color-mix(in srgb, var(--accent) 7%, transparent); --sb-active-bg: var(--surface); --sb-active-ink: var(--accent); --sb-line: var(--line);
+  color-scheme: inherit; backdrop-filter: saturate(1.4) blur(16px);
+}
+[data-design="leitfaden"] .nav a { border-radius: 999px; padding: 8px 12px; }
+[data-design="leitfaden"] .nav a.active { box-shadow: 0 1px 3px rgba(16, 24, 40, .12), inset 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent); }
+[data-design="leitfaden"] .nav a::before { display: none; }
+[data-design="leitfaden"] .nav a.active .icon { color: var(--gold); }
+[data-design="leitfaden"] .nav .section { text-transform: uppercase; }
+[data-design="leitfaden"] .context-dot { box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent); }
+
+/* Kopf */
+[data-design="leitfaden"] .page-header h1 { font-size: clamp(1.9rem, 3vw, 2.5rem); letter-spacing: -0.03em; }
+
+/* Einstieg wie auf der Passkey-Seite */
+[data-design="leitfaden"] .dash-hero {
+  display: grid; grid-template-columns: 1.4fr 1fr; align-items: center; gap: 24px; margin: 0 0 22px; padding: 30px 34px; border-radius: 22px;
+  background:
+    radial-gradient(520px 260px at 90% 10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent 70%),
+    radial-gradient(420px 260px at 0% 100%, color-mix(in srgb, var(--gold) 18%, transparent), transparent 70%),
+    var(--surface);
+  border: 1px solid var(--line); box-shadow: var(--shadow); animation: rise .6s var(--ease) both;
+}
+[data-design="leitfaden"] .dash-eyebrow { display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); padding: 4px 11px; border-radius: 999px; }
+[data-design="leitfaden"] .dash-hero-title { font-size: clamp(1.6rem, 2.6vw, 2.2rem); font-weight: 720; letter-spacing: -0.03em; line-height: 1.15; margin: 12px 0 6px; }
+[data-design="leitfaden"] .dash-hero-title b { color: var(--accent); }
+[data-design="leitfaden"] .dash-hero-sub { color: var(--muted); font-size: 1.02rem; }
+[data-design="leitfaden"] .dash-hero-meter > span { background: linear-gradient(90deg, var(--accent), var(--gold)); }
+
+/* Nummerierte Abschnitte (wie 1, 2, 3 auf der Passkey-Seite) */
+[data-design="leitfaden"] .page { counter-reset: lf-sec; }
+[data-design="leitfaden"] .page .card > .card-head h2 { display: flex; align-items: center; gap: 12px; font-size: 1.12rem; }
+[data-design="leitfaden"] .page .card > .card-head h2::before {
+  counter-increment: lf-sec; content: counter(lf-sec); display: inline-grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 999px;
+  background: var(--accent); color: var(--accent-ink); font-size: .9rem; font-weight: 700; box-shadow: 0 4px 14px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+[data-design="leitfaden"] .card { border-radius: 20px; padding: 26px 28px; }
+
+/* Kennzahlen mit Icon-Kachel */
+[data-design="leitfaden"] .kpi-ico { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; background: var(--accent-soft); color: var(--accent); margin-bottom: 12px; transition: transform .3s var(--ease); }
+[data-design="leitfaden"] .kpi-firmware .kpi-ico { background: color-mix(in srgb, var(--gold) 20%, transparent); color: #9c7a1c; }
+[data-design="leitfaden"] .kpi-coverage .kpi-ico { background: var(--ok-soft); color: var(--ok); }
+[data-design="leitfaden"] .kpi-link:hover .kpi-ico { transform: rotate(-8deg) scale(1.08); }
+[data-design="leitfaden"] .kpi { padding: 18px 20px; border-radius: 18px; }
+[data-design="leitfaden"] .kpi .value { font-size: 2.1rem; }
+[data-design="leitfaden"] .kpi::after { background: linear-gradient(90deg, var(--accent), var(--gold)); }
+
+/* Handlungsbedarf als Hinweis-Kästen wie „Gut zu wissen“ */
+[data-design="leitfaden"] .action-items { border: 1px solid color-mix(in srgb, var(--warn) 30%, var(--line)); border-left-width: 1px; background: linear-gradient(180deg, var(--warn-soft), var(--surface) 70%); border-radius: 20px; padding: 20px 24px; }
+[data-design="leitfaden"] .action-items li { border-top: 0; padding: 9px 12px; margin: 4px 0; border-radius: 12px; background: color-mix(in srgb, var(--surface) 80%, transparent); transition: transform .2s var(--ease), box-shadow .2s; }
+[data-design="leitfaden"] .action-items li:hover { transform: translateX(3px); box-shadow: var(--shadow); }
+[data-design="leitfaden"] .ai-icon { width: 28px; height: 28px; }
+
+/* Assistent: große Nummern mit gestrichelter Laufbahn */
+[data-design="leitfaden"] .steps { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 8px 14px; box-shadow: var(--shadow); }
+[data-design="leitfaden"] .step-no { width: 32px; height: 32px; }
+[data-design="leitfaden"] .step:not(:last-child)::after { height: 2px; background: repeating-linear-gradient(90deg, var(--line) 0 8px, transparent 8px 14px); }
+[data-design="leitfaden"] .step.done:not(:last-child)::after { background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 14px); }
+[data-design="leitfaden"] .step.current:not(:last-child)::after { background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 14px) 0 0 / 28px 2px; animation: lf-march 1s linear infinite; }
+@keyframes lf-march { to { background-position: 28px 0; } }
+[data-design="leitfaden"] .pick { grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+[data-design="leitfaden"] .pick button { border-radius: 14px; padding: 14px 16px; transition: transform .2s var(--ease), border-color .2s, box-shadow .2s; }
+[data-design="leitfaden"] .pick button:hover:not(:disabled) { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); box-shadow: 0 8px 20px rgba(16, 24, 40, .08); background: var(--surface); }
+
+/* Tabellen */
+[data-design="leitfaden"] th { color: var(--muted); }
+[data-design="leitfaden"] .view-tabs { box-shadow: var(--shadow); }
+[data-design="leitfaden"] .topbar { background: color-mix(in srgb, var(--surface) 62%, transparent); }

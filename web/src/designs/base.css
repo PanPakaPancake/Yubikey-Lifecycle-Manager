@@ -1,0 +1,42 @@
+/* ==========================================================================
+   Designvorschläge (Prototyp): gemeinsame Grundlage und der Umschalter.
+   Ohne data-design sieht alles aus wie bisher.
+   ========================================================================== */
+
+.dash-hero, .kpi-ico { display: none; }
+
+/* Umschalter unten rechts */
+.design-picker { position: fixed; right: 18px; bottom: 18px; z-index: 80; display: flex; flex-direction: column; align-items: flex-end; gap: 8px; font-size: 14px; }
+.design-picker-btn { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px !important; padding: 9px 16px !important; background: #111827 !important; color: #fff !important;
+  border: 1px solid rgba(255,255,255,.12) !important; box-shadow: 0 10px 30px -6px rgba(0,0,0,.45) !important; font-weight: 600; }
+.design-picker-pop { width: 330px; background: #ffffff; color: #0f172a; border: 1px solid #e5e7eb; border-radius: 18px; padding: 8px; box-shadow: 0 24px 60px -12px rgba(0,0,0,.4); animation: dp-in .25s cubic-bezier(.2,.8,.2,1); }
+@keyframes dp-in { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }
+.design-picker-title { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #6b7280; padding: 6px 10px 8px; }
+.design-picker-pop button { display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; border: 0 !important; background: transparent !important; color: inherit !important;
+  padding: 9px 10px !important; border-radius: 12px !important; box-shadow: none !important; }
+.design-picker-pop button:hover { background: #f3f4f6 !important; }
+.design-picker-pop button.on { background: #eef2ff !important; }
+.design-picker-pop strong { display: block; font-size: .92rem; }
+.design-picker-pop small { display: block; color: #6b7280; font-size: .78rem; line-height: 1.35; }
+.design-swatch { width: 34px; height: 34px; border-radius: 10px; flex: none; box-shadow: inset 0 0 0 1px rgba(0,0,0,.08); }
+.sw-aktuell { background: linear-gradient(135deg, #111a33 0 45%, #2f5be7 45% 75%, #e0b03a 75%); }
+.sw-leitfaden { background: linear-gradient(135deg, #f7f9ff 0 40%, #2f5be7 40% 70%, #e0b03a 70%); }
+.sw-kontrollraum { background: radial-gradient(circle at 70% 30%, #22d3ee 0 18%, transparent 19%), linear-gradient(135deg, #070b14 0 55%, #8b5cf6 55%); }
+.sw-magazin { background: linear-gradient(135deg, #f6f1e7 0 50%, #c2410c 50% 72%, #1c1917 72%); }
+.sw-bento { background: conic-gradient(#7c3aed 0 25%, #10b981 0 50%, #f59e0b 0 75%, #3b82f6 0); }
+.sw-fokus { background: linear-gradient(135deg, #18181b 0 30%, #fafafa 30% 72%, #059669 72%); }
+@media (max-width: 900px) { .design-picker { right: 10px; bottom: 10px; } .design-picker-pop { width: min(330px, calc(100vw - 20px)); } }
+@media print { .design-picker { display: none; } }
+
+/* Gemeinsame Bausteine des Einstiegs (je Design eingefärbt) */
+[data-design] .dash-hero-title { margin: 6px 0 4px; }
+[data-design] .dash-hero-sub { margin: 0; }
+[data-design] .dash-hero-meter { height: 8px; border-radius: 999px; background: color-mix(in srgb, var(--line) 80%, transparent); overflow: hidden; margin-top: 16px; max-width: 420px; }
+[data-design] .dash-hero-meter > span { display: block; height: 100%; border-radius: inherit; background: var(--accent); animation: dp-grow 1.1s cubic-bezier(.2,.8,.2,1) both .2s; transform-origin: left; }
+@keyframes dp-grow { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+[data-design] .dash-hero-art { display: grid; place-items: center; }
+@media (prefers-reduced-motion: reduce) { [data-design] * { animation-duration: .001ms !important; animation-iteration-count: 1 !important; } }
+@media (max-width: 900px) {
+  [data-design] .dash-hero { grid-template-columns: 1fr !important; padding: 20px !important; min-height: 0 !important; }
+  [data-design] .dash-hero-art { display: none !important; }
+}

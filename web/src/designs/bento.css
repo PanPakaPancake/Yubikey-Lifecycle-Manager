@@ -1,0 +1,138 @@
+/* ==========================================================================
+   Vorschlag 4 · Bento
+   Jeder Bereich hat seine Farbe (Übersicht violett, Inventar grün, Rollout blau, Registrieren gelb …),
+   die Übersicht ist ein Kachel-Raster mit farbigen Verlaufskacheln, sehr runde Ecken,
+   Kacheln federn beim Laden herein und kippen leicht beim Darüberfahren.
+   ========================================================================== */
+
+:root[data-design="bento"] {
+  --bg: #f3f2fa; --surface: #ffffff; --surface-2: #f6f5fc; --ink: #1e1b2e; --muted: #6b6880; --line: #e7e4f3;
+  --accent: #6d28d9; --accent-2: #8b5cf6; --accent-ink: #fff; --accent-soft: #f1ebff;
+  --ok: #059669; --ok-soft: #e6f7f0; --warn: #d97706; --warn-soft: #fff4e2; --error: #e11d48; --error-soft: #ffe8ee;
+  --radius: 24px; --radius-sm: 14px; --shadow: 0 1px 2px rgba(30, 27, 46, .04), 0 8px 24px -10px rgba(30, 27, 46, .12);
+  --c-violet: #7c3aed; --c-green: #10b981; --c-blue: #3b82f6; --c-amber: #f59e0b; --c-pink: #ec4899; --c-red: #ef4444; --c-teal: #14b8a6; --c-slate: #64748b;
+  --spring: cubic-bezier(.34, 1.56, .64, 1);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design="bento"]:not([data-theme="light"]) { --bg: #100e1a; --surface: #1a1727; --surface-2: #221e33; --ink: #ece9f8; --muted: #a29fb8; --line: #2d2842; --accent: #a78bfa; --accent-soft: #2a2148; --accent-ink: #120d22; }
+}
+:root[data-design="bento"][data-theme="dark"] { --bg: #100e1a; --surface: #1a1727; --surface-2: #221e33; --ink: #ece9f8; --muted: #a29fb8; --line: #2d2842; --accent: #a78bfa; --accent-soft: #2a2148; --accent-ink: #120d22; }
+
+[data-design="bento"] body { background: var(--bg); }
+[data-design="bento"] h1 { font-weight: 800; letter-spacing: -0.035em; }
+
+/* Seitenleiste als schwebende Kachel, Icons in Farbkästchen */
+@media (min-width: 901px) {
+  [data-design="bento"] .shell { grid-template-columns: 268px 1fr; }
+  [data-design="bento"] .shell.sidebar-dark .sidebar { margin: 12px 0 12px 12px; height: calc(100vh - 24px); top: 12px; border-radius: 26px; border: 0; }
+}
+[data-design="bento"] .shell.sidebar-dark .sidebar {
+  --sb-bg: var(--surface); --sb-ink: var(--ink); --sb-muted: var(--muted); --sb-hover: var(--surface-2); --sb-active-bg: var(--surface-2); --sb-active-ink: var(--ink); --sb-line: var(--line);
+  color-scheme: inherit; box-shadow: var(--shadow); backdrop-filter: none;
+}
+[data-design="bento"] .nav a { --c: var(--c-slate); border-radius: 14px; padding: 6px 8px; gap: 12px; }
+[data-design="bento"] .nav a::before { display: none; }
+[data-design="bento"] .nav a .icon { box-sizing: content-box; padding: 6px; border-radius: 10px; color: var(--c) !important; background: color-mix(in srgb, var(--c) 13%, transparent); transition: transform .35s var(--spring), background .2s, color .2s; }
+[data-design="bento"] .nav a:hover .icon { transform: rotate(-10deg) scale(1.1); }
+[data-design="bento"] .nav a.active .icon { background: var(--c); color: #fff !important; box-shadow: 0 6px 14px -4px color-mix(in srgb, var(--c) 70%, transparent); }
+[data-design="bento"] .nav a.active { font-weight: 700; }
+[data-design="bento"] .nav a[href="/"] { --c: var(--c-violet); }
+[data-design="bento"] .nav a[href="/keys"] { --c: var(--c-green); }
+[data-design="bento"] .nav a[href="/rollout"] { --c: var(--c-blue); }
+[data-design="bento"] .nav a[href="/register"] { --c: var(--c-amber); }
+[data-design="bento"] .nav a[href="/todos"] { --c: var(--c-pink); }
+[data-design="bento"] .nav a[href="/approvals"] { --c: var(--c-red); }
+[data-design="bento"] .nav a[href="/tenant"], [data-design="bento"] .nav a[href="/tenants"] { --c: var(--c-teal); }
+[data-design="bento"] .nav a[href="/partner/stock"] { --c: var(--c-green); }
+[data-design="bento"] .nav a[href="/profiles"] { --c: var(--c-amber); }
+[data-design="bento"] .nav a[href="/users"] { --c: var(--c-violet); }
+[data-design="bento"] .nav a[href="/partner/notifications"] { --c: var(--c-pink); }
+[data-design="bento"] .nav a[href="/passkey"] { --c: var(--c-blue); }
+[data-design="bento"] .brand-mark { border-radius: 14px; background: linear-gradient(135deg, #ede9fe, #fef3c7); }
+[data-design="bento"] .avatar { background: linear-gradient(135deg, var(--c-violet), var(--c-pink)); }
+[data-design="bento"] .topbar { background: color-mix(in srgb, var(--bg) 80%, transparent); border-bottom: 0; }
+
+/* Übersicht als Bento-Raster */
+@media (min-width: 1101px) {
+  [data-design="bento"] .dash { display: grid; gap: 16px; grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-areas: "hero hero cov cov" "hero hero active stock" "act act act fw" "months months status status" "firmware firmware tenants tenants"; }
+  [data-design="bento"] .dash-kpis, [data-design="bento"] .dash-charts, [data-design="bento"] .dash-tables { display: contents; }
+  [data-design="bento"] .dash-hero { grid-area: hero; }
+  [data-design="bento"] .action-items { grid-area: act; margin: 0; }
+  [data-design="bento"] .kpi-coverage { grid-area: cov; } [data-design="bento"] .kpi-active { grid-area: active; } [data-design="bento"] .kpi-stock { grid-area: stock; } [data-design="bento"] .kpi-firmware { grid-area: fw; }
+  [data-design="bento"] .card-months { grid-area: months; } [data-design="bento"] .card-status { grid-area: status; }
+  [data-design="bento"] .card-firmware { grid-area: firmware; } [data-design="bento"] .card-tenants { grid-area: tenants; }
+}
+[data-design="bento"] .dash-hero {
+  display: flex; flex-direction: column; justify-content: space-between; gap: 10px; position: relative; overflow: hidden; padding: 26px 28px; border-radius: 28px; min-height: 250px;
+  background: radial-gradient(260px 200px at 85% 85%, rgba(245, 158, 11, .35), transparent 70%), linear-gradient(135deg, #ede9fe, #fce7f3 60%, #fef3c7);
+  color: #1e1b2e; animation: bento-pop .6s var(--spring) both;
+}
+[data-design="bento"] .dash-hero-art { position: absolute; right: -10px; bottom: 6px; }
+[data-design="bento"] .dash-eyebrow { display: inline-block; align-self: flex-start; padding: 5px 12px; border-radius: 999px; background: rgba(255, 255, 255, .7); font-weight: 700; font-size: .8rem; }
+[data-design="bento"] .dash-hero-title { font-size: 1.9rem; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; max-width: 16ch; }
+[data-design="bento"] .dash-hero-title b { background: linear-gradient(90deg, var(--c-violet), var(--c-pink)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+[data-design="bento"] .dash-hero-sub { color: #4b4762; max-width: 30ch; }
+[data-design="bento"] .dash-hero-meter { background: rgba(255, 255, 255, .7); max-width: 60%; height: 10px; }
+[data-design="bento"] .dash-hero-meter > span { background: linear-gradient(90deg, var(--c-violet), var(--c-pink)); }
+
+/* Farbige Kennzahl-Kacheln */
+[data-design="bento"] .kpi { --c: var(--c-violet); --c2: #a78bfa; border: 0; border-radius: 26px; padding: 20px 22px; color: #fff; overflow: hidden;
+  background: linear-gradient(135deg, var(--c), var(--c2)); background-size: 160% 160%; box-shadow: 0 14px 30px -14px color-mix(in srgb, var(--c) 80%, transparent);
+  animation: bento-pop .6s var(--spring) both, bento-shift 8s ease-in-out infinite alternate; }
+[data-design="bento"] .kpi-coverage { --c: #6d28d9; --c2: #c026d3; animation-delay: .05s, 0s; }
+[data-design="bento"] .kpi-active { --c: #059669; --c2: #34d399; animation-delay: .1s, 0s; }
+[data-design="bento"] .kpi-stock { --c: #2563eb; --c2: #38bdf8; animation-delay: .15s, 0s; }
+[data-design="bento"] .kpi-firmware { --c: #ea580c; --c2: #fbbf24; animation-delay: .2s, 0s; display: flex; flex-direction: column; justify-content: center; }
+[data-design="bento"] .kpi .label, [data-design="bento"] .kpi .sub { color: rgba(255, 255, 255, .85); }
+[data-design="bento"] .kpi .value, [data-design="bento"] .kpi .value.tone-text-warn { color: #fff; font-size: 2.6rem; font-weight: 800; }
+[data-design="bento"] .kpi-coverage .value { font-size: 3.4rem; }
+[data-design="bento"] .kpi-ico { display: grid; position: absolute; right: -14px; bottom: -18px; opacity: .22; transform: rotate(-12deg); transition: transform .5s var(--spring), opacity .3s; }
+[data-design="bento"] .kpi-ico .icon { width: 96px; height: 96px; stroke-width: 1.4; }
+[data-design="bento"] .kpi-coverage .kpi-ico { display: none; }
+[data-design="bento"] .kpi-link:hover { transform: translateY(-4px) rotate(-.6deg); box-shadow: 0 20px 36px -14px color-mix(in srgb, var(--c) 90%, transparent); border: 0; }
+[data-design="bento"] .kpi-link:hover .kpi-ico { transform: rotate(0) scale(1.08); opacity: .32; }
+[data-design="bento"] .kpi::after { display: none; }
+[data-design="bento"] .kpi .donut circle:first-child { stroke: rgba(255, 255, 255, .25); }
+[data-design="bento"] .kpi .donut circle:not(:first-child) { stroke: #fff; }
+@keyframes bento-pop { from { opacity: 0; transform: scale(.92) translateY(10px); } to { opacity: 1; transform: none; } }
+@keyframes bento-shift { from { background-position: 0% 0%; } to { background-position: 100% 100%; } }
+
+/* Karten */
+[data-design="bento"] .card { border: 0; border-radius: 26px; box-shadow: var(--shadow); }
+[data-design="bento"] .reveal-on .page .card:not(.in) { transform: scale(.94); }
+[data-design="bento"] .reveal-on .page .card { transition: opacity .5s ease, transform .6s var(--spring), box-shadow .25s; }
+[data-design="bento"] .card-head h2 { font-size: 1.08rem; font-weight: 750; }
+[data-design="bento"] .action-items { border: 0; border-radius: 26px; background: var(--surface); box-shadow: var(--shadow); padding: 20px 22px; }
+[data-design="bento"] .action-items .count { background: var(--c-pink); color: #fff; }
+[data-design="bento"] .action-items li { border-top: 0; padding: 8px 10px; border-radius: 14px; background: var(--surface-2); margin: 6px 0; transition: transform .3s var(--spring); }
+[data-design="bento"] .action-items li:hover { transform: scale(1.015); }
+[data-design="bento"] .ai-icon { border-radius: 9px; }
+[data-design="bento"] .bar .fill { border-radius: 999px; width: 54%; background: linear-gradient(180deg, var(--c-pink), var(--c-violet)); }
+[data-design="bento"] .bar .fill { animation: bar-up .8s var(--spring) both; }
+
+/* Bedienelemente */
+[data-design="bento"] button, [data-design="bento"] .btn { border-radius: 14px; }
+[data-design="bento"] button.primary, [data-design="bento"] .btn.primary { background: linear-gradient(135deg, var(--c-violet), var(--c-pink)); border: 0; box-shadow: 0 10px 20px -8px rgba(124, 58, 237, .6); }
+[data-design="bento"] .badge { border-radius: 8px; }
+[data-design="bento"] .view-tabs { border: 0; background: var(--surface); box-shadow: var(--shadow); }
+[data-design="bento"] .view-tabs button.on { background: var(--c-green); color: #fff; box-shadow: 0 6px 14px -6px var(--c-green); }
+[data-design="bento"] .view-tabs button.on .count { background: rgba(255, 255, 255, .25); color: #fff; }
+[data-design="bento"] .assign-kpis .card:nth-child(1) .kpi-icon { background: #ede9fe; color: var(--c-violet); }
+[data-design="bento"] .assign-kpis .card:nth-child(2) .kpi-icon { background: #dcfce7; color: var(--c-green); }
+[data-design="bento"] .assign-kpis .card:nth-child(3) .kpi-icon { background: #fef3c7; color: var(--c-amber); }
+[data-design="bento"] .assign-kpis .card:nth-child(4) .kpi-icon { background: #ffe4e6; color: var(--c-red); }
+[data-design="bento"] tbody tr td:first-child { border-radius: 12px 0 0 12px; } [data-design="bento"] tbody tr td:last-child { border-radius: 0 12px 12px 0; }
+[data-design="bento"] tbody tr:hover td { background: var(--surface-2); }
+[data-design="bento"] td { border-bottom: 0; }
+
+/* Assistent: Schritte als Kapseln */
+[data-design="bento"] .steps { gap: 8px; }
+[data-design="bento"] .step { flex: 0 1 auto; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--surface); box-shadow: var(--shadow); }
+[data-design="bento"] .step::after { display: none; }
+[data-design="bento"] .step.current { background: var(--c-amber); color: #fff; animation: bento-pop .5s var(--spring) both; }
+[data-design="bento"] .step.current .step-no { background: #fff; color: var(--c-amber); border-color: #fff; box-shadow: none; }
+[data-design="bento"] .step.done { background: #dcfce7; color: #047857; }
+[data-design="bento"] .pick { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+[data-design="bento"] .pick button { border: 0; border-radius: 20px; background: var(--surface-2); padding: 16px; transition: transform .35s var(--spring), box-shadow .2s; }
+[data-design="bento"] .pick button:hover:not(:disabled) { transform: translateY(-3px) rotate(-.5deg); box-shadow: var(--shadow); background: var(--surface); }

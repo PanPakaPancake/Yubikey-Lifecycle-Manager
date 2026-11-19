@@ -1,0 +1,108 @@
+/* ==========================================================================
+   Vorschlag 5 · Fokus
+   Schmale Icon-Leiste in Graphit, die beim Darüberfahren aufklappt; viel Weißraum,
+   ein einziger Akzent (Smaragd), leichte große Zahlen, Handlungsbedarf als Zeitleiste,
+   ruhige Bewegungen: Einschieben, wachsende Linien, Akzent-Unterstriche.
+   ========================================================================== */
+
+:root[data-design="fokus"] {
+  --bg: #fafafa; --surface: #ffffff; --surface-2: #f4f4f5; --ink: #18181b; --muted: #71717a; --line: #e4e4e7;
+  --accent: #059669; --accent-2: #10b981; --accent-ink: #fff; --accent-soft: #ecfdf5;
+  --radius: 10px; --radius-sm: 8px; --shadow: none; --shadow-lg: 0 20px 40px -16px rgba(24, 24, 27, .25);
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-design="fokus"]:not([data-theme="light"]) { --bg: #0c0c0e; --surface: #131316; --surface-2: #1b1b1f; --ink: #f4f4f5; --muted: #a1a1aa; --line: #27272a; --accent: #34d399; --accent-soft: #0f2a20; --accent-ink: #052e1f; }
+}
+:root[data-design="fokus"][data-theme="dark"] { --bg: #0c0c0e; --surface: #131316; --surface-2: #1b1b1f; --ink: #f4f4f5; --muted: #a1a1aa; --line: #27272a; --accent: #34d399; --accent-soft: #0f2a20; --accent-ink: #052e1f; }
+
+[data-design="fokus"] body { background: var(--bg); }
+[data-design="fokus"] h1 { font-weight: 600; letter-spacing: -0.03em; }
+
+/* Icon-Leiste, klappt beim Darüberfahren über den Inhalt auf */
+@media (min-width: 901px) {
+  [data-design="fokus"] .shell { grid-template-columns: 72px 1fr; }
+  [data-design="fokus"] .shell.sidebar-dark .sidebar {
+    --sb-bg: #18181b; --sb-ink: #e4e4e7; --sb-muted: #71717a; --sb-hover: rgba(255, 255, 255, .06); --sb-active-bg: rgba(16, 185, 129, .14); --sb-active-ink: #6ee7b7; --sb-line: rgba(255, 255, 255, .08);
+    width: 72px; padding: 16px 12px; overflow-x: hidden; z-index: 50; transition: width .3s var(--ease), box-shadow .3s; border-right: 0; backdrop-filter: none;
+  }
+  [data-design="fokus"] .shell.sidebar-dark .sidebar:hover, [data-design="fokus"] .shell.sidebar-dark .sidebar:focus-within { width: 250px; box-shadow: 20px 0 50px -20px rgba(0, 0, 0, .5); }
+  [data-design="fokus"] .sidebar .nav-label, [data-design="fokus"] .brand > div, [data-design="fokus"] .nav .section-sub, [data-design="fokus"] .account-text, [data-design="fokus"] .foot-actions, [data-design="fokus"] .sidebar .version {
+    opacity: 0; transition: opacity .2s; white-space: nowrap;
+  }
+  [data-design="fokus"] .sidebar:is(:hover, :focus-within) :is(.nav-label, .brand > div, .section-sub, .account-text, .foot-actions, .version) { opacity: 1; transition-delay: .08s; }
+  [data-design="fokus"] .nav .section { font-size: 0; height: 1px; margin: 14px 8px; background: var(--sb-line); }
+  [data-design="fokus"] .sidebar:is(:hover, :focus-within) .nav .section { font-size: .68rem; height: auto; background: none; }
+  [data-design="fokus"] .nav .section .context-dot { display: none; }
+  [data-design="fokus"] .brand { padding: 2px 6px 16px; }
+  [data-design="fokus"] .nav a { padding: 10px 14px; gap: 16px; white-space: nowrap; }
+  [data-design="fokus"] .nav a::before { left: -12px; }
+  [data-design="fokus"] .sidebar-foot { padding: 12px 2px 4px; }
+  [data-design="fokus"] .main { padding: 26px 56px 64px; max-width: 1240px; }
+  [data-design="fokus"] .topbar { margin: -26px -56px 30px; padding: 14px 56px; }
+}
+[data-design="fokus"] .brand-mark { background: #fff; border-radius: 10px; }
+[data-design="fokus"] .avatar { background: var(--accent); }
+[data-design="fokus"] .topbar { background: color-mix(in srgb, var(--bg) 85%, transparent); }
+[data-design="fokus"] .page { animation: fk-in .45s var(--ease) both; }
+@keyframes fk-in { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: none; } }
+
+/* Einstieg: nur ein ruhiger Satz */
+[data-design="fokus"] .dash-hero { display: block; margin: 0 0 34px; }
+[data-design="fokus"] .dash-hero-art { display: none; }
+[data-design="fokus"] .dash-eyebrow { font-size: .78rem; color: var(--muted); font-weight: 500; }
+[data-design="fokus"] .dash-hero-title { font-size: clamp(1.8rem, 3vw, 2.5rem); font-weight: 300; letter-spacing: -0.03em; line-height: 1.2; max-width: 30ch; }
+[data-design="fokus"] .dash-hero-title b { font-weight: 600; color: var(--accent); }
+[data-design="fokus"] .dash-hero-sub { color: var(--muted); }
+[data-design="fokus"] .dash-hero-meter { height: 2px; max-width: 340px; }
+
+/* Kennzahlen: leicht, groß, mit Linie */
+[data-design="fokus"] .dash-kpis { gap: 36px; margin: 8px 0 26px; }
+[data-design="fokus"] .kpi.card { background: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; padding: 16px 0 0; box-shadow: none; }
+[data-design="fokus"] .kpi .label { font-size: .72rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); font-weight: 600; }
+[data-design="fokus"] .kpi .value { font-size: 2.9rem; font-weight: 300; letter-spacing: -0.04em; }
+[data-design="fokus"] .kpi::after { inset: -1px auto auto 0; width: 100%; height: 2px; opacity: 1; transform: scaleX(0); transform-origin: left; transition: transform .5s var(--ease); background: var(--accent); }
+[data-design="fokus"] .kpi-link:hover { transform: none; box-shadow: none; }
+[data-design="fokus"] .kpi-link:hover::after { transform: scaleX(1); }
+[data-design="fokus"] .kpi .donut circle:first-child { stroke: var(--line); }
+
+/* Handlungsbedarf als Zeitleiste */
+[data-design="fokus"] .action-items { background: none; border: 0; box-shadow: none; padding: 0; margin-bottom: 30px; }
+[data-design="fokus"] .action-items h2 { font-size: .74rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+[data-design="fokus"] .action-items .count { background: var(--ink); color: var(--bg); }
+[data-design="fokus"] .action-items ul { position: relative; padding-left: 6px; }
+[data-design="fokus"] .action-items ul::before { content: ""; position: absolute; left: 17px; top: 14px; bottom: 14px; width: 1px; background: var(--line); transform-origin: top; animation: fk-line .8s var(--ease) both; }
+@keyframes fk-line { from { transform: scaleY(0); } }
+[data-design="fokus"] .action-items li { border-top: 0; padding: 7px 0; position: relative; animation: fk-in .45s var(--ease) both; }
+[data-design="fokus"] .action-items li:nth-child(2) { animation-delay: .06s; } [data-design="fokus"] .action-items li:nth-child(3) { animation-delay: .12s; }
+[data-design="fokus"] .action-items li:nth-child(4) { animation-delay: .18s; } [data-design="fokus"] .action-items li:nth-child(5) { animation-delay: .24s; }
+[data-design="fokus"] .ai-icon { width: 24px; height: 24px; background: var(--surface) !important; border: 1.5px solid currentColor; }
+[data-design="fokus"] .ai-icon.tone-error { color: var(--error); } [data-design="fokus"] .ai-icon.tone-warn { color: var(--warn); } [data-design="fokus"] .ai-icon.tone-info { color: var(--accent); }
+[data-design="fokus"] .action-items li a { color: var(--ink); background-image: linear-gradient(var(--accent), var(--accent)); background-size: 0 1.5px; background-position: 0 100%; background-repeat: no-repeat; transition: background-size .3s var(--ease); }
+[data-design="fokus"] .action-items li a:hover { text-decoration: none; background-size: 100% 1.5px; }
+
+/* Karten: flach, Überschriften klein */
+[data-design="fokus"] .card { border: 1px solid var(--line); border-radius: 10px; box-shadow: none; padding: 22px 24px; }
+[data-design="fokus"] .card-head h2 { font-size: .74rem; text-transform: uppercase; letter-spacing: .1em; color: var(--muted); }
+[data-design="fokus"] .bar .fill { background: var(--ink); width: 30%; border-radius: 2px; }
+[data-design="fokus"] .bar:hover .fill { background: var(--accent); }
+[data-design="fokus"] th { color: var(--muted); }
+[data-design="fokus"] tr.clickable:hover td, [data-design="fokus"] tbody tr:hover td { background: var(--surface-2); }
+
+/* Bedienelemente */
+[data-design="fokus"] button.primary, [data-design="fokus"] .btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); box-shadow: none; }
+[data-design="fokus"] button.primary:hover:not(:disabled), [data-design="fokus"] .btn.primary:hover { background: var(--accent); border-color: var(--accent); filter: none; box-shadow: none; }
+[data-design="fokus"] .view-tabs { border-radius: 0; background: none; border: 0; border-bottom: 1px solid var(--line); padding: 0; gap: 18px; }
+[data-design="fokus"] .view-tabs button { border-radius: 0; padding: 8px 2px; position: relative; }
+[data-design="fokus"] .view-tabs button.on { background: none; box-shadow: none; color: var(--ink); }
+[data-design="fokus"] .view-tabs button.on::after { content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--accent); animation: bar-grow .35s var(--ease) both; transform-origin: left; }
+[data-design="fokus"] .badge { border-radius: 6px; }
+
+/* Assistent: dünne Fortschrittslinie, Namen darunter */
+[data-design="fokus"] .steps { gap: 0; }
+[data-design="fokus"] .step { flex-direction: column; align-items: flex-start; gap: 10px; padding: 0 8px 0 0; border-top: 2px solid var(--line); padding-top: 12px; font-weight: 500; }
+[data-design="fokus"] .step::after { display: none; }
+[data-design="fokus"] .step.done { border-top-color: var(--ink); color: var(--ink); }
+[data-design="fokus"] .step.current { border-top-color: var(--accent); }
+[data-design="fokus"] .step-no { display: none; }
+[data-design="fokus"] .pick button { border-radius: 8px; transition: border-color .2s, transform .25s var(--ease); }
+[data-design="fokus"] .pick button:hover:not(:disabled) { border-color: var(--accent); transform: translateX(4px); background: var(--surface); }

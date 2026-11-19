@@ -1,0 +1,109 @@
+/* ==========================================================================
+   Vorschlag 2 · Kontrollraum
+   Immer dunkel, wie ein Leitstand: Cyan und Violett auf Nachtblau, feines Raster im Hintergrund,
+   leuchtende Kanten und Werte, Live-Puls, Zahlen in Monospace, Scan-Linie über dem Lagebild.
+   ========================================================================== */
+
+:root[data-design="kontrollraum"], :root[data-design="kontrollraum"][data-theme] {
+  --bg: #050912; --surface: #0b111e; --surface-2: #101828; --ink: #e3eeff; --muted: #7d8ba6; --line: #1b2640;
+  --accent: #22d3ee; --accent-2: #a78bfa; --accent-ink: #031219; --accent-soft: rgba(34, 211, 238, .12);
+  --ok: #34d399; --ok-soft: rgba(52, 211, 153, .12); --warn: #fbbf24; --warn-soft: rgba(251, 191, 36, .12); --error: #fb7185; --error-soft: rgba(251, 113, 133, .13);
+  --gold: #fbbf24; --radius: 12px; --radius-sm: 8px;
+  --shadow: 0 0 0 1px rgba(34, 211, 238, .04), 0 10px 30px -12px rgba(0, 0, 0, .8);
+  --shadow-lg: 0 20px 50px -10px rgba(0, 0, 0, .9);
+  --kr-glow: 0 0 24px -4px rgba(34, 211, 238, .45);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) { :root[data-design="kontrollraum"] { color-scheme: dark; } }
+
+[data-design="kontrollraum"] body {
+  background:
+    radial-gradient(900px 500px at 80% -200px, rgba(139, 92, 246, .22), transparent 70%),
+    radial-gradient(700px 400px at 10% 110%, rgba(34, 211, 238, .12), transparent 70%),
+    linear-gradient(rgba(148, 163, 184, .05) 1px, transparent 1px) 0 0 / 32px 32px,
+    linear-gradient(90deg, rgba(148, 163, 184, .05) 1px, transparent 1px) 0 0 / 32px 32px,
+    var(--bg);
+  background-attachment: fixed;
+}
+[data-design="kontrollraum"] h1 { font-weight: 650; letter-spacing: -0.02em; }
+[data-design="kontrollraum"] h2, [data-design="kontrollraum"] th, [data-design="kontrollraum"] .kpi .label, [data-design="kontrollraum"] .nav .section {
+  font-family: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace; text-transform: uppercase; letter-spacing: .1em; font-size: .74rem; font-weight: 600; color: var(--muted);
+}
+[data-design="kontrollraum"] .page-header p { font-family: "Cascadia Mono", Consolas, ui-monospace, monospace; font-size: .8rem; }
+
+/* Seitenleiste */
+[data-design="kontrollraum"] .shell.sidebar-dark .sidebar {
+  --sb-bg: rgba(5, 9, 18, .85); --sb-ink: #c9d6ee; --sb-muted: #5d6b86; --sb-hover: rgba(34, 211, 238, .06); --sb-active-bg: rgba(34, 211, 238, .1); --sb-active-ink: #67e8f9; --sb-line: rgba(34, 211, 238, .1);
+}
+[data-design="kontrollraum"] .nav a.active { box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .25); }
+[data-design="kontrollraum"] .nav a.active .icon { filter: drop-shadow(0 0 6px rgba(34, 211, 238, .8)); }
+[data-design="kontrollraum"] .nav a::before { background: var(--accent); box-shadow: 0 0 12px var(--accent); }
+[data-design="kontrollraum"] .brand-mark { background: #0f172a; box-shadow: 0 0 0 1px rgba(34, 211, 238, .35), var(--kr-glow); }
+[data-design="kontrollraum"] .avatar { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #041018; }
+[data-design="kontrollraum"] .topbar { background: rgba(5, 9, 18, .7); border-bottom-color: rgba(34, 211, 238, .1); }
+
+/* Karten mit Leuchtkante oben */
+[data-design="kontrollraum"] .card { background: linear-gradient(180deg, rgba(16, 24, 40, .92), rgba(11, 17, 30, .92)); border: 1px solid var(--line); border-radius: 12px; position: relative; }
+[data-design="kontrollraum"] .card::before { content: ""; position: absolute; left: 18px; right: 18px; top: -1px; height: 1px; background: linear-gradient(90deg, transparent, var(--accent), var(--accent-2), transparent); opacity: .7; }
+[data-design="kontrollraum"] .card-head h2::before { content: "▸ "; color: var(--accent); }
+
+/* Lagebild (Hero) als Statuszeile mit Scan-Linie */
+[data-design="kontrollraum"] .dash-hero {
+  display: grid; grid-template-columns: 1fr auto; gap: 20px; align-items: center; position: relative; overflow: hidden; margin-bottom: 18px; padding: 22px 26px; border-radius: 12px;
+  border: 1px solid rgba(34, 211, 238, .22); background: linear-gradient(110deg, rgba(34, 211, 238, .08), rgba(139, 92, 246, .1)); box-shadow: var(--kr-glow);
+}
+[data-design="kontrollraum"] .dash-hero::after { content: ""; position: absolute; top: 0; bottom: 0; width: 140px; left: -160px; background: linear-gradient(90deg, transparent, rgba(34, 211, 238, .18), transparent); animation: kr-scan 4.5s ease-in-out infinite; }
+@keyframes kr-scan { 0% { left: -160px; } 60%, 100% { left: 110%; } }
+[data-design="kontrollraum"] .dash-eyebrow { font-family: "Cascadia Mono", Consolas, ui-monospace, monospace; font-size: .74rem; letter-spacing: .14em; text-transform: uppercase; color: var(--accent); display: inline-flex; align-items: center; gap: 8px; }
+[data-design="kontrollraum"] .dash-eyebrow::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 var(--ok); animation: kr-live 1.6s ease-out infinite; }
+@keyframes kr-live { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, .7); } 100% { box-shadow: 0 0 0 10px transparent; } }
+[data-design="kontrollraum"] .dash-hero-title { font-size: 1.5rem; font-weight: 600; }
+[data-design="kontrollraum"] .dash-hero-title b { color: var(--accent); text-shadow: 0 0 18px rgba(34, 211, 238, .6); font-family: "Cascadia Mono", Consolas, ui-monospace, monospace; }
+[data-design="kontrollraum"] .dash-hero-sub { color: var(--muted); }
+[data-design="kontrollraum"] .dash-hero-meter { max-width: 560px; background: rgba(148, 163, 184, .12); height: 6px; }
+[data-design="kontrollraum"] .dash-hero-meter > span { background: linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow: 0 0 14px var(--accent); }
+[data-design="kontrollraum"] .dash-hero-art .pk-float { filter: drop-shadow(0 0 26px rgba(34, 211, 238, .45)); }
+
+/* Kennzahlen */
+[data-design="kontrollraum"] .kpi .value { font-family: "Cascadia Mono", "JetBrains Mono", Consolas, ui-monospace, monospace; font-weight: 600; letter-spacing: -0.02em; color: #f0f9ff; text-shadow: 0 0 22px rgba(34, 211, 238, .35); }
+[data-design="kontrollraum"] .kpi .value.tone-text-warn { color: var(--warn); text-shadow: 0 0 22px rgba(251, 191, 36, .45); }
+[data-design="kontrollraum"] .kpi-ico { display: grid; place-items: center; position: absolute; right: 14px; top: 14px; width: 34px; height: 34px; border-radius: 9px; color: var(--accent); border: 1px solid rgba(34, 211, 238, .3); background: rgba(34, 211, 238, .06); }
+[data-design="kontrollraum"] .kpi-firmware .kpi-ico { color: var(--warn); border-color: rgba(251, 191, 36, .3); background: rgba(251, 191, 36, .06); }
+[data-design="kontrollraum"] .kpi-coverage .kpi-ico { display: none; }
+[data-design="kontrollraum"] .kpi-link:hover { border-color: rgba(34, 211, 238, .5); box-shadow: var(--kr-glow); }
+[data-design="kontrollraum"] .kpi::after { background: linear-gradient(90deg, var(--accent), var(--accent-2)); box-shadow: 0 0 12px var(--accent); }
+
+/* Diagramme leuchten */
+[data-design="kontrollraum"] .bar .fill { background: linear-gradient(180deg, var(--accent), var(--accent-2)); box-shadow: 0 0 16px -2px rgba(34, 211, 238, .55); }
+[data-design="kontrollraum"] .bar .n { color: var(--accent); font-family: "Cascadia Mono", Consolas, monospace; }
+[data-design="kontrollraum"] .donut svg { filter: drop-shadow(0 0 10px rgba(34, 211, 238, .25)); }
+
+/* Handlungsbedarf als Alarmliste */
+[data-design="kontrollraum"] .action-items { background: rgba(251, 191, 36, .05); border: 1px solid rgba(251, 191, 36, .25); border-left: 3px solid var(--warn); }
+[data-design="kontrollraum"] .action-items li { border-top-color: rgba(148, 163, 184, .1); font-family: inherit; }
+[data-design="kontrollraum"] .ai-icon.tone-warn, [data-design="kontrollraum"] .ai-icon.tone-error { animation: kr-blink 2.4s ease-in-out infinite; }
+@keyframes kr-blink { 0%, 100% { box-shadow: 0 0 0 0 transparent; } 50% { box-shadow: 0 0 14px 2px color-mix(in srgb, var(--warn) 60%, transparent); } }
+[data-design="kontrollraum"] .ai-icon { color: #0b111e; }
+
+/* Tabellen, Badges, Bedienelemente */
+[data-design="kontrollraum"] td .mono, [data-design="kontrollraum"] td.mono, [data-design="kontrollraum"] td a.mono { color: #67e8f9; }
+[data-design="kontrollraum"] tbody tr:nth-child(even) td { background: rgba(148, 163, 184, .025); }
+[data-design="kontrollraum"] tr.clickable:hover td, [data-design="kontrollraum"] tbody tr:hover td { background: rgba(34, 211, 238, .05); }
+[data-design="kontrollraum"] .badge { border: 1px solid currentColor; background: transparent; }
+[data-design="kontrollraum"] button.primary, [data-design="kontrollraum"] .btn.primary { background: linear-gradient(135deg, var(--accent), #38bdf8); color: #031219; box-shadow: var(--kr-glow); border: 0; }
+[data-design="kontrollraum"] input, [data-design="kontrollraum"] select { background: #070c17; }
+[data-design="kontrollraum"] .view-tabs, [data-design="kontrollraum"] .segmented { background: #070c17; }
+[data-design="kontrollraum"] .view-tabs button.on { background: rgba(34, 211, 238, .12); color: var(--accent); box-shadow: inset 0 0 0 1px rgba(34, 211, 238, .35); }
+
+/* Assistent: segmentierte Fortschrittsleiste */
+[data-design="kontrollraum"] .steps { gap: 6px; }
+[data-design="kontrollraum"] .step { flex-direction: column; align-items: flex-start; gap: 8px; padding: 12px 14px 10px; border-radius: 8px; background: #0a101c; border: 1px solid var(--line); font-family: "Cascadia Mono", Consolas, monospace; font-size: .78rem; text-transform: uppercase; letter-spacing: .06em; }
+[data-design="kontrollraum"] .step::after { display: none; }
+[data-design="kontrollraum"] .step-no { width: auto; height: auto; border: 0; background: none !important; box-shadow: none !important; color: var(--muted); font-size: .72rem; }
+[data-design="kontrollraum"] .step.current { border-color: rgba(34, 211, 238, .55); box-shadow: var(--kr-glow); color: var(--accent); }
+[data-design="kontrollraum"] .step.current .step-no { color: var(--accent); }
+[data-design="kontrollraum"] .step.done { border-color: rgba(52, 211, 153, .35); color: var(--ok); }
+[data-design="kontrollraum"] .step.done .step-no { color: var(--ok); }
+[data-design="kontrollraum"] .pick button { background: #0a101c; }
+[data-design="kontrollraum"] .pick button:hover:not(:disabled) { border-color: rgba(34, 211, 238, .5); box-shadow: var(--kr-glow); }
+[data-design="kontrollraum"] .mobilebar { background: rgba(5, 9, 18, .85); }
