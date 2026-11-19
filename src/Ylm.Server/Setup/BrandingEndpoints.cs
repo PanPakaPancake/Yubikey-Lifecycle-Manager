@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Ylm.Core;
 using Ylm.Server.Audit;
 using Ylm.Server.Data;
@@ -26,6 +27,29 @@ public static class BrandingEndpoints
 
     public static void MapBranding(this IEndpointRouteBuilder app)
     {
+        // Öffentlich (ohne Anmeldung) für die Passkey-Infoseiten der Endnutzer: nur Name, Farbe, Kontakt und Logo.
+        // ?t=<Tenant-Id> liefert das wirksame Erscheinungsbild des Tenants, sonst das des Partners.
+        var pub = app.MapGroup("/api/public/branding").AllowAnonymous();
+        pub.MapGet("", async (Guid? t, BrandingService branding, YlmDbContext db) =>
+        {
+            var tenantId = t is { } id && await db.Tenants.AnyAsync(x => x.Id == id) ? id : (Guid?)null;
+            var b = await branding.ResolveAsync(tenantId);
+            return Results.Ok(new
+            {
+                b.CompanyName,
+                AccentColor = $"#{b.Accent.R:x2}{b.Accent.G:x2}{b.Accent.B:x2}",
+                b.Contact,
+                HasLogo = b.Logo is { Length: > 0 },
+            });
+        });
+        pub.MapGet("/logo", async (Guid? t, BrandingService branding, YlmDbContext db) =>
+        {
+            var tenantId = t is { } id && await db.Tenants.AnyAsync(x => x.Id == id) ? id : (Guid?)null;
+            var row = tenantId is null ? null : await branding.GetAsync(tenantId);
+            if (row?.Logo is not { Length: > 0 }) row = await branding.GetAsync(null);
+            return row?.Logo is { Length: > 0 } logo ? Results.File(logo, row.LogoContentType ?? "image/png") : Results.NotFound();
+        });
+
         var g = app.MapGroup("/api/branding").RequireAuthorization();
 
         g.MapGet("", async (Guid? tenantId, CurrentUser cu, BrandingService branding) =>
@@ -89,7 +113,7 @@ public static class BrandingEndpoints
         });
 
         // Muster-PIN-Brief mit dem wirksamen Erscheinungsbild.
-        g.MapGet("/preview.pdf", async (Guid? tenantId, CurrentUser cu, BrandingService branding, YlmDbContext db) =>
+        g.MapGet("/preview.pdf", async (Guid? tenantId, CurrentUser cu, BrandingService branding, YlmDbContext db, HttpRequest request, Microsoft.Extensions.Options.IOptions<YlmOptions> options) =>
         {
             if (tenantId is { } t) await cu.RequireTenantAsync(t, Permission.ReadInventory);
             else await cu.RequireAsync(Permission.ReadInventory);
@@ -97,7 +121,8 @@ public static class BrandingEndpoints
             var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? "Tenant" : "Muster-Tenant";
             using var _ = Theme.Use(brand);
             var pdf = PinLetterPdf.Create(new PinLetterData(brand.CompanyName ?? "", tenantName, "Erika Mustermann", "erika.mustermann@example.com",
-                "482913", "YubiKey 5 NFC", 12345678, true, DateTime.Now));
+                "482913", "YubiKey 5 NFC", 12345678, true, DateTime.Now,
+                InfoUrl: PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, options.Value, request), tenantId)));
             return Results.File(pdf, "application/pdf", "Muster-PIN-Brief.pdf");
         });
     }

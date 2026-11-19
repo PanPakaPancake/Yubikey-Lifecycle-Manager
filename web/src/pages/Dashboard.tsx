@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { fmtDate, statusLabels, type KeyStatus } from '../api';
 import { useCan } from '../auth';
 import type { ReactNode } from 'react';
-import { Badge, Card, Donut, download, Empty, ErrorBox, MenuButton, PageHeader, Spinner, useApi } from '../ui';
+import { Badge, Card, CountUp, Donut, download, Empty, ErrorBox, MenuButton, PageHeader, Spinner, useApi } from '../ui';
 import { Icon } from '../icons';
 import { useTenant } from '../tenant';
 
@@ -50,7 +50,7 @@ export default function DashboardPage() {
 
           <div className="grid cols-4">
             <Kpi label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
-              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to="/assignments"
+              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to="/keys?view=people"
               aside={data.coveragePercent != null && <Donut size={64} thickness={9} parts={[
                 { key: 'with', value: Math.min(100, data.coveragePercent), color: 'var(--ok)', label: 'Mit Key' },
                 { key: 'without', value: Math.max(0, 100 - data.coveragePercent), color: 'transparent', label: 'Ohne Key' },
@@ -133,7 +133,7 @@ const statusColor: Record<KeyStatus, string> = { Active: 'var(--ok)', InStock: '
 function Kpi({ label, value, sub, to, tone, children, aside }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode; aside?: ReactNode }) {
   const text = <>
     <div className="label">{label}</div>
-    <div className={'value' + (tone ? ' tone-text-' + tone : '')}>{value}</div>
+    <div className={'value' + (tone ? ' tone-text-' + tone : '')}><CountUp value={value} /></div>
     <div className="sub">{sub}</div>
     {children}
   </>;

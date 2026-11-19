@@ -5,13 +5,13 @@ import { AuthContext } from './auth';
 import { Empty, PageHeader, Spinner, useApi } from './ui';
 import { Icon, type IconName } from './icons';
 import { ThemeToggle } from './theme';
+import { BrandMark } from './brand';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
 import AccountSetupPage from './pages/AccountSetup';
 import AccountPage from './pages/Account';
 import DashboardPage from './pages/Dashboard';
 import KeysPage from './pages/Keys';
-import AssignmentsPage from './pages/Assignments';
 import KeyDetailPage from './pages/KeyDetail';
 import WizardPage from './pages/Wizard';
 import BatchesPage, { NewBatchPage } from './pages/Batches';
@@ -29,13 +29,17 @@ import ApprovalsPage from './pages/Approvals';
 import TodosPage from './pages/Todos';
 import IdentifyPage from './pages/Identify';
 import IntegrationsPage from './pages/Integrations';
+import PasskeyInfoPage from './pages/PasskeyInfo';
 import { isRegisterPath } from './register';
 import { ChooseTenant, TenantProvider, TenantSwitcher, useTenant } from './tenant';
+
+// Dunkle Seitenleiste (Entscheidung Timo, 2026-11-19); 'sidebar-light' wäre die helle Variante.
+const SidebarStyle = 'sidebar-dark';
 
 const roleLabel: Record<string, string> = { Owner: 'Owner', Operator: 'Operator', Helpdesk: 'Helpdesk', Auditor: 'Auditor' };
 
 // Seiten der Partnerebene (gelten für alle Kunden); alles andere läuft im Kontext des gewählten Tenants.
-const partnerPaths = ['/partner', '/tenants', '/users', '/platform', '/agents'];
+const partnerPaths = ['/partner', '/tenants', '/profiles', '/users', '/platform', '/agents'];
 const isPartnerPath = (path: string) => partnerPaths.some((p) => path === p || path.startsWith(p + '/'));
 
 export default function App() {
@@ -53,6 +57,8 @@ export default function App() {
 
   useEffect(() => { void reload(); }, [reload]);
 
+  // Öffentliche Infoseiten für Endnutzer (Link im PIN-Brief): ohne Anmeldung, ohne Navigation der Plattform.
+  if (location.pathname === '/passkey' || location.pathname.startsWith('/passkey/')) return <PasskeyInfoPage authenticated={!!me?.authenticated} />;
   if (!me) return <div className="center-page"><Spinner label="Wird geladen …" /></div>;
 
   if (location.pathname.startsWith('/setup')) return <SetupPage />;
@@ -80,7 +86,7 @@ export default function App() {
 function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | undefined; logout: () => void }) {
   const location = useLocation();
   const { tenant, tenants } = useTenant();
-  // Freigaben gibt es nur, wenn ein Tenant die Vier-Augen-Freigabe eingeschaltet hat.
+  // Freigaben nur, wenn ein Tenant die Vier-Augen-Freigabe nutzt; offene Anträge verlinkt sonst der Handlungsbedarf auf der Übersicht.
   const fourEyes = tenants.some((t) => t.requireBreakglassApproval);
   const partner = isPartnerPath(location.pathname);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -91,7 +97,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
     <NavLink to={to} end={end}><Icon name={icon} />{label}</NavLink>
   );
   return (
-    <div className={'shell' + (menuOpen ? ' menu-open' : '')}>
+    <div className={'shell ' + SidebarStyle + (menuOpen ? ' menu-open' : '')}>
       <header className="mobilebar">
         <button type="button" className="icon-btn" aria-label="Menü öffnen" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" size={22} /></button>
         <span className="mobilebar-title">Lifecycle Manager</span>
@@ -99,7 +105,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
       <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />
       <aside className="sidebar">
         <div className="brand">
-          <svg width="30" height="30" viewBox="0 0 32 32" aria-hidden><rect x="21" y="12" width="9" height="8" fill="#b8bec7" /><rect className="brand-body" x="2" y="8" width="22" height="16" rx="6" /><circle cx="11" cy="16" r="5" fill="#d4a52a" /></svg>
+          <BrandMark />
           <div>Lifecycle Manager<small>{me.organizationName || 'YubiKeys'}</small></div>
           <button type="button" className="icon-btn sidebar-close" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}><Icon name="x" size={20} /></button>
         </div>
@@ -108,21 +114,23 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
-          {item('/assignments', 'users', 'Wer hat welchen Key')}
           {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" />Registrieren</NavLink>}
           {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
-          {(fourEyes || can('ApproveRegistrations')) && item('/approvals', 'shield', 'Freigaben')}
+          {fourEyes && item('/approvals', 'shield', 'Freigaben')}
           {tenant && item('/tenant', 'building', 'Tenant-Einstellungen')}
-          {item('/profiles', 'sliders', 'Profile')}
           {can('ReadAudit') && item('/audit', 'scroll', 'Audit-Log')}
 
           <div className="section partner"><span className="context-dot" />Partner</div>
           {item('/tenants', 'building', 'Tenants')}
           {can('ManagePartnerStock') && item('/partner/stock', 'box', 'Partnerlager')}
+          {item('/profiles', 'sliders', 'Profile')}
           {can('ManageUsers') && item('/users', 'users', 'Benutzer & Rollen')}
           {can('ManageApiKeys') && item('/partner/notifications', 'bell', 'Benachrichtigungen')}
           {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
           {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
+
+          <div className="section">Hilfe</div>
+          {item('/passkey', 'info', 'Passkeys erklärt')}
         </nav>
         <div className="sidebar-foot">
           <NavLink to="/account" className="account-link">
@@ -150,7 +158,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/keys" element={<KeysPage />} />
-          <Route path="/assignments" element={<AssignmentsPage />} />
+          <Route path="/assignments" element={<ToPeopleView />} />
           <Route path="/keys/identify" element={<IdentifyPage />} />
           <Route path="/keys/:id" element={<KeyDetailPage />} />
           <Route path="/register" element={<WizardPage />} />
@@ -184,6 +192,14 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
 }
 
 /** Frühere Partner-Seiten: Umschalter auf „Alle Tenants“ und weiter zur Seite auf Kundenebene. */
+/** Frühere Seite „Wer hat welchen Key“: jetzt die Personenansicht des Inventars. */
+function ToPeopleView() {
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  params.delete('view');
+  return <Navigate to={'/keys?view=people' + (params.size ? '&' + params.toString() : '')} replace />;
+}
+
 function AllTenants({ to }: { to: string }) {
   const { setTenantId } = useTenant();
   useEffect(() => { setTenantId(''); }, [setTenantId]);

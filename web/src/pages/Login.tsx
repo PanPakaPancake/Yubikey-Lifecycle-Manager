@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { ErrorBox, Field, useAction } from '../ui';
+import { BrandMark, HeroKey } from '../brand';
+import { Icon } from '../icons';
 import { getPasskey, passkeyError, passkeysSupported } from '../webauthn';
 
 const errorTexts: Record<string, string> = {
@@ -52,15 +54,28 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
   };
 
   return (
-    <div className="center-page">
-      <div className="login-card card">
-        <div className="brand">
-          <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden><rect x="21" y="12" width="9" height="8" fill="#b8bec7" /><rect className="brand-body" x="2" y="8" width="22" height="16" rx="6" /><circle cx="11" cy="16" r="5" fill="#d4a52a" /></svg>
-          <div>Yubikey Lifecycle Manager</div>
+    <div className="login-page">
+      <aside className="login-hero">
+        <div className="brand"><BrandMark size={38} /><div>Yubikey Lifecycle Manager</div></div>
+        <div>
+          <HeroKey />
+          <h2>Jeder Key an der richtigen Stelle.</h2>
+          <p>Ausgeben, registrieren, sperren und nachverfolgen, für alle Ihre Entra-Tenants an einem Ort.</p>
+          <ul>
+            <li><Icon name="shield" />Anmeldung nur phishing-resistent per YubiKey</li>
+            <li><Icon name="users" />Auf einen Blick: wer hat welchen Key</li>
+            <li><Icon name="scroll" />Lückenloses Audit-Log</li>
+          </ul>
         </div>
+        <div className="small">Selbst gehostet · Ihre Daten bleiben bei Ihnen</div>
+      </aside>
+      <div className="login-side">
+      <div className="login-card card">
+        <div className="brand compact"><BrandMark /><div>Yubikey Lifecycle Manager</div></div>
+        <h1>Anmelden</h1>
         {!setupComplete && <div className="alert warn">Die Einrichtung ist noch nicht abgeschlossen. <a href="/setup">Zur Einrichtung</a></div>}
         {err && <ErrorBox error={errorTexts[err] ?? decodeURIComponent(err)} />}
-        <p className="muted">Melden Sie sich mit Ihrem YubiKey an.</p>
+        <p className="muted">Melden Sie sich mit Ihrem YubiKey an. <a href="/passkey">Was ist ein Passkey?</a></p>
         <div className="login-buttons">
           {methods.entraSso && (
             <a className="btn primary" href={'/auth/login?returnUrl=' + encodeURIComponent(returnUrl)}>Mit Microsoft anmelden</a>
@@ -95,6 +110,7 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
             <ErrorBox error={devError} />
           </details>
         )}
+      </div>
       </div>
     </div>
   );

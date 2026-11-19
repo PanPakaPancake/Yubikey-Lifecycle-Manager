@@ -58,6 +58,7 @@ public sealed class SharedKeyService(
     AuditService audit,
     IDataProtectionProvider dataProtection,
     PinLetterStore letters,
+    Microsoft.Extensions.Options.IOptions<YlmOptions> ylmOptions,
     ILogger<SharedKeyService> logger)
 {
     public const int MaxAccounts = 25;
@@ -340,7 +341,8 @@ public sealed class SharedKeyService(
                 using var brandScope = Theme.Use(brand);
                 var pdf = PinLetterPdf.Create(new PinLetterData(
                     brand.CompanyName ?? settings.OrganizationName, tenant.DisplayName, req.Custodian!, req.Usage == KeyUsage.Breakglass ? "Breakglass-Key" : "Geteilter Key", pin,
-                    key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now, users.Select(u => u.UserPrincipalName).ToList()));
+                    key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now, users.Select(u => u.UserPrincipalName).ToList(),
+                InfoUrl: PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, ylmOptions.Value, ct: ct), tenant.Id)));
                 job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief geteilter Key {key.SerialNumber}.pdf");
             }
             else job.Notes.Add("Die PIN des Keys bleibt unverändert; es gibt deshalb keinen neuen PIN-Brief.");
