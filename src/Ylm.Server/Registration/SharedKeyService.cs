@@ -177,9 +177,11 @@ public sealed class SharedKeyService(
             var actor = AuditService.User(actorUser);
             var tenant = await db.Tenants.FirstAsync(t => t.Id == tenantId, ct);
             var profile = await RegistrationService.LoadProfileAsync(db, tenantId, req.ProfileId, ct);
-            agent = agents.Require(req.AgentId, actorId);
-            if (agent.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
-            agent.BusyWith = "Geteilter Key";
+            // agent erst nach dem Belegen setzen: Eine Absage wegen agent_busy darf den laufenden Vorgang nicht freigeben.
+            var claim = agents.Require(req.AgentId, actorId);
+            if (claim.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
+            claim.BusyWith = "Geteilter Key";
+            agent = claim;
             var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
 
             // Vier-Augen-Freigabe (V2): Breakglass nur mit gültiger Freigabe eines zweiten Admins.
@@ -348,6 +350,7 @@ public sealed class SharedKeyService(
             else job.Notes.Add("Die PIN des Keys bleibt unverändert; es gibt deshalb keinen neuen PIN-Brief.");
             job.Step = $"{users.Count} Konto/Konten registriert";
             job.Prompt = "Key abziehen und dem Verwahrer übergeben.";
+            if (agent is not null) agent.BusyWith = null; // vor dem Endzustand freigeben, sonst meldet ein sofortiger Folgeauftrag agent_busy
             job.State = JobState.Succeeded;
             agents.Progress(agent, new AgentProgress("Geteilter Key fertig", $"{users.Count} Konten registriert. Key kann abgezogen werden.", job.TotalSteps, job.TotalSteps, Done: true));
         }
@@ -362,6 +365,7 @@ public sealed class SharedKeyService(
             };
             if (ex is not ApiException) logger.LogError(ex, "Shared registration failed at {Stage}", stage);
             if (registered.Count > 0) message += $" Bereits registriert: {string.Join(", ", registered)}.";
+            if (agent is not null) agent.BusyWith = null; // vor dem Endzustand freigeben, sonst meldet ein sofortiger Folgeauftrag agent_busy
             job.State = JobState.Failed;
             job.Error = message;
             job.ErrorCode = code;
