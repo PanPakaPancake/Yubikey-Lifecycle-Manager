@@ -193,8 +193,12 @@ public sealed class YubiKeyHardware : IKeyDevice, IDisposable
                     else await Task.Delay(100, cts.Token);
                 }
                 var sincePlugged = System.Diagnostics.Stopwatch.StartNew();
-                if (serial is { } expected && again.SerialNumber is { } actual && actual != expected)
-                    return OperationResult.Fail(DeviceErrors.WrongKey, $"Eingesteckt ist Key {actual}, erwartet wird {expected}.");
+                // Nach dem Abziehen kann ein anderer Key eingesteckt worden sein. Der Reset geht nur an den Key,
+                // dessen Seriennummer vorher geprüft wurde; ist sie jetzt nicht lesbar, wird zur Sicherheit abgebrochen.
+                if (serial is { } expected && again.SerialNumber != expected)
+                    return OperationResult.Fail(DeviceErrors.WrongKey, again.SerialNumber is { } actual
+                        ? $"Eingesteckt ist Key {actual}, erwartet wird {expected}. Es wurde nichts zurückgesetzt."
+                        : $"Die Seriennummer des wieder eingesteckten Keys ist nicht lesbar, erwartet wird {expected}. Zur Sicherheit wurde nichts zurückgesetzt.");
                 _logger.LogInformation("Werksreset Versuch {Attempt}: Key eingesteckt, sende Reset", attempt);
                 prompts.Prompt("Key jetzt berühren");
                 var (ok, status) = await Task.Run(() =>
