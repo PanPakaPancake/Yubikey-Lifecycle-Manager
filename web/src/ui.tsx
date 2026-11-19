@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Icon } from './icons';
+import { Icon, type IconName } from './icons';
 import { api, ApiError, statusLabels, type GroupRef, type KeyStatus, type Tenant } from './api';
 
 export function useApi<T>(url: string | null, deps: unknown[] = []) {
@@ -293,5 +293,67 @@ export function SortTh({ label, sortKey, sort, onSort, className }: { label: str
         {label}<span className="sort-arrow" aria-hidden>{active ? (sort.desc ? '↓' : '↑') : '↕'}</span>
       </button>
     </th>
+  );
+}
+
+export interface MenuItem { label: string; hint?: string; icon?: IconName; onClick: () => void }
+
+/** Knopf mit aufklappender Auswahl, z. B. für Exporte. Schließt bei Klick daneben und mit Escape. */
+export function MenuButton({ label, items, icon = 'download', primary }: { label: string; items: MenuItem[]; icon?: IconName; primary?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
+  }, [open]);
+  return (
+    <div className="menu" ref={ref}>
+      <button type="button" className={primary ? 'primary' : undefined} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
+        <Icon name={icon} size={16} />{label}<span className={'menu-caret' + (open ? ' open' : '')} aria-hidden>▾</span>
+      </button>
+      {open && (
+        <div className="menu-pop" role="menu">
+          {items.map((i) => (
+            <button key={i.label} type="button" role="menuitem" onClick={() => { setOpen(false); i.onClick(); }}>
+              {i.icon && <Icon name={i.icon} size={16} />}
+              <span><strong>{i.label}</strong>{i.hint && <span className="small muted">{i.hint}</span>}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Ring-Diagramm aus Anteilen; Segmente zeichnen sich beim Laden ein. */
+export function Donut({ parts, size = 132, thickness = 16, center }: { parts: { key: string; value: number; color: string; label: string }[]; size?: number; thickness?: number; center?: ReactNode }) {
+  const total = parts.reduce((s, p) => s + p.value, 0);
+  const r = (size - thickness) / 2;
+  const c = 2 * Math.PI * r;
+  let offset = 0;
+  return (
+    <div className="donut" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={parts.map((p) => `${p.label}: ${p.value}`).join(', ')}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={thickness} />
+        {total > 0 && parts.filter((p) => p.value > 0).map((p, i) => {
+          const len = (p.value / total) * c;
+          const el = (
+            <circle key={p.key} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={p.color} strokeWidth={thickness}
+              strokeDasharray={`${Math.max(len - 2, 0.1)} ${c}`} strokeDashoffset={-offset} transform={`rotate(-90 ${size / 2} ${size / 2})`}
+              className="donut-seg" style={{ animationDelay: i * 120 + 'ms', ['--len' as string]: len }}>
+              <title>{p.label}: {p.value}</title>
+            </circle>
+          );
+          offset += len;
+          return el;
+        })}
+      </svg>
+      {center && <div className="donut-center">{center}</div>}
+    </div>
   );
 }

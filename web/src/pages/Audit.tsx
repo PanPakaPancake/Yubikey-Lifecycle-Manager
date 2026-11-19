@@ -6,11 +6,11 @@ import { Card, download, Empty, ErrorBox, Info, LiveSearchInput, PageHeader, use
 import { useToast } from '../feedback';
 import { useTenant } from '../tenant';
 
-/** Kundenebene: Einträge des gewählten Tenants; scope="all": alle Einträge (Partnerebene). */
-export default function AuditPage({ scope }: { scope?: 'all' }) {
+/** Einträge des gewählten Tenants oder (ohne Auswahl) alle Einträge inkl. plattformweiter Ereignisse. */
+export default function AuditPage() {
   const { me } = useAuth();
   const ctx = useTenant();
-  const tenantId = scope === 'all' ? '' : ctx.tenantId;
+  const tenantId = ctx.tenantId;
   useEffect(() => setOlder([]), [tenantId]);
   const [action, setAction] = useState('');
   const [q, setQ] = useState('');

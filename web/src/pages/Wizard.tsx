@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router';
 import { api, type AgentInfo, type Job, type KeyInfo, type Profile } from '../api';
 import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, useAction, useApi, useLiveSearch, usePolling, Steps } from '../ui';
 import { JobProgress } from './KeyDetail';
-import { useTenant } from '../tenant';
+import { RegisterModes } from '../register';
+import { ChooseTenant, useTenant } from '../tenant';
 
 export interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number; entraPasskeys?: { displayName?: string; model?: string; isYubiKey: boolean }[] | null }
 export interface Violation { code: string; message: string; canOverride: boolean; resolvedByReset: boolean }
@@ -76,7 +77,8 @@ export default function WizardPage() {
 
   return (
     <>
-      <PageHeader title="Key registrieren" subtitle="Einzelregistrierung im Auftrag einer Person (Registrierung on Behalf)" actions={step > 0 ? <button onClick={restart}>Neu beginnen</button> : <><Link className="btn" to="/register/shared">Mehrere Konten auf einem Key? Geteilter Key</Link><Link className="btn" to="/batches">Viele Personen? Stapelregistrierung</Link></>} />
+      <PageHeader title="Key registrieren" subtitle="Im Auftrag einer Person (Registrierung on Behalf)" actions={step > 0 && <button onClick={restart}>Neu beginnen</button>} />
+      {step === 0 && <RegisterModes />}
       <Steps names={stepNames} current={step} />
       <ErrorBox error={error} />
 
@@ -130,7 +132,7 @@ function PersonStep({ tenantId, onPick, initialQuery = '' }: { tenantId: string;
       <div className="toolbar">
         <input type="search" placeholder="Name, UPN oder Mail eintippen (ab 2 Zeichen)" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus />
       </div>
-      {!tenantId && <Info>Bitte oben im Umschalter den Kunden-Tenant wählen, für den registriert wird.</Info>}
+      {!tenantId && <ChooseTenant purpose="Für die Registrierung" />}
       <ErrorBox error={error} />
       {busy && <Spinner label="Suche in Entra ID …" />}
       {!busy && users && users.length === 0 && <Empty>Keine Person gefunden.</Empty>}

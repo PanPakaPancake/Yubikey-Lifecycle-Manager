@@ -106,3 +106,17 @@ export function TenantSwitcher({ partnerContext }: { partnerContext: boolean }) 
     </div>
   );
 }
+
+/** Hinweis mit Direktauswahl, wenn eine Seite einen bestimmten Tenant braucht („Alle Tenants“ passt hier nicht). */
+export function ChooseTenant({ purpose = 'Für diese Seite' }: { purpose?: string }) {
+  const { tenants, setTenantId } = useTenant();
+  const active = tenants.filter((t) => t.status === 'Active');
+  return (
+    <div className="choose-tenant">
+      <p><strong>{purpose} bitte einen Kunden-Tenant wählen.</strong> <span className="muted">Die Auswahl gilt auch oben im Umschalter.</span></p>
+      {active.length === 0
+        ? <p className="muted">Noch kein Tenant angebunden.</p>
+        : <div className="choose-tenant-list">{active.map((t) => <button key={t.id} type="button" onClick={() => setTenantId(t.id)}>{t.displayName}</button>)}</div>}
+    </div>
+  );
+}

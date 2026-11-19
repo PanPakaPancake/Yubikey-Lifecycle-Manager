@@ -3,7 +3,8 @@ import { Link, useSearchParams } from 'react-router';
 import { api, approvalLabels, fmtDate, usageLabels, type Approval, type Job, type KeyInfo, type KeyUsage, type Tenant } from '../api';
 import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, Steps, useAction, useApi, useLiveSearch, usePolling } from '../ui';
 import { useCan } from '../auth';
-import { useTenant } from '../tenant';
+import { RegisterModes } from '../register';
+import { ChooseTenant, useTenant } from '../tenant';
 import { useToast } from '../feedback';
 import { JobProgress } from './KeyDetail';
 import { KeyStep, ProfileStep, type EntraUser, type Violation } from './Wizard';
@@ -78,11 +79,12 @@ export default function SharedWizardPage() {
       <PageHeader
         title="Geteilter Key"
         subtitle="Mehrere Konten auf einem Key, z. B. für Produktionsmitarbeiter oder Breakglass-Konten. Ausgabe und Rückgabe regelt der Verwahrer."
-        actions={step > 0 ? <button onClick={restart}>Neu beginnen</button> : <Link className="btn" to="/register">Für eine Person registrieren</Link>}
+        actions={step > 0 && <button onClick={restart}>Neu beginnen</button>}
       />
+      {step === 0 && <RegisterModes />}
       <Steps names={stepNames} current={step} />
       <ErrorBox error={error} />
-      {!tenantId && <Info>Bitte oben im Umschalter den Kunden-Tenant wählen.</Info>}
+      {!tenantId && <ChooseTenant purpose="Für den geteilten Key" />}
 
       {step === 0 && tenantId && (
         <Card title="Welche Konten kommen auf den Key?">
