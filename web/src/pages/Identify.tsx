@@ -3,7 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { api, ApiError, fmtDate, type AgentInfo, type YubiKey } from '../api';
 import { Badge, Card, Empty, ErrorBox, Field, Info, PageHeader, Spinner, useAction, useApi, usePolling } from '../ui';
 import { useToast } from '../feedback';
-import { useTenant } from '../tenant';
+import { ChooseTenant, useTenant } from '../tenant';
 
 /**
  * Nacherfassen (V1.1): Keys, die Nutzer selbst registriert haben, kennt die Plattform nur aus Entra, ohne Seriennummer und Firmware.
@@ -54,7 +54,7 @@ export default function IdentifyPage() {
   return (
     <>
       <PageHeader title="Nacherfassen" subtitle="Selbst registrierte Keys: Seriennummer und Firmware per Einstecken ergänzen." actions={<Link className="btn" to="/keys?needsDetails=1">Im Inventar zeigen</Link>} />
-      {!tenantId && <Info>Bitte oben im Umschalter den Kunden-Tenant wählen.</Info>}
+      {!tenantId && <ChooseTenant purpose="Zum Nacherfassen" />}
       <ErrorBox error={error} />
       {tenantId && (
         <div className="grid cols-2">

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router';
 import { api, type Me } from './api';
 import { AuthContext } from './auth';
-import { Empty, Spinner, useApi } from './ui';
+import { Empty, PageHeader, Spinner, useApi } from './ui';
 import { Icon, type IconName } from './icons';
 import { ThemeToggle } from './theme';
 import LoginPage from './pages/Login';
@@ -29,7 +29,8 @@ import ApprovalsPage from './pages/Approvals';
 import TodosPage from './pages/Todos';
 import IdentifyPage from './pages/Identify';
 import IntegrationsPage from './pages/Integrations';
-import { TenantProvider, TenantSwitcher, useTenant } from './tenant';
+import { isRegisterPath } from './register';
+import { ChooseTenant, TenantProvider, TenantSwitcher, useTenant } from './tenant';
 
 const roleLabel: Record<string, string> = { Owner: 'Owner', Operator: 'Operator', Helpdesk: 'Helpdesk', Auditor: 'Auditor' };
 
@@ -78,7 +79,9 @@ export default function App() {
 
 function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | undefined; logout: () => void }) {
   const location = useLocation();
-  const { tenant } = useTenant();
+  const { tenant, tenants } = useTenant();
+  // Freigaben gibt es nur, wenn ein Tenant die Vier-Augen-Freigabe eingeschaltet hat.
+  const fourEyes = tenants.some((t) => t.requireBreakglassApproval);
   const partner = isPartnerPath(location.pathname);
   const [menuOpen, setMenuOpen] = useState(false);
   // Close the mobile menu on every navigation.
@@ -106,24 +109,19 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
           {item('/assignments', 'users', 'Wer hat welchen Key')}
-          {can('RegisterKeys') && item('/register', 'keyPlus', 'Key registrieren', true)}
-          {can('RegisterKeys') && item('/register/shared', 'share', 'Geteilter Key')}
-          {can('RegisterKeys') && item('/batches', 'layers', 'Stapelregistrierung')}
+          {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" />Registrieren</NavLink>}
           {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
-          {item('/approvals', 'shield', 'Freigaben')}
-          {can('ManageInventory') && item('/keys/identify', 'scan', 'Nacherfassen')}
+          {(fourEyes || can('ApproveRegistrations')) && item('/approvals', 'shield', 'Freigaben')}
           {tenant && item('/tenant', 'building', 'Tenant-Einstellungen')}
           {item('/profiles', 'sliders', 'Profile')}
           {can('ReadAudit') && item('/audit', 'scroll', 'Audit-Log')}
 
           <div className="section partner"><span className="context-dot" />Partner</div>
-          {item('/partner', 'globe', 'Übersicht aller Kunden', true)}
           {item('/tenants', 'building', 'Tenants')}
           {can('ManagePartnerStock') && item('/partner/stock', 'box', 'Partnerlager')}
           {can('ManageUsers') && item('/users', 'users', 'Benutzer & Rollen')}
           {can('ManageApiKeys') && item('/partner/integrations', 'plug', 'Integrationen')}
           {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
-          {can('ReadAudit') && item('/partner/audit', 'scroll', 'Audit-Log (alle)')}
           {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
         </nav>
         <div className="sidebar-foot">
@@ -165,10 +163,10 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/tenant" element={<SelectedTenantPage />} />
           <Route path="/profiles" element={<ProfilesPage />} />
           <Route path="/audit" element={<AuditPage />} />
-          <Route path="/partner" element={<DashboardPage scope="all" />} />
+          <Route path="/partner" element={<AllTenants to="/" />} />
           <Route path="/partner/stock" element={<PartnerStockPage />} />
           <Route path="/partner/integrations" element={<IntegrationsPage />} />
-          <Route path="/partner/audit" element={<AuditPage scope="all" />} />
+          <Route path="/partner/audit" element={<AllTenants to="/audit" />} />
           <Route path="/tenants" element={<TenantsPage />} />
           <Route path="/tenants/:id" element={<TenantRoute />} />
           <Route path="/agents" element={<AgentsPage />} />
@@ -184,10 +182,17 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   );
 }
 
+/** Frühere Partner-Seiten: Umschalter auf „Alle Tenants“ und weiter zur Seite auf Kundenebene. */
+function AllTenants({ to }: { to: string }) {
+  const { setTenantId } = useTenant();
+  useEffect(() => { setTenantId(''); }, [setTenantId]);
+  return <Navigate to={to} replace />;
+}
+
 /** Tenant-Einstellungen des oben gewählten Tenants. */
 function SelectedTenantPage() {
   const { tenant } = useTenant();
-  if (!tenant) return <p className="muted">Bitte oben einen Kunden-Tenant wählen.</p>;
+  if (!tenant) return <><PageHeader title="Tenant-Einstellungen" /><ChooseTenant purpose="Für die Einstellungen" /></>;
   return <TenantDetailPage key={tenant.id} id={tenant.id} />;
 }
 

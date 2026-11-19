@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, batchStatusLabels, fmtDate, type Batch, type BatchCandidate, type BatchStatus, type BatchSummary, type Profile } from '../api';
 import { Badge, Card, Empty, ErrorBox, Field, GroupSearch, Info, PageHeader, Spinner, useAction, useApi, useLiveSearch } from '../ui';
-import { useTenant } from '../tenant';
+import { RegisterModes } from '../register';
+import { ChooseTenant, useTenant } from '../tenant';
 
 const statusTone: Record<BatchStatus, 'info' | 'ok' | 'neutral'> = { Open: 'info', Completed: 'ok', Cancelled: 'neutral' };
 
@@ -21,7 +22,8 @@ export default function BatchesPage() {
         subtitle="Viele Personen nacheinander mit Keys versorgen: Liste aus Gruppe, CSV oder Suche, dann Key für Key einstecken."
         actions={tenantId && <Link className="btn primary" to="/batches/new">Neuer Stapel</Link>}
       />
-      {!tenantId && <Info>Bitte oben im Umschalter den Kunden-Tenant wählen.</Info>}
+      <RegisterModes />
+      {!tenantId && <ChooseTenant purpose="Für Stapel" />}
       <ErrorBox error={error} />
       {loading && !data && <Spinner />}
       {tenantId && data && data.length === 0 && <Empty>Für {tenant?.displayName} gibt es noch keinen Stapel.</Empty>}
@@ -130,7 +132,7 @@ export function NewBatchPage() {
     navigate('/batches/' + b.id);
   });
 
-  if (!tenantId) return <><PageHeader title="Neuer Stapel" /><Info>Bitte oben im Umschalter den Kunden-Tenant wählen.</Info></>;
+  if (!tenantId) return <><PageHeader title="Neuer Stapel" /><ChooseTenant purpose="Für Stapel" /></>;
 
   return (
     <>

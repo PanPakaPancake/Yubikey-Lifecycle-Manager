@@ -2,7 +2,7 @@ import { useMemo, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { fmtDate, usageLabels, type KeyUsage } from '../api';
 import { useCan } from '../auth';
-import { Badge, download, Empty, ErrorBox, formatSort, LiveSearchInput, PageHeader, parseSort, SortTh, Spinner, useApi, type SortState } from '../ui';
+import { Badge, download, Empty, ErrorBox, formatSort, LiveSearchInput, MenuButton, PageHeader, parseSort, SortTh, Spinner, useApi, type SortState } from '../ui';
 import { Icon, type IconName } from '../icons';
 import { useTenant } from '../tenant';
 
@@ -103,12 +103,11 @@ export default function AssignmentsPage() {
         title="Wer hat welchen Key?"
         subtitle={<>{ctx.tenant ? ctx.tenant.displayName : 'Alle Tenants'}{data && <> · Stand {fmtDate(data.generatedAt)}</>}</>}
         actions={can('ReadReports') && (
-          <div className="btn-group" role="group" aria-label="Exportieren">
-            <span className="btn-group-label"><Icon name="download" size={15} />Export{filteredHint ? ' (gefiltert)' : ''}</span>
-            <button onClick={() => exp('xlsx')}>Excel</button>
-            <button onClick={() => exp('csv')}>CSV</button>
-            <button onClick={() => exp('pdf')}>PDF</button>
-          </div>
+          <MenuButton label={filteredHint ? 'Exportieren (gefiltert)' : 'Exportieren'} items={[
+            { label: 'Excel (.xlsx)', hint: 'Eine Zeile pro Person und Key, mit Filterzeile', icon: 'list', onClick: () => exp('xlsx') },
+            { label: 'PDF', hint: 'Zum Drucken oder Ablegen, A4 quer', icon: 'scroll', onClick: () => exp('pdf') },
+            { label: 'CSV', hint: 'Für andere Programme (Semikolon, UTF-8)', icon: 'download', onClick: () => exp('csv') },
+          ]} />
         )}
       />
       <ErrorBox error={error} />

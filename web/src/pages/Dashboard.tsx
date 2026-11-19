@@ -2,7 +2,7 @@ import { Link } from 'react-router';
 import { fmtDate, statusLabels, type KeyStatus } from '../api';
 import { useCan } from '../auth';
 import type { ReactNode } from 'react';
-import { Badge, Card, download, Empty, ErrorBox, PageHeader, Spinner, useApi } from '../ui';
+import { Badge, Card, Donut, download, Empty, ErrorBox, MenuButton, PageHeader, Spinner, useApi } from '../ui';
 import { Icon } from '../icons';
 import { useTenant } from '../tenant';
 
@@ -17,29 +17,30 @@ interface DashboardData {
 
 const monthLabel = (m: string) => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
 
-/** Kundenebene: gewählter Tenant aus dem Umschalter; scope="all": Partnerebene über alle Kunden. */
-export default function DashboardPage({ scope }: { scope?: 'all' }) {
+/** Gewählter Tenant aus dem Umschalter oder (ohne Auswahl) alle Tenants. */
+export default function DashboardPage() {
   const ctx = useTenant();
-  const tenantId = scope === 'all' ? '' : ctx.tenantId;
+  const tenantId = ctx.tenantId;
   const can = useCan();
   const q = tenantId ? '?tenantId=' + tenantId : '';
   const { data, error, loading } = useApi<DashboardData>('/api/dashboard' + q, [tenantId]);
   // Kennzahlen führen ins passend gefilterte Inventar (auf Partnerebene: über alle Tenants).
-  const keysLink = (status: KeyStatus) => '/keys?status=' + status + (scope === 'all' ? '&tenantId=all' : '');
+  const keysLink = (status: KeyStatus) => '/keys?status=' + status;
   const maxMonth = Math.max(1, ...(data?.issuedPerMonth.map((m) => m.count) ?? [1]));
 
   return (
     <>
       <PageHeader
-        title={scope === 'all' ? 'Übersicht aller Kunden' : ctx.tenant ? 'Übersicht ' + ctx.tenant.displayName : 'Übersicht'}
+        title={ctx.tenant ? 'Übersicht ' + ctx.tenant.displayName : 'Übersicht aller Tenants'}
         subtitle={data ? 'Stand ' + fmtDate(data.generatedAt) : undefined}
-        actions={<>
-          {can('ReadReports') && <>
-            <button onClick={() => download('/api/exports/keys.csv' + q)}>Keys (CSV)</button>
-            <button onClick={() => download('/api/exports/registrations.csv' + q)}>Registrierungen (CSV)</button>
-            <button className="primary" onClick={() => download('/api/exports/dashboard.pdf' + q)}>Bericht (PDF)</button>
-          </>}
-        </>}
+        actions={can('ReadReports') && (
+          <MenuButton label="Exportieren" items={[
+            { label: 'Bericht (PDF)', hint: 'Kennzahlen, Ausgaben pro Monat, Firmware', icon: 'scroll', onClick: () => download('/api/exports/dashboard.pdf' + q) },
+            { label: 'Wer hat welchen Key (Excel)', hint: 'Person, Key, Verwahrer', icon: 'users', onClick: () => download('/api/exports/assignments.xlsx' + q) },
+            { label: 'Alle Keys (CSV)', hint: 'Inventar mit Status, Tags und Zusatzfeldern', icon: 'key', onClick: () => download('/api/exports/keys.csv' + q) },
+            { label: 'Registrierungen (CSV)', hint: 'Verlauf inkl. entfernter Registrierungen', icon: 'list', onClick: () => download('/api/exports/registrations.csv' + q) },
+          ]} />
+        )}
       />
       <ErrorBox error={error} />
       {!data && loading && <Spinner label="Wird geladen …" />}
@@ -49,9 +50,11 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
 
           <div className="grid cols-4">
             <Kpi label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
-              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to={scope === 'all' ? undefined : '/assignments'}>
-              {data.coveragePercent != null && <div className="meter"><span style={{ width: Math.min(100, data.coveragePercent) + '%' }} /></div>}
-            </Kpi>
+              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to="/assignments"
+              aside={data.coveragePercent != null && <Donut size={64} thickness={9} parts={[
+                { key: 'with', value: Math.min(100, data.coveragePercent), color: 'var(--ok)', label: 'Mit Key' },
+                { key: 'without', value: Math.max(0, 100 - data.coveragePercent), color: 'transparent', label: 'Ohne Key' },
+              ]} />} />
             <Kpi label="Keys aktiv" value={data.byStatus.Active ?? 0} sub={`${data.total} Keys gesamt`} to={keysLink('Active')} />
             <Kpi label="Im Lager" value={data.inStock} sub={`${data.byStatus.Locked ?? 0} gesperrt, ${data.byStatus.Retired ?? 0} ausgemustert`} to={keysLink('InStock')} />
             <Kpi label="Firmware mit Sicherheitshinweis" value={data.vulnerableKeys} tone={data.vulnerableKeys ? 'warn' : undefined}
@@ -70,14 +73,16 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
                 ))}
               </div>
             </Card>
-            <Card title="Status">
-              <table>
-                <tbody>
+            <Card title="Keys nach Status">
+              <div className="status-chart">
+                <Donut parts={(Object.keys(statusLabels) as KeyStatus[]).map((s) => ({ key: s, value: data.byStatus[s] ?? 0, color: statusColor[s], label: statusLabels[s] }))}
+                  center={<><strong>{data.total}</strong><span className="small muted">Keys</span></>} />
+                <ul className="status-legend">
                   {(Object.keys(statusLabels) as KeyStatus[]).map((s) => (
-                    <tr key={s}><td><Link to={keysLink(s)} className={'badge status-' + s}>{statusLabels[s]}</Link></td><td className="num">{data.byStatus[s] ?? 0}</td></tr>
+                    <li key={s}><Link to={keysLink(s)}><i style={{ background: statusColor[s] }} />{statusLabels[s]}<span className="num">{data.byStatus[s] ?? 0}</span></Link></li>
                   ))}
-                </tbody>
-              </table>
+                </ul>
+              </div>
             </Card>
           </div>
 
@@ -123,13 +128,16 @@ export default function DashboardPage({ scope }: { scope?: 'all' }) {
   );
 }
 
-function Kpi({ label, value, sub, to, tone, children }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode }) {
-  const body = <>
+const statusColor: Record<KeyStatus, string> = { Active: 'var(--ok)', InStock: 'var(--accent)', Locked: 'var(--error)', Retired: 'var(--muted)' };
+
+function Kpi({ label, value, sub, to, tone, children, aside }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode; aside?: ReactNode }) {
+  const text = <>
     <div className="label">{label}</div>
     <div className={'value' + (tone ? ' tone-text-' + tone : '')}>{value}</div>
     <div className="sub">{sub}</div>
     {children}
   </>;
+  const body = aside ? <div className="kpi-gauge"><div style={{ flex: 1, minWidth: 0 }}>{text}</div>{aside}</div> : text;
   if (!to) return <div className="card kpi">{body}</div>;
   if (to.startsWith('#')) return <a className="card kpi kpi-link" href={to}>{body}</a>;
   return <Link className="card kpi kpi-link" to={to}>{body}</Link>;

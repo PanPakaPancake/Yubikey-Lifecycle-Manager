@@ -446,8 +446,6 @@ button.kpi-row { cursor: pointer; }
 .segmented button + button { border-left: 1px solid var(--line); }
 .segmented button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 .push-right { margin-left: auto; }
-.btn-group { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.btn-group-label { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-size: .85rem; margin-right: 2px; }
 .person { display: flex; gap: 10px; align-items: center; }
 .avatar.sm { width: 30px; height: 30px; font-size: .75rem; flex: none; }
 .account-chips { display: flex; flex-wrap: wrap; max-width: 360px; }
@@ -506,3 +504,48 @@ button.kpi-row { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .lp-page, .lp-digits span { animation: none; }
 }
+
+/* Aufklappmenü */
+.menu { position: relative; display: inline-block; }
+.menu > button { display: inline-flex; align-items: center; gap: 6px; }
+.menu-caret { font-size: .7rem; transition: transform .15s; }
+.menu-caret.open { transform: rotate(180deg); }
+.menu-pop { position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; min-width: 260px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 12px 32px rgba(16, 24, 40, .16); padding: 6px; display: flex; flex-direction: column; animation: menu-in .14s ease-out both; transform-origin: top right; }
+.menu-pop button { border: 0; background: none; text-align: left; display: flex; gap: 10px; align-items: flex-start; padding: 8px 10px; border-radius: 7px; width: 100%; }
+.menu-pop button:hover, .menu-pop button:focus-visible { background: var(--accent-soft); }
+.menu-pop button .icon { margin-top: 2px; color: var(--accent); flex: none; }
+.menu-pop button span { display: flex; flex-direction: column; }
+@keyframes menu-in { from { opacity: 0; transform: translateY(-4px) scale(.98); } to { opacity: 1; transform: none; } }
+
+/* Ring-Diagramm */
+.donut { position: relative; flex: none; }
+.donut-seg { animation: donut-draw .8s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes donut-draw { from { stroke-dasharray: 0 1000; } }
+.donut-center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; line-height: 1.15; }
+.donut-center strong { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.status-chart { display: flex; gap: 20px; align-items: center; flex-wrap: wrap; }
+.status-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 160px; }
+.status-legend a { display: flex; align-items: center; gap: 8px; color: inherit; padding: 4px 8px; border-radius: 6px; }
+.status-legend a:hover { background: var(--surface-2); text-decoration: none; }
+.status-legend i { width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.status-legend .num { margin-left: auto; font-weight: 600; font-variant-numeric: tabular-nums; }
+.kpi-gauge { display: flex; gap: 12px; align-items: center; }
+.bar .fill { transform-origin: bottom; animation: bar-up .6s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes bar-up { from { transform: scaleY(0); } }
+@media (prefers-reduced-motion: reduce) { .donut-seg, .bar .fill, .menu-pop { animation: none; } }
+
+/* Wege der Registrierung */
+.mode-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
+.mode-card { display: flex; gap: 10px; align-items: center; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: inherit; transition: border-color .15s, box-shadow .15s, transform .15s; }
+.mode-card:hover { text-decoration: none; border-color: var(--accent); transform: translateY(-1px); }
+.mode-card strong { display: block; }
+.mode-card > span:last-child { display: flex; flex-direction: column; }
+.mode-card.active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.mode-icon { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 9px; background: var(--accent-soft); color: var(--accent); flex: none; }
+.mode-card.active .mode-icon { background: var(--accent); color: var(--accent-ink); }
+@media (max-width: 900px) { .mode-cards { grid-template-columns: 1fr; } }
+.choose-tenant { border: 1px dashed var(--line); border-radius: var(--radius); padding: 16px 18px; background: var(--surface); animation: alert-in .25s ease both; }
+.choose-tenant p { margin: 0 0 10px; }
+.choose-tenant-list { display: flex; flex-wrap: wrap; gap: 8px; }
+.choose-tenant-list button:hover { border-color: var(--accent); color: var(--accent); }

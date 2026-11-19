@@ -346,7 +346,7 @@ Plattform → **Profile**. Es gibt das Profil **„Standard“**: zufällige PIN
 
 ### 5.4 Einzel-Wizard (Key mit Firmware ≥ 5.7)
 
-Plattform → **Key registrieren**:
+Plattform → **Registrieren** → **Für eine Person**:
 
 1. **Person:** Test-Tenant wählen, Testperson suchen (mind. 2 Zeichen) und anklicken.
 2. **YubiKey einstecken:** Dein Agent ist ausgewählt, der Key wird angezeigt → Weiter.
@@ -431,7 +431,7 @@ Plattform → Keys → den registrierten Key öffnen → **Zurücksetzen und ins
 
 Vorbereitung: eine kleine Entra-Gruppe mit zwei bis drei Testpersonen, die noch keinen Key haben, und ebenso viele Keys im Werkszustand.
 
-1. Plattform → **Stapelregistrierung** → **Neuer Stapel** → Reiter **Entra-Gruppe** → Gruppe suchen und wählen.
+1. Plattform → **Registrieren** → **Stapel** → **Neuer Stapel** → Reiter **Entra-Gruppe** → Gruppe suchen und wählen.
 2. Liste prüfen: Personen mit vorhandenem Key sind abgewählt. Optional bei einer Person eine **feste Seriennummer** eintragen (dann bekommt nur genau dieser Key die Person).
 3. **Stapel anlegen** → **Abarbeiten starten**. Ersten Key einstecken.
 4. Passt der Key ohne Rückfrage (Werkszustand, Profil erfüllt), startet die Registrierung automatisch; sonst erscheint die Prüfung wie im Einzel-Wizard.
@@ -449,7 +449,7 @@ Vorbereitung: eine kleine Entra-Gruppe mit zwei bis drei Testpersonen, die noch 
 
 Vorbereitung: zwei Testkonten (z. B. Schichtarbeitsplatz) und ein Key im Werkszustand mit Firmware ≥ 5.7.
 
-1. **Geteilter Key** → Reiter **Geteilter Key** → Verwahrer eintragen (Pflichtfeld) → beide Konten hinzufügen → **Weiter**.
+1. **Registrieren** → **Geteilter Key / Breakglass** → Reiter **Geteilter Key** → Verwahrer eintragen (Pflichtfeld) → beide Konten hinzufügen → **Weiter**.
 2. Key einstecken → Profil prüfen → **Registrieren**.
 3. Den einen PIN-Brief herunterladen: er ist an den Verwahrer adressiert und nennt beide Konten.
 
@@ -468,7 +468,7 @@ Einzelnes Konto entfernen: in der Key-Ansicht beim Konto **Entfernen**. Der Pass
 Vorbereitung: ein zweites Plattformkonto mit dem Recht „Breakglass freigeben“ (Owner oder eigene Rolle).
 
 1. **Tenant-Einstellungen** → **Vier-Augen-Freigabe für Breakglass-Keys** anhaken → **Speichern**.
-2. **Geteilter Key** → Reiter **Breakglass** → Verwahrer (z. B. „IT-Tresor“), Breakglass-Konto, Key und Profil wählen. In Schritt 3 erscheint statt **Registrieren** der Kasten **Freigabe beantragen** mit Pflichtfeld Grund.
+2. **Registrieren** → **Geteilter Key / Breakglass** → Reiter **Breakglass** → Verwahrer (z. B. „IT-Tresor“), Breakglass-Konto, Key und Profil wählen. In Schritt 3 erscheint statt **Registrieren** der Kasten **Freigabe beantragen** mit Pflichtfeld Grund.
 3. Mit dem zweiten Konto anmelden → **Freigaben** → **Freigeben**.
 4. Wieder mit dem ersten Konto: im Assistenten ist die Freigabe jetzt grün, **Registrieren** ist möglich.
 
@@ -483,7 +483,7 @@ Vorbereitung: ein zweites Plattformkonto mit dem Recht „Breakglass freigeben�
 
 Vorbereitung: eine Testperson registriert selbst einen YubiKey unter `https://mysignins.microsoft.com/security-info`, danach **Jetzt synchronisieren** im Tenant.
 
-1. **Nacherfassen** → Person in der Liste wählen.
+1. **Inventar** → **Nacherfassen** (oder über den Handlungsbedarf auf der Übersicht) → Person in der Liste wählen.
 2. Den Key der Person einstecken (die PIN wird nicht gebraucht) → **Nacherfassen**.
 
 **Erwartet:**
@@ -514,7 +514,7 @@ curl -X POST https://<plattform>/api/v1/todos -H "X-Api-Key: ylm_…" -H "Conten
 2. Erwartung: alle ausgegebenen Keys mit Person, Seriennummer, Modell und Datum. Geteilte Keys und Breakglass zeigen den Verwahrer, unter **Nach Key** auch alle Konten darauf.
 3. Im Suchfeld eine Person, einen UPN oder eine Seriennummer tippen. Die Liste filtert beim Tippen; Konten auf geteilten Keys werden mitgefunden.
 4. Kachel **Auffälligkeiten** anklicken: es bleiben Keys ohne Konto, geteilte Keys ohne Verwahrer usw.
-5. **Excel**, **CSV** und **PDF** herunterladen. Erwartung: gleiche Auswahl wie in der Ansicht, Excel mit Filterzeile, PDF im Querformat.
+5. Über **Exportieren** Excel, PDF und CSV herunterladen. Erwartung: gleiche Auswahl wie in der Ansicht, Excel mit Filterzeile, PDF im Querformat.
 
 ### 5.17 Erscheinungsbild der Dokumente (Whitelabeling)
 

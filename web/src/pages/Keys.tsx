@@ -70,6 +70,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
           ? <>Keys, die keinem Kunden zugeordnet sind{data ? ` (${data.total})` : ''}. Von hier aus weisen Sie Keys einem Tenant zu.</>
           : data ? `${data.total} Keys` : undefined}
         actions={canIntake && <>
+          {!partner && <Link className="btn" to="/keys/identify">Nacherfassen</Link>}
           <button onClick={() => setModal('import')}>CSV importieren</button>
           <button className="primary" onClick={() => setModal('intake')}>Wareneingang per Einstecken</button>
         </>}
