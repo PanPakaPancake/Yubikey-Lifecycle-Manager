@@ -18,7 +18,7 @@ h3 { font-weight: 650; }
 .mono, code { font-feature-settings: normal; }
 
 /* ---- Seitenleiste ---- */
-.shell { grid-template-columns: 252px 1fr; }
+@media (min-width: 901px) { .shell { grid-template-columns: 252px 1fr; } }
 .sidebar {
   --sb-bg: color-mix(in srgb, var(--surface) 82%, transparent);
   --sb-ink: var(--ink);
@@ -212,7 +212,6 @@ tbody tr:last-child td { border-bottom: 0; }
   .main { padding: 16px 16px 40px; }
   .mobilebar { backdrop-filter: blur(12px); background: color-mix(in srgb, var(--surface) 85%, transparent); }
   .shell.sidebar-dark .sidebar { background: linear-gradient(180deg, #111a33 0%, #0c1328 100%); }
-  .sidebar { background: var(--surface); }
   .nav a::before { left: -14px; }
 }
 
@@ -223,3 +222,17 @@ tbody tr:last-child td { border-bottom: 0; }
   .progress > span::after, .step.current .step-no { animation: none !important; }
   .kpi-link:hover { transform: none; }
 }
+
+/* ---- Ansichten im Inventar ---- */
+.view-tabs { display: flex; gap: 4px; margin: 4px 0 16px; border-bottom: 1px solid var(--line); }
+.view-tabs button { position: relative; border: 0; background: none; border-radius: 0; padding: 10px 14px; color: var(--muted); font-weight: 600; }
+.view-tabs button:hover:not(:disabled) { background: none; color: var(--ink); }
+.view-tabs button::after { content: ""; position: absolute; left: 10px; right: 10px; bottom: -1px; height: 2px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2)); transform: scaleX(0); transition: transform .3s var(--ease); }
+.view-tabs button.on { color: var(--accent); }
+.view-tabs button.on::after { transform: scaleX(1); }
+.view-tabs .count { font-size: .75rem; font-weight: 650; padding: 1px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.view-tabs button.on .count { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+.section-title { margin: 26px 0 12px; font-size: 1.05rem; }
+.profile-origin { margin: -8px 0 10px; }
+@media (max-width: 600px) { .kpi-row .kpi-icon { display: none; } .kpi-row { padding: 14px; } }

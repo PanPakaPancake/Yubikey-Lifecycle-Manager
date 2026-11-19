@@ -50,7 +50,7 @@ export default function DashboardPage() {
 
           <div className="grid cols-4">
             <Kpi label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
-              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to="/assignments"
+              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to="/keys?view=people"
               aside={data.coveragePercent != null && <Donut size={64} thickness={9} parts={[
                 { key: 'with', value: Math.min(100, data.coveragePercent), color: 'var(--ok)', label: 'Mit Key' },
                 { key: 'without', value: Math.max(0, 100 - data.coveragePercent), color: 'transparent', label: 'Ohne Key' },

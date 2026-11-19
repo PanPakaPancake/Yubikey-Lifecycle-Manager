@@ -379,7 +379,9 @@ Plattform → **Keys** → **Wareneingang per Einstecken** → Tenant wählen �
 
 ### 5.3 Profil prüfen
 
-Plattform → **Profile**. Es gibt das Profil **„Standard“**: zufällige PIN, Länge 8, PIN-Wechsel erzwingen, Anzeigename „YubiKey {Seriennummer}“. Nichts ändern.
+Links unter **Partner** → **Profile**. Es gibt das Profil **„Standard“** (an alle Tenants vererbt): zufällige PIN, Länge 8, PIN-Wechsel erzwingen, Anzeigename „YubiKey {Seriennummer}“. Nichts ändern.
+
+In den **Tenant-Einstellungen** zeigt die Karte **Registrierungsprofile** das geerbte Profil („Global · geerbt“). Über **Eigenes Profil anlegen** lässt sich ein Profil nur für diesen Tenant ergänzen; mit „Als Standardprofil dieses Tenants verwenden“ ersetzt es dort das Standardprofil des Partners.
 
 ### 5.4 Einzel-Wizard (Key mit Firmware ≥ 5.7)
 
@@ -545,13 +547,14 @@ curl -X POST https://<plattform>/api/v1/todos -H "X-Api-Key: ylm_…" -H "Conten
 
 ---
 
-### 5.16 Wer hat welchen Key (Übersicht und Export)
+### 5.16 Wer hat welchen Key (Inventar, Ansicht „Nach Person“)
 
-1. Links unter **Kunde** auf **Wer hat welchen Key** klicken. Oben im Umschalter erst einen Tenant wählen, danach **Alle Tenants**.
-2. Erwartung: alle ausgegebenen Keys mit Person, Seriennummer, Modell und Datum. Geteilte Keys und Breakglass zeigen den Verwahrer, unter **Nach Key** auch alle Konten darauf.
+1. Links unter **Kunde** auf **Inventar** klicken. Oben stehen die Kacheln zur Ausgabe (ausgegebene Keys, Personen, Geteilt/Breakglass, Auffälligkeiten) und darunter die Ansichten **Alle Keys** und **Nach Person**. Oben im Umschalter erst einen Tenant wählen, danach **Alle Tenants**.
+2. **Nach Person** wählen. Erwartung: alle ausgegebenen Keys mit Person, Seriennummer, Modell und Datum. Geteilte Keys und Breakglass zeigen den Verwahrer. In **Alle Keys** steht der Verwahrer ebenfalls in der Spalte Person.
 3. Im Suchfeld eine Person, einen UPN oder eine Seriennummer tippen. Die Liste filtert beim Tippen; Konten auf geteilten Keys werden mitgefunden.
-4. Kachel **Auffälligkeiten** anklicken: es bleiben Keys ohne Konto, geteilte Keys ohne Verwahrer usw.
-5. Über **Exportieren** Excel, PDF und CSV herunterladen. Erwartung: gleiche Auswahl wie in der Ansicht, Excel mit Filterzeile, PDF im Querformat.
+4. Kachel **Auffälligkeiten** anklicken (auch aus **Alle Keys** heraus): die Ansicht wechselt zu **Nach Person**, es bleiben Keys ohne Konto, geteilte Keys ohne Verwahrer usw.
+5. Über **Exportieren** „Wer hat welchen Key“ als Excel, PDF und CSV herunterladen sowie **Alle Keys (CSV)**. Erwartung: gleiche Auswahl wie in der Personenansicht, Excel mit Filterzeile, PDF im Querformat.
+6. Alte Lesezeichen auf `/assignments` öffnen die Personenansicht des Inventars.
 
 ### 5.17 Erscheinungsbild der Dokumente (Whitelabeling)
 

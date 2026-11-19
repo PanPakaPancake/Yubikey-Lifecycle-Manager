@@ -1,13 +1,18 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { api, fmtDate, statusLabels, type AgentInfo, type CustomField, type KeyStatus, type YubiKey } from '../api';
+import { api, fmtDate, statusLabels, usageLabels, type AgentInfo, type CustomField, type KeyStatus, type YubiKey } from '../api';
 import { useCan } from '../auth';
-import { Badge, Empty, ErrorBox, Field, formatSort, Info, LiveSearchInput, Modal, PageHeader, parseSort, SortTh, Spinner, StatusBadge, useAction, useApi, type SortState } from '../ui';
+import { Badge, download, Empty, ErrorBox, Field, formatSort, Info, LiveSearchInput, MenuButton, Modal, PageHeader, parseSort, SortTh, Spinner, StatusBadge, useAction, useApi, type SortState } from '../ui';
 import { useTenant } from '../tenant';
+import { Icon } from '../icons';
+import { AssignmentKpis, assignmentExportItems, PeopleView, type Overview } from './Assignments';
 
 interface KeyPage { total: number; page: number; pageSize: number; items: YubiKey[] }
 
-/** Kundenebene: Keys des gewählten Tenants (oder aller); partner: nur das Partnerlager. */
+/**
+ * Kundenebene: Inventar des gewählten Tenants (oder aller) mit zwei Ansichten,
+ * „Alle Keys“ und „Nach Person“ (wer hat welchen Key). partner: nur das Partnerlager.
+ */
 export default function KeysPage({ partner }: { partner?: boolean }) {
   const [params, setParams] = useSearchParams();
   const can = useCan();
@@ -25,6 +30,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
   }, [paramTenant, setTenantId]);
   const tenantId = partner ? '' : ctx.tenantId;
   const canIntake = partner ? can('ManagePartnerStock') && can('ManageInventory') : can('ManageInventory');
+  const view = !partner && params.get('view') === 'people' ? 'people' : 'keys';
   const status = params.get('status') ?? '';
   const q = params.get('q') ?? '';
   const tag = params.get('tag') ?? '';
@@ -53,7 +59,13 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
   if (needsDetails) qs.set('needsDetails', 'true');
   if (params.get('sort')) qs.set('sort', params.get('sort')!);
   qs.set('page', String(page));
-  const { data, error, loading, reload } = useApi<KeyPage>('/api/keys?' + qs.toString(), [qs.toString()]);
+  const { data, error, loading, reload } = useApi<KeyPage>(view === 'keys' ? '/api/keys?' + qs.toString() : null, [qs.toString(), view]);
+  const { data: overview, error: overviewError } = useApi<Overview>(partner ? null : '/api/assignments' + (tenantId ? '?tenantId=' + tenantId : ''), [tenantId, partner]);
+  // Wechsel der Ansicht startet mit leeren Filtern, weil beide Ansichten eigene Filter haben.
+  const switchView = (v: 'keys' | 'people', extra: Record<string, string> = {}) => setParams(new URLSearchParams(v === 'people' ? { view: 'people', ...extra } : extra));
+  const exportQs = tenantId ? '?tenantId=' + tenantId : '';
+  const usage = params.get('usage') ?? '';
+  const issues = params.get('issues') === '1';
   const { data: tags } = useApi<string[]>('/api/tags' + (tenantId ? '?tenantId=' + tenantId : ''), [tenantId]);
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   useEffect(() => { setSelected(new Set()); }, [qs.toString()]);
@@ -68,13 +80,33 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
         title={partner ? 'Partnerlager' : ctx.tenant ? 'Inventar ' + ctx.tenant.displayName : 'Inventar aller Tenants'}
         subtitle={partner
           ? <>Keys, die keinem Kunden zugeordnet sind{data ? ` (${data.total})` : ''}. Von hier aus weisen Sie Keys einem Tenant zu.</>
-          : data ? `${data.total} Keys` : undefined}
-        actions={canIntake && <>
-          {!partner && <Link className="btn" to="/keys/identify">Nacherfassen</Link>}
-          <button onClick={() => setModal('import')}>CSV importieren</button>
-          <button className="primary" onClick={() => setModal('intake')}>Wareneingang per Einstecken</button>
+          : 'Alle Keys mit Status, und wer welchen Key gerade hat.'}
+        actions={<>
+          {canIntake && !partner && <Link className="btn" to="/keys/identify">Nacherfassen</Link>}
+          {canIntake && <button onClick={() => setModal('import')}>CSV importieren</button>}
+          {!partner && can('ReadReports') && <MenuButton label="Exportieren" items={[
+            { label: 'Alle Keys (CSV)', hint: 'Inventar mit Status, Tags und Zusatzfeldern', icon: 'key', onClick: () => download('/api/exports/keys.csv' + exportQs) },
+            ...assignmentExportItems(tenantId, params),
+          ]} />}
+          {canIntake && <button className="primary" onClick={() => setModal('intake')}>Wareneingang per Einstecken</button>}
         </>}
       />
+      {!partner && <ErrorBox error={overviewError} />}
+      {!partner && overview && (
+        <AssignmentKpis s={overview.summary} usage={view === 'people' ? usage : ''} issues={view === 'people' && issues}
+          onFilter={(k, v) => switchView('people', v ? { [k]: v } : {})} />
+      )}
+      {!partner && (
+        <div className="view-tabs" role="tablist" aria-label="Ansicht">
+          <button type="button" role="tab" aria-selected={view === 'keys'} className={view === 'keys' ? 'on' : ''} onClick={() => view !== 'keys' && switchView('keys')}>
+            <Icon name="key" size={16} />Alle Keys{data && view === 'keys' && <span className="count">{data.total}</span>}
+          </button>
+          <button type="button" role="tab" aria-selected={view === 'people'} className={view === 'people' ? 'on' : ''} onClick={() => view !== 'people' && switchView('people')}>
+            <Icon name="users" size={16} />Nach Person{overview && <span className="count">{overview.summary.people}</span>}
+          </button>
+        </div>
+      )}
+      {view === 'people' ? (overview ? <PeopleView data={overview} allTenants={!tenantId} /> : !overviewError && <Spinner label="Wird geladen …" />) : <>
       <div className="toolbar">
         <select value={status} onChange={(e) => set('status', e.target.value)} aria-label="Status">
           <option value="">Alle Status</option>
@@ -116,7 +148,8 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
                     <td>{k.model ?? '–'}</td>
                     <td className="mono">{k.firmwareVersion ?? '–'} {k.advisories.some((a) => a.affectsFido) && <Badge tone="warn">Hinweis</Badge>}</td>
                     <td><StatusBadge status={k.status} /></td>
-                    <td>{reg.length === 0 ? '–' : reg.map((r) => <div key={r.id}>{r.userDisplayName ?? r.userPrincipalName}<div className="small muted">{r.userPrincipalName}</div></div>)}</td>
+                    <td>{k.usage !== 'Personal' && <div><Badge tone={k.usage === 'Breakglass' ? 'error' : 'info'}>{usageLabels[k.usage]}</Badge> <span className="small muted">{k.custodian ? 'bei ' + k.custodian : 'Verwahrer fehlt'}</span></div>}
+                      {reg.length === 0 ? (k.usage === 'Personal' ? '–' : null) : reg.map((r) => <div key={r.id}>{r.userDisplayName ?? r.userPrincipalName}<div className="small muted">{r.userPrincipalName}</div></div>)}</td>
                     {!partner && <td>{k.inPartnerStock ? <Badge tone="warn">Partnerlager</Badge> : k.tenantName}</td>}
                     <td>{k.tags.map((t) => <span className="tag" key={t}>{t}</span>)}</td>
                     <td className="small muted">{fmtDate(k.updatedAt)}</td>
@@ -134,6 +167,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
           <button disabled={page >= pages} onClick={() => set('page', String(page + 1))}>Weiter</button>
         </div>
       )}
+      </>}
       {bulk && <BulkModal kind={bulk} keys={selectedKeys} onClose={() => setBulk(null)}
         onDone={(res, label) => { setBulk(null); setBulkResult({ ...res, label }); setSelected(new Set(res.failed.map((f) => f.id))); reload(); }} />}
       {modal === 'import' && <ImportModal defaultTarget={partner ? 'partner' : tenantId} onClose={() => setModal(null)} onDone={reload} />}
