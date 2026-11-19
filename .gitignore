@@ -14,3 +14,5 @@ installer/out/
 installer/publish/
 agent-package/*.msi
 agent-package/version.txt
+backups/
+docker-compose.override.yml

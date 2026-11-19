@@ -1,0 +1,9 @@
+# Nur für die Entwicklung: Server und Updater lokal aus dem Quellcode bauen statt die Release-Images zu laden.
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+# Achtung: Danach läuft ein lokal gebautes Image unter dem Namen des Release-Images. Zurück zu den Releases:
+#   docker compose pull && docker compose up -d
+services:
+  server:
+    build: .
+  updater:
+    build: ./updater

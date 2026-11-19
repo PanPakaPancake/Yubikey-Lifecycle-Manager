@@ -41,59 +41,48 @@ Die Gruppe brauchen wir in Schritt 3 als Zielgruppe.
 
 ### 0.3 Version notieren
 
-Getestet wird der Stand von `main` (V1, Version 0.1.0, Commit `e877d22` oder neuer). Bitte den Commit notieren:
-
-```powershell
-git -C Yubikey-Lifecycle-Manager log -1 --oneline
-```
+Getestet wird das neueste Release. Die Version steht nach der Installation unter **Globale Einstellungen → Version und Updates**; bitte notieren.
 
 ---
 
-## 1. Server per Docker Compose starten
+## 1. Server installieren
 
 ### Welche Variante?
 
-| | Variante A: alles auf dem Admin-PC (**empfohlen für den ersten Test**) | Variante B: Linux-Server mit Reverse Proxy |
+| | Variante A: alles auf dem Admin-PC (**empfohlen für den ersten Test**) | Variante B: Linux-Server/VPS mit Domain |
 |---|---|---|
 | Adresse | `http://localhost:8080` | `https://ylm.<deine-domain>` |
-| Aufwand | gering, kein DNS, kein Zertifikat | DNS-Eintrag, Caddy/Traefik/nginx |
+| Aufwand | gering, kein DNS, kein Zertifikat | DNS-Eintrag, Ports 80/443; HTTPS richtet das Skript mit Caddy ein |
 | Entspricht Produktion | nein | ja |
 
-Die Plattform erlaubt `http://` nur für `localhost`. Entra akzeptiert `http://localhost` als Umleitungs-URI, der Agent ebenfalls. Für andere Adressen ist HTTPS Pflicht.
+Die Plattform erlaubt `http://` nur für `localhost`. Entra akzeptiert `http://localhost` als Umleitungs-URI, der Agent ebenfalls. Für andere Adressen ist HTTPS Pflicht. Alle Varianten sind in [BETRIEB.md](BETRIEB.md#1-server-installieren) beschrieben.
 
-### 1.1 Repo holen und `.env` anlegen
+### 1.1 Installationsskript ausführen
 
-**Variante A (PowerShell auf dem Admin-PC):**
+**Variante A (PowerShell auf dem Admin-PC, Docker Desktop läuft):**
 
 ```powershell
-git clone https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager.git
-cd Yubikey-Lifecycle-Manager
-Copy-Item .env.example .env
-notepad .env
+irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
 ```
 
-**Variante B (Linux):**
+**Variante B (Linux-Server per SSH):**
 
 ```bash
-git clone https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager.git
-cd Yubikey-Lifecycle-Manager
-cp .env.example .env
-nano .env
+curl -fsSL https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.sh | sudo bash
 ```
 
-Inhalt von `.env`:
+Variante 1 wählen und die Domain eingeben.
 
-```ini
-POSTGRES_PASSWORD=<langes zufälliges Passwort>
-# Variante A:
-YLM_PUBLIC_URL=http://localhost:8080
-# Variante B:
-# YLM_PUBLIC_URL=https://ylm.example.com
-```
+**Erwartet:**
+
+- Das Skript legt den Installationsordner an (A: `%USERPROFILE%\YubikeyLifecycleManager`, B: `/opt/ylm`) und darin eine `.env` mit Zufallsgeheimnissen.
+- Es lädt die Images, startet `db`, `server`, `backup`, `updater` (B zusätzlich `caddy`) und meldet „Fertig“ mit Adresse und **Setup-Token**. Token kopieren.
+- `docker compose ps` im Installationsordner zeigt `db` und nach ca. 30 Sekunden auch `server` als `healthy`.
+- B: `https://ylm.<deine-domain>/healthz` antwortet mit `{"status":"ok"}` und gültigem Zertifikat.
 
 ### 1.2 Test-Einstellung: Anmeldung vorerst ohne YubiKey-Pflicht
 
-Standardmäßig lässt die Plattform nur Anmeldungen mit Passkey/YubiKey zu (Claim `amr` = `fido`). Damit wir in Schritt 3 „Jetzt beheben“ an einer **ausgeschalteten** FIDO2-Richtlinie testen können, schalten wir diese Pflicht für den ersten Durchlauf ab. Lege dazu im Repo-Ordner eine Datei **`docker-compose.override.yml`** an (Docker Compose liest sie automatisch mit, bitte nicht committen):
+Standardmäßig lässt die Plattform nur Anmeldungen mit Passkey/YubiKey zu (Claim `amr` = `fido`). Damit wir in Schritt 3 „Jetzt beheben“ an einer **ausgeschalteten** FIDO2-Richtlinie testen können, schalten wir diese Pflicht für den ersten Durchlauf ab. Lege dazu im Installationsordner eine Datei **`docker-compose.override.yml`** an (Docker Compose liest sie automatisch mit):
 
 ```yaml
 services:
@@ -102,39 +91,16 @@ services:
       Ylm__RequirePhishingResistantSignIn: "false"
 ```
 
-Die Pflicht testen wir am Ende in Schritt 7 wieder mit eingeschalteter Einstellung.
+Dann im Installationsordner `docker compose up -d`. Die Pflicht testen wir am Ende in Schritt 7 wieder mit eingeschalteter Einstellung.
 
-> Variante B: Der Reverse Proxy muss `X-Forwarded-Proto` und `X-Forwarded-Host` setzen, Port 8080 darf nicht aus dem Netz erreichbar sein. Beispiel für Caddy steht in [BETRIEB.md](BETRIEB.md#1-server-docker).
-
-### 1.3 Bauen und starten
+### 1.3 Datensicherung
 
 ```powershell
-docker compose up -d --build
-docker compose ps
+docker compose exec backup sh /backup.sh now
+docker compose exec backup sh /backup.sh list
 ```
 
-Der erste Build dauert einige Minuten (Node- und .NET-Images werden geladen).
-
-**Erwartet:**
-
-- `docker compose ps` zeigt `db` als `healthy` und `server` als `running`, nach ca. 30 Sekunden ebenfalls `healthy`.
-- Im Log ist **einmal** ein Fehler zur Migrationstabelle zu sehen (`__EFMigrationsHistory`). Das ist bei leerer Datenbank normal.
-
-### 1.4 Erreichbarkeit und Setup-Token
-
-```powershell
-# Health-Check
-curl.exe http://localhost:8080/healthz
-# Setup-Token aus dem Log (PowerShell)
-docker compose logs server | Select-String Setup-Token
-```
-
-Linux: `curl http://localhost:8080/healthz` und `docker compose logs server | grep Setup-Token`.
-
-**Erwartet:**
-
-- `/healthz` antwortet mit `{"status":"ok"}`.
-- Im Log steht `Einrichtung noch nicht abgeschlossen. Setup-Token: …`. Token kopieren.
+**Erwartet:** Eine Datei `ylm-JJJJMMTT-HHMMSS.tar.gz` im Ordner `backups`. Wiederherstellen und Umzug beschreibt [BETRIEB.md 1.6 und 1.7](BETRIEB.md#16-datensicherung-und-wiederherstellung).
 
 ---
 
@@ -599,7 +565,7 @@ Bitte bei jeder Abweichung zurückmelden:
 
 | Bereich | Wie bekomme ich das Log? |
 |---|---|
-| Server | `docker compose logs server --since 30m > server.log` (im Repo-Ordner) |
+| Server | `docker compose logs server --since 30m > server.log` (im Installationsordner) |
 | Datenbank (nur bei Startproblemen) | `docker compose logs db --since 30m > db.log` |
 | Web-Oberfläche | Browser F12 → Netzwerk → die rote Anfrage anklicken → Registerkarte „Antwort“ (enthält `code` und `message`) → kopieren oder Screenshot. Zusätzlich die Registerkarte „Konsole“. |
 | Agent-Dienst | Ordner `C:\ProgramData\YubikeyLifecycleManager\Agent\logs` (Tray → „Logs öffnen“), die neueste Datei |
@@ -633,14 +599,14 @@ Außerdem hilfreich: Commit (`git log -1 --oneline`), Version der Tray-App (steh
 Zum Kopieren in eine Antwort, Haken setzen oder Abweichung notieren:
 
 ```text
-Commit:            ____________
+Version:           ____________
 Variante:          A (localhost) / B (HTTPS)
 Windows-Version:   ____________
 YubiKey 1:         Modell ________  FW ______  SN ________
 YubiKey 2:         Modell ________  FW ______  SN ________
 
-[ ] 1.3  Container laufen, healthy
-[ ] 1.4  /healthz ok, Setup-Token im Log
+[ ] 1.1  Skript fertig, Container healthy, Setup-Token angezeigt
+[ ] 1.3  Sicherung erstellt
 [ ] 2.2  Anmeldung per Code, App automatisch angelegt, Prüfung grün
 [ ] 2.3  Owner vorausgefüllt, Heim-Tenant-Haken gesetzt
 [ ] 2.4  (nur falls nötig) Skript als Ausweichweg

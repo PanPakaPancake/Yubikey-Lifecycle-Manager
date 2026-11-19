@@ -20,6 +20,22 @@ Selbst hostbare Plattform, mit der IT-Administratoren allein oder im Team den Le
 
 Ein reiner Browser kann die Registrierung on Behalf nicht durchführen. Die Begründung steht in der Planung.
 
+## Installation
+
+Lokal auf einem Windows-PC mit Docker Desktop (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
+```
+
+Auf einem Linux-Server oder VPS mit eigener Domain und automatischem HTTPS:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.sh | sudo bash
+```
+
+Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images, richtet die tägliche Datensicherung ein und zeigt am Ende das Setup-Token. Details, Reverse Proxy, Sicherung und Umzug: [Betrieb und Installation](docs/BETRIEB.md).
+
 ## Dokumentation
 
 - [Projektplanung](docs/PLANUNG.md)

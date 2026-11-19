@@ -1,12 +1,14 @@
 # Mehrstufiger Build: Web-Oberfläche (Node) + Backend (.NET) → schlankes ASP.NET-Image.
-FROM node:22-alpine AS web
+# Web und .NET werden auf der Plattform des Build-Rechners gebaut (Ergebnis ist architekturunabhängig);
+# nur das End-Image gibt es je Zielarchitektur (linux/amd64, linux/arm64).
+FROM --platform=$BUILDPLATFORM node:22-alpine AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
 RUN npm run build -- --outDir /out/wwwroot --emptyOutDir
 
-FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 ARG VERSION=0.1.0-dev
 WORKDIR /src
 COPY Directory.Build.props Directory.Packages.props ./

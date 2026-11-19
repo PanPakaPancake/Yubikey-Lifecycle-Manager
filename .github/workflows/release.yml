@@ -53,13 +53,34 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Images bauen und veröffentlichen
+      # Images für linux/amd64 und linux/arm64 (z. B. ARM-VPS). Web und .NET baut der Runner nativ,
+      # nur die End-Images laufen per QEMU für arm64.
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Image-Namen
+        id: names
         run: |
-          OWNER_LC="${SERVER_IMAGE,,}"; UPD_LC="${UPDATER_IMAGE,,}"
-          docker build --build-arg VERSION=${{ steps.v.outputs.version }} -t "$OWNER_LC:${{ steps.v.outputs.version }}" -t "$OWNER_LC:latest" .
-          docker build -t "$UPD_LC:${{ steps.v.outputs.version }}" -t "$UPD_LC:latest" ./updater
-          docker push --all-tags "$OWNER_LC"
-          docker push --all-tags "$UPD_LC"
+          echo "server=${SERVER_IMAGE,,}" >> "$GITHUB_OUTPUT"
+          echo "updater=${UPDATER_IMAGE,,}" >> "$GITHUB_OUTPUT"
+      - name: Server-Image bauen und veröffentlichen
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          build-args: VERSION=${{ steps.v.outputs.version }}
+          tags: |
+            ${{ steps.names.outputs.server }}:${{ steps.v.outputs.version }}
+            ${{ steps.names.outputs.server }}:latest
+          push: true
+      - name: Updater-Image bauen und veröffentlichen
+        uses: docker/build-push-action@v6
+        with:
+          context: ./updater
+          platforms: linux/amd64,linux/arm64
+          tags: |
+            ${{ steps.names.outputs.updater }}:${{ steps.v.outputs.version }}
+            ${{ steps.names.outputs.updater }}:latest
+          push: true
       - name: GitHub-Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

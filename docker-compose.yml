@@ -1,5 +1,13 @@
-# Selbst gehosteter Betrieb: PostgreSQL + Plattform.
-# TLS übernimmt ein Reverse Proxy (z. B. Caddy, Traefik, nginx) vor Port 8080; siehe docs/BETRIEB.md.
+# Yubikey Lifecycle Manager – Betrieb mit Docker Compose.
+#
+# Erstinstallation am einfachsten per Skript (legt .env mit Zufallsgeheimnissen an):
+#   Linux/VPS:  curl -fsSL https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.sh | sudo bash
+#   Windows:    irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
+# Details: docs/BETRIEB.md
+#
+# Bitte diese Datei nicht verändern, sonst überschreibt bzw. blockiert sie spätere Updates.
+# Eigene Einstellungen gehören in .env, eigene Ergänzungen in docker-compose.override.yml.
+# Lokal aus dem Quellcode bauen (nur Entwicklung): siehe docker-compose.build.yml.
 services:
   db:
     image: postgres:16-alpine
@@ -17,9 +25,7 @@ services:
       retries: 5
 
   server:
-    # Fertiges Image aus den Releases; `docker compose up -d --build` baut stattdessen lokal aus dem Quellcode.
     image: ghcr.io/panpakapancake/yubikey-lifecycle-manager:${YLM_VERSION:-latest}
-    build: .
     restart: unless-stopped
     depends_on:
       db:
@@ -29,18 +35,18 @@ services:
       Ylm__PublicBaseUrl: ${YLM_PUBLIC_URL:-}
       Ylm__UpdaterUrl: http://updater:8090
       Ylm__UpdaterToken: ${UPDATER_TOKEN:-}
-      TZ: Europe/Berlin
+      TZ: ${TZ:-Europe/Berlin}
     volumes:
-      # Zertifikat (verschlüsselt), Data-Protection-Schlüssel – unbedingt sichern.
+      # App-Zertifikat (verschlüsselt) und Data-Protection-Schlüssel. Sichert der Dienst "backup" mit.
       - data:/data
     ports:
-      - "127.0.0.1:8080:8080"
+      # Standard: nur vom Rechner selbst erreichbar. HTTPS übernimmt Caddy (Profil "https") oder ein eigener Reverse Proxy.
+      - "${YLM_BIND:-127.0.0.1:8080}:8080"
 
   # Update per Klick: holt auf Anforderung der Plattform das neue Server-Image und startet den Server neu.
   # Nur dieser Container sieht den Docker-Socket. Ohne UPDATER_TOKEN in .env nimmt er keine Aufträge an.
   updater:
     image: ghcr.io/panpakapancake/yubikey-lifecycle-manager-updater:latest
-    build: ./updater
     restart: unless-stopped
     environment:
       UPDATER_TOKEN: ${UPDATER_TOKEN:-}
@@ -48,6 +54,47 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro
 
+  # Datensicherung: täglich um BACKUP_TIME Datenbank und Volume "data" nach ./backups, alte Stände nach BACKUP_KEEP_DAYS weg.
+  # Sofort sichern:  docker compose exec backup sh /backup.sh now
+  # Wiederherstellen: docs/BETRIEB.md, Abschnitt "Datensicherung"
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    entrypoint: ["sh", "/backup.sh"]
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      BACKUP_TIME: ${BACKUP_TIME:-02:30}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - ./deploy/backup.sh:/backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+      - data:/data
+
+  # Automatisches HTTPS mit Let's Encrypt für den Betrieb auf einem Server/VPS.
+  # Aktiv mit COMPOSE_PROFILES=https in .env (setzt das Installationsskript). Braucht YLM_DOMAIN und offene Ports 80/443.
+  caddy:
+    image: caddy:2-alpine
+    profiles: [https]
+    restart: unless-stopped
+    depends_on:
+      - server
+    environment:
+      YLM_DOMAIN: ${YLM_DOMAIN:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
 volumes:
   db:
   data:
+  caddy_data:
+  caddy_config:
