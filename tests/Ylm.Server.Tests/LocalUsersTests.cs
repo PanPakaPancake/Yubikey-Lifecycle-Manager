@@ -183,6 +183,32 @@ public sealed class LocalUsersTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Entra_login_without_app_registration_does_not_go_to_microsoft()
+    {
+        await _app.WithDbAsync(async db =>
+        {
+            var s = db.Installation.First();
+            s.ClientId = null;
+            s.SetupCompletedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync();
+        });
+        var redirect = await _app.Client().GetAsync("/auth/login");
+        Assert.Equal("/login?error=sso_not_configured", redirect.Headers.Location?.ToString());
+
+        await _app.WithDbAsync(async db => { db.Installation.First().SetupCompletedAt = null; await db.SaveChangesAsync(); });
+        Assert.Equal("/setup", (await _app.Client().GetAsync("/auth/login")).Headers.Location?.ToString());
+
+        // Danach eingetragene App wird genommen, auch wenn die Optionen schon mit leerer Client-ID gebaut wurden.
+        var clientId = Guid.NewGuid();
+        await _app.WithDbAsync(async db => { var s = db.Installation.First(); s.ClientId = clientId; s.SetupCompletedAt = DateTimeOffset.UtcNow; await db.SaveChangesAsync(); });
+        var client = _app.Client();
+        var first = await client.GetAsync("/auth/login");
+        Assert.StartsWith("/auth/login?retry=1", first.Headers.Location?.ToString());
+        var challenge = await client.GetAsync(first.Headers.Location);
+        Assert.Contains("client_id=" + clientId, challenge.Headers.Location?.ToString());
+    }
+
+    [Fact]
     public async Task Entra_user_needs_no_setup_link()
     {
         var user = await Json(await _owner.PostAsJsonAsync("/api/users", new { upn = "sso@home.example", role = "Auditor", allTenants = true }));

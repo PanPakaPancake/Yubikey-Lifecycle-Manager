@@ -14,11 +14,21 @@ public static class AuthEndpoints
 
     public static void MapAuth(this IEndpointRouteBuilder app, IWebHostEnvironment env, YlmOptions options)
     {
-        app.MapGet("/auth/login", async (string? returnUrl, YlmDbContext db) =>
+        app.MapGet("/auth/login", async (string? returnUrl, int? retry, YlmDbContext db, IOptionsMonitor<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions> oidc,
+            IOptionsMonitorCache<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions> oidcCache) =>
         {
             var target = returnUrl is { Length: > 0 } r && r.StartsWith('/') && !r.StartsWith("//") ? r : "/";
             var settings = await db.Installation.AsNoTracking().FirstOrDefaultAsync();
             if (settings is { EntraSsoEnabled: false }) return Results.Redirect("/login?error=sso_disabled");
+            // Ohne eingetragene Entra-App nicht mit leerer Client-ID zu Microsoft schicken (AADSTS700038).
+            if (settings?.ClientId is not { } clientId) return Results.Redirect(settings is { IsSetupComplete: true } ? "/login?error=sso_not_configured" : "/setup");
+            // Optionen, die vor dem Eintragen der App (oder bei nicht erreichbarer Datenbank) gebaut wurden, verwerfen.
+            // Die Authentifizierungs-Middleware hat den Handler für diese Anfrage schon damit gebaut, daher einmal neu laden.
+            if (retry is null && oidc.Get(AuthSchemes.Entra).ClientId != clientId.ToString())
+            {
+                oidcCache.TryRemove(AuthSchemes.Entra);
+                return Results.Redirect("/auth/login?retry=1&returnUrl=" + Uri.EscapeDataString(target));
+            }
             return Results.Challenge(new AuthenticationProperties { RedirectUri = target }, [AuthSchemes.Entra]);
         }).AllowAnonymous();
 

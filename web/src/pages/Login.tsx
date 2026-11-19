@@ -11,6 +11,7 @@ const errorTexts: Record<string, string> = {
   remote_failure: 'Die Anmeldung bei Microsoft ist fehlgeschlagen.',
   denied: 'Die Anmeldung wurde abgelehnt.',
   sso_disabled: 'Die Anmeldung mit Microsoft ist abgeschaltet. Bitte mit Passkey anmelden.',
+  sso_not_configured: 'Für die Anmeldung mit Microsoft ist keine Entra-App eingetragen. Bitte den Setup-Assistenten abschließen oder mit Passkey anmelden.',
 };
 
 type Methods = { entraSso: boolean; passkey: boolean; emergency: boolean };
