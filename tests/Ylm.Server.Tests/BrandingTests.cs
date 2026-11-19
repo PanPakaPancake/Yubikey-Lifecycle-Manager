@@ -96,4 +96,31 @@ public sealed class BrandingTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.Forbidden, (await hd.PutAsJsonAsync($"/api/branding?tenantId={_tenant}", new { companyName = "X" })).StatusCode);
         Assert.Equal(HttpStatusCode.OK, (await hd.GetAsync("/api/branding")).StatusCode);
     }
+
+    [Fact]
+    public async Task Public_branding_for_passkey_page_works_without_login()
+    {
+        await Json(await _owner.PutAsJsonAsync("/api/branding", new { companyName = "Partner IT", accentColor = "#0A7A50", contact = "Hotline 0800 123", footer = "intern" }));
+        await Json(await _owner.PutAsJsonAsync($"/api/branding?tenantId={_tenant}", new { companyName = "Kunde A AG", accentColor = (string?)null, contact = (string?)null, footer = (string?)null }));
+
+        var anon = _app.Client();
+        var partner = await Json(await anon.GetAsync("/api/public/branding"));
+        Assert.Equal("Partner IT", partner.GetProperty("companyName").GetString());
+        Assert.Equal("#0a7a50", partner.GetProperty("accentColor").GetString());
+        Assert.Equal("Hotline 0800 123", partner.GetProperty("contact").GetString());
+        Assert.False(partner.TryGetProperty("footer", out _));
+
+        var tenant = await Json(await anon.GetAsync($"/api/public/branding?t={_tenant}"));
+        Assert.Equal("Kunde A AG", tenant.GetProperty("companyName").GetString());
+        // Unbekannte Tenant-Id: Partner-Vorgabe.
+        var unknown = await Json(await anon.GetAsync($"/api/public/branding?t={Guid.NewGuid()}"));
+        Assert.Equal("Partner IT", unknown.GetProperty("companyName").GetString());
+        Assert.Equal(HttpStatusCode.NotFound, (await anon.GetAsync("/api/public/branding/logo")).StatusCode);
+        // Die Verwaltung bleibt geschützt.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/branding")).StatusCode);
+
+        var pdf = await _owner.GetAsync($"/api/branding/preview.pdf?tenantId={_tenant}");
+        var text = Encoding.Latin1.GetString(await pdf.Content.ReadAsByteArrayAsync());
+        Assert.Contains($"/passkey/anleitung?t={_tenant}", text);
+    }
 }
