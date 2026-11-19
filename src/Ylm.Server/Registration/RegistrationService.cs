@@ -38,6 +38,7 @@ public sealed class RegistrationService(
     AuditService audit,
     IDataProtectionProvider dataProtection,
     PinLetterStore letters,
+    Microsoft.Extensions.Options.IOptions<YlmOptions> ylmOptions,
     ILogger<RegistrationService> logger)
 {
     public const string FixedPinPurpose = "Ylm.Profile.FixedPin";
@@ -119,6 +120,8 @@ public sealed class RegistrationService(
         ConnectedAgent? agent = null;
         PlatformUser? actorUser = null;
         var stage = "start";
+        // Stapel: „Erfolgreich“ erst melden, wenn der Stapeleintrag gespeichert ist, sonst sieht der Aufrufer einen halben Stand.
+        var succeeded = false;
         try
         {
             actorUser = await db.PlatformUsers.FirstAsync(u => u.Id == actorId, ct);
@@ -271,12 +274,14 @@ public sealed class RegistrationService(
             using var brandScope = Theme.Use(brand);
             var pdf = PinLetterPdf.Create(new PinLetterData(
                 brand.CompanyName ?? settings.OrganizationName, tenant.DisplayName, user.DisplayName ?? user.UserPrincipalName, user.UserPrincipalName, pin,
-                key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now));
+                key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now,
+                InfoUrl: PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, ylmOptions.Value, ct: ct), tenantId)));
             job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief {user.UserPrincipalName} {key.SerialNumber}.pdf",
                 job.BatchItemId is null ? null : PinLetterStore.BatchLifetime);
             job.Step = "Registrierung abgeschlossen";
             job.Prompt = "Key abziehen und zusammen mit dem PIN-Brief übergeben.";
-            job.State = JobState.Succeeded;
+            succeeded = true;
+            if (job.BatchItemId is null) job.State = JobState.Succeeded;
             agents.Progress(agent, new AgentProgress("Registrierung abgeschlossen", $"{user.DisplayName}: Key kann abgezogen werden.", 7, 7, Done: true));
         }
         catch (Exception ex)
@@ -291,6 +296,7 @@ public sealed class RegistrationService(
             if (ex is not ApiException) logger.LogError(ex, "Registration failed at {Stage}", stage);
             if (stage is "credential" or "graph" or "force_pin_change" or "save")
                 message += " Auf dem Key ist bereits eine PIN gesetzt; für einen neuen Versuch mit Werksreset registrieren.";
+            succeeded = false;
             job.State = JobState.Failed;
             job.Error = message;
             job.ErrorCode = code;
@@ -308,8 +314,9 @@ public sealed class RegistrationService(
             job.FinishedAt = DateTimeOffset.UtcNow;
             if (job.BatchItemId is { } itemId)
             {
-                try { await BatchService.FinishItemAsync(db, audit, itemId, job, actorUser); }
+                try { await BatchService.FinishItemAsync(db, audit, itemId, job, succeeded, actorUser); }
                 catch (Exception batchEx) { logger.LogError(batchEx, "Could not update batch item {Item}", itemId); }
+                if (succeeded) job.State = JobState.Succeeded;
             }
             if (agent is not null) agent.BusyWith = null;
         }

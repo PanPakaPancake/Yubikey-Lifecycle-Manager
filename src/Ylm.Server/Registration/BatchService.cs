@@ -445,14 +445,14 @@ public sealed class BatchService(
     }
 
     /// <summary>Called by the registration job when it ends, successful or not.</summary>
-    internal static async Task FinishItemAsync(YlmDbContext db, AuditService audit, Guid itemId, OperationJob job, PlatformUser? actor)
+    internal static async Task FinishItemAsync(YlmDbContext db, AuditService audit, Guid itemId, OperationJob job, bool succeeded, PlatformUser? actor)
     {
         db.ChangeTracker.Clear();
         var item = await db.BatchItems.FirstOrDefaultAsync(i => i.Id == itemId);
         if (item is null) return;
         item.CompletedAt = DateTimeOffset.UtcNow;
         item.CompletedByName = actor?.DisplayName;
-        if (job.State == JobState.Succeeded)
+        if (succeeded)
         {
             item.Status = BatchItemStatus.Done;
             item.KeyId = job.KeyId;
