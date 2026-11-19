@@ -32,7 +32,8 @@ internal sealed class PairForm : Form
         layout.Controls.Add(_code);
         layout.Controls.Add(_result);
         var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, AutoSize = true, Dock = DockStyle.Fill };
-        var cancel = new Button { Text = "Abbrechen", Width = 100, DialogResult = DialogResult.Cancel };
+        var cancel = new Button { Text = "Abbrechen", Width = 100 };
+        cancel.Click += (_, _) => Close(); // nicht modal: DialogResult allein schließt nicht
         buttons.Controls.Add(cancel);
         buttons.Controls.Add(_ok);
         layout.Controls.Add(buttons);
