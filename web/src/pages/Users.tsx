@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { api, fmtDate, loginKindLabel, type LoginKind, type PlatformUser, type Role, type Tenant, type UserPasskey } from '../api';
 import { useAuth } from '../auth';
 import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
+import { useConfirm, useToast } from '../feedback';
 
 type CatalogEntry = { permission: string; group: string; label: string; description: string; ownerOnly: boolean };
 type BuiltInRole = { role: Role; description: string; permissions: string[] };
@@ -179,6 +180,7 @@ function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Par
   const [tenantIds, setTenantIds] = useState<string[]>(user.tenantIds ?? []);
   const [isActive, setIsActive] = useState(user.isActive ?? true);
   const { busy, error, run } = useAction();
+  const confirm = useConfirm();
   const isNew = !user.id;
   const save = () => run(async () => {
     const body = { upn, displayName: displayName || null, role, customRoleId: role === 'Custom' ? customRoleId : null, allTenants, tenantIds: allTenants ? [] : tenantIds, isActive };
@@ -194,9 +196,9 @@ function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Par
   });
   const newLink = () => run(async () => {
     const msg = user.loginKind === 'Emergency'
-      ? 'Neuen Einrichtungslink erzeugen? Passwort und Authenticator des Notfallkontos werden dabei zurückgesetzt.'
-      : 'Neuen Einrichtungslink erzeugen? Bestehende Passkeys bleiben gültig, mit dem Link kommt ein weiterer dazu.';
-    if (!window.confirm(msg)) return;
+      ? 'Passwort und Authenticator des Notfallkontos werden dabei zurückgesetzt.'
+      : 'Bestehende Passkeys bleiben gültig, mit dem Link kommt ein weiterer dazu.';
+    if (!(await confirm({ title: 'Neuen Einrichtungslink erzeugen?', message: msg, confirmLabel: 'Link erzeugen', danger: user.loginKind === 'Emergency' }))) return;
     const l = await api.post<{ url: string; expiresAt: string }>(`/api/users/${user.id}/setup-link`);
     onSaved({ user: user.displayName ?? '', ...l });
   });
@@ -253,11 +255,16 @@ function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Par
 function UserCredentials({ user, busy, onNewLink }: { user: PlatformUser; busy: boolean; onNewLink: () => void }) {
   const { data, reload } = useApi<UserPasskey[]>(user.loginKind === 'Local' ? `/api/users/${user.id}/passkeys` : null);
   const { error, run } = useAction();
-  const remove = (p: UserPasskey) => run(async () => {
-    if (!window.confirm(`Passkey „${p.name}“ von ${user.displayName} entfernen?`)) return;
-    await api.del(`/api/users/${user.id}/passkeys/${p.id}`);
-    reload();
-  });
+  const confirm = useConfirm();
+  const toast = useToast();
+  const remove = async (p: UserPasskey) => {
+    if (!(await confirm({ title: 'Passkey entfernen?', message: `„${p.name}“ von ${user.displayName} wird entfernt.`, confirmLabel: 'Entfernen', danger: true }))) return;
+    await run(async () => {
+      await api.del(`/api/users/${user.id}/passkeys/${p.id}`);
+      toast.ok(`Passkey „${p.name}“ entfernt.`);
+      reload();
+    });
+  };
   return (
     <div className="mt">
       <div className="perm-group">Zugang ({loginKindLabel[user.loginKind]})</div>

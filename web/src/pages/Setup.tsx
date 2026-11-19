@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../api';
-import { Card, ErrorBox, Field, Info, Spinner, useAction } from '../ui';
+import { Card, ErrorBox, Field, Info, Spinner, useAction, Steps } from '../ui';
 
 interface SignedInAdmin { upn: string; displayName: string; tenantId: string; organizationName: string; defaultDomain?: string }
 
@@ -205,9 +205,7 @@ export default function SetupPage() {
     <div className="main" style={{ maxWidth: 860, margin: '0 auto' }}>
       <h1>Einrichtung der Installation</h1>
       <p className="muted">Einmalig: Grunddaten festlegen, bei Microsoft anmelden, und die Plattform legt ihre App-Registrierung im Heim-Tenant selbst an.</p>
-      <ol className="steps">
-        {steps.map((s, i) => <li key={s} className={'step ' + (i < step ? 'done' : i === step ? 'current' : '')}>{s}</li>)}
-      </ol>
+      <Steps names={steps} current={step} />
       <ErrorBox error={error} />
 
       {step === 0 && (

@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { api, type AgentInfo, type Job, type KeyInfo, type Profile } from '../api';
-import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, useAction, useApi, useLiveSearch, usePolling } from '../ui';
+import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinner, useAction, useApi, useLiveSearch, usePolling, Steps } from '../ui';
 import { JobProgress } from './KeyDetail';
 import { useTenant } from '../tenant';
 
@@ -77,9 +77,7 @@ export default function WizardPage() {
   return (
     <>
       <PageHeader title="Key registrieren" subtitle="Einzelregistrierung im Auftrag einer Person (Registrierung on Behalf)" actions={step > 0 ? <button onClick={restart}>Neu beginnen</button> : <Link className="btn" to="/batches">Viele Personen? Stapelregistrierung</Link>} />
-      <ol className="steps">
-        {stepNames.map((s, i) => <li key={s} className={'step ' + (i < step ? 'done' : i === step ? 'current' : '')}>{s}</li>)}
-      </ol>
+      <Steps names={stepNames} current={step} />
       <ErrorBox error={error} />
 
       {step === 0 && <PersonStep tenantId={tenantId} onPick={(u) => { setUser(u); setStep(1); void suggestProfile(u); }} />}

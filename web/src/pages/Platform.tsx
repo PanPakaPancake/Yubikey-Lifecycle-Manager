@@ -4,6 +4,7 @@ import { api, fieldTypes, fmtDate, keyFromLabel, type CustomField, type GlobalFi
 import { useAuth, useCan } from '../auth';
 import { Badge, Card, ErrorBox, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { FieldExplanation } from './TenantDetail';
+import { useConfirm } from '../feedback';
 
 /** Platform level: settings that apply to the whole installation and are inherited by the tenants. */
 export default function PlatformPage() {
@@ -241,6 +242,7 @@ function UpdatesCard() {
   const [refresh, setRefresh] = useState(0);
   const { data, error, reload } = useApi<UpdateInfo>('/api/platform/updates' + (refresh ? '?refresh=true' : ''), [refresh]);
   const { busy, error: actionError, run } = useAction();
+  const confirm = useConfirm();
   const [phase, setPhase] = useState<'idle' | 'running' | 'restarting'>('idle');
   const [log, setLog] = useState<string[]>([]);
   const [from, setFrom] = useState<string>();
@@ -264,14 +266,16 @@ function UpdatesCard() {
     return () => clearInterval(t);
   }, [phase, from, reload]);
 
-  const apply = () => run(async () => {
-    if (!window.confirm(`Auf Version ${data!.latestVersion} aktualisieren? Die Plattform ist dabei etwa eine Minute nicht erreichbar. Laufende Registrierungen vorher abschließen.`)) return;
-    setFrom(data!.currentVersion);
-    await api.post('/api/platform/updates/apply', { version: data!.latestVersion });
-    setLog([]);
-    doneChecks.current = 0;
-    setPhase('running');
-  });
+  const apply = async () => {
+    if (!(await confirm({ title: `Auf Version ${data!.latestVersion} aktualisieren?`, message: 'Die Plattform ist dabei etwa eine Minute nicht erreichbar. Laufende Registrierungen vorher abschließen.', confirmLabel: 'Jetzt aktualisieren' }))) return;
+    await run(async () => {
+      setFrom(data!.currentVersion);
+      await api.post('/api/platform/updates/apply', { version: data!.latestVersion });
+      setLog([]);
+      doneChecks.current = 0;
+      setPhase('running');
+    });
+  };
 
   const status = data?.updater.status;
   return (

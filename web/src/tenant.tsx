@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { api, type Tenant } from './api';
 
 // Kundenebene: der oben gewählte Tenant gilt für alle Kundenseiten (ähnlich dem Tenant-Umschalter im Admin Center).
@@ -40,6 +40,7 @@ export function TenantSwitcher({ partnerContext }: { partnerContext: boolean }) 
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState('');
   const [onlyProblems, setOnlyProblems] = useState(false);
+  const [cursor, setCursor] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -56,6 +57,19 @@ export function TenantSwitcher({ partnerContext }: { partnerContext: boolean }) 
     .filter((t) => !onlyProblems || hasProblems(t))
     .sort((a, b) => a.displayName.localeCompare(b.displayName, 'de'));
   const pick = (id: string) => { setTenantId(id); setOpen(false); setQ(''); };
+  // Keyboard: ↑/↓ moves through the list (incl. „Alle Tenants“), Enter picks, Esc closes.
+  const showAll = !term && !onlyProblems;
+  const options = [...(showAll ? [''] : []), ...list.map((t) => t.id)];
+  useEffect(() => { setCursor(Math.max(0, options.indexOf(tenantId))); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open]);
+  useEffect(() => { if (cursor >= options.length) setCursor(0); }, [options.length, cursor]);
+  const optionsRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { optionsRef.current?.querySelector('.kb-active')?.scrollIntoView({ block: 'nearest' }); }, [cursor]);
+  const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((a) => Math.min(options.length - 1, a + 1)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((a) => Math.max(0, a - 1)); }
+    else if (e.key === 'Enter') { e.preventDefault(); if (options[cursor] !== undefined) pick(options[cursor]); }
+    else if (e.key === 'Escape') setOpen(false);
+  };
 
   return (
     <div className={'tenant-switcher' + (partnerContext ? ' dim' : '')} ref={ref}>
@@ -67,19 +81,20 @@ export function TenantSwitcher({ partnerContext }: { partnerContext: boolean }) 
       </button>
       {open && (
         <div className="tenant-menu" role="listbox">
-          <input type="search" autoFocus placeholder="Tenant suchen (Name, Domain, ID) …" value={q} onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter' && list[0]) pick(list[0].id); if (e.key === 'Escape') setOpen(false); }} />
+          <input type="search" autoFocus placeholder="Tenant suchen (Name, Domain, ID) …" value={q} onChange={(e) => { setQ(e.target.value); setCursor(0); }}
+            onKeyDown={onKey} aria-activedescendant={options[cursor] !== undefined ? 'tenant-opt-' + (options[cursor] || 'all') : undefined} />
           <label className="check small" style={{ margin: '6px 2px' }}>
             <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> Nur Tenants mit Handlungsbedarf
           </label>
-          <div className="tenant-options">
-            {!term && !onlyProblems && (
-              <button type="button" className={tenantId === '' ? 'selected' : ''} onClick={() => pick('')}>
+          <div className="tenant-options" ref={optionsRef}>
+            {showAll && (
+              <button type="button" id="tenant-opt-all" role="option" aria-selected={tenantId === ''} className={(tenantId === '' ? 'selected' : '') + (cursor === 0 ? ' kb-active' : '')} onClick={() => pick('')} onMouseEnter={() => setCursor(0)}>
                 <strong>Alle Tenants</strong><span className="small muted">Übersicht über alle Kunden</span>
               </button>
             )}
-            {list.map((t) => (
-              <button type="button" key={t.id} className={t.id === tenantId ? 'selected' : ''} onClick={() => pick(t.id)}>
+            {list.map((t, i) => (
+              <button type="button" key={t.id} id={'tenant-opt-' + t.id} role="option" aria-selected={t.id === tenantId} className={(t.id === tenantId ? 'selected' : '') + (cursor === i + (showAll ? 1 : 0) ? ' kb-active' : '')}
+                onClick={() => pick(t.id)} onMouseEnter={() => setCursor(i + (showAll ? 1 : 0))}>
                 <strong>{t.displayName}{hasProblems(t) && <span className="dot-warn" title="Handlungsbedarf" />}</strong>
                 <span className="small muted">{t.defaultDomain ?? t.entraTenantId}</span>
               </button>

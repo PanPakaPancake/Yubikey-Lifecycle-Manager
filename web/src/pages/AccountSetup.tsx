@@ -19,7 +19,7 @@ export default function AccountSetupPage() {
     <div className="center-page">
       <div className="login-card card" style={{ maxWidth: 520 }}>
         <div className="brand">
-          <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden><rect x="21" y="12" width="9" height="8" fill="#b8bec7" /><rect x="2" y="8" width="22" height="16" rx="6" fill="#2b2f36" /><circle cx="11" cy="16" r="5" fill="#d4a52a" /></svg>
+          <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden><rect x="21" y="12" width="9" height="8" fill="#b8bec7" /><rect className="brand-body" x="2" y="8" width="22" height="16" rx="6" /><circle cx="11" cy="16" r="5" fill="#d4a52a" /></svg>
           <div>Konto einrichten</div>
         </div>
         {!token && <ErrorBox error="Im Link fehlt der Einrichtungscode. Bitte den vollständigen Link aus der Nachricht öffnen." />}
