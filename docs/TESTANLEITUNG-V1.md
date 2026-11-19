@@ -563,9 +563,9 @@ curl -X POST https://<plattform>/api/v1/todos -H "X-Api-Key: ylm_…" -H "Conten
 3. In den **Tenant-Einstellungen** eines Tenants nur den Firmennamen ändern. Erwartung: alle anderen Werte kommen weiter vom Partner.
 4. Einen Key registrieren bzw. den Bericht (PDF) und die Key-Zuweisungen (PDF) dieses Tenants herunterladen: das Tenant-Erscheinungsbild wird verwendet. Über alle Tenants gilt das des Partners.
 
-## 6. Integrationen (ab V2)
+## 6. Benachrichtigungen (ab V2)
 
-Alles unter **Integrationen** (Partnerebene, Recht „API und Integrationen“).
+Alles unter **Benachrichtigungen** (Partnerebene, Recht „API und Integrationen“; früher „Integrationen“).
 
 ### 6.1 Webhooks
 
@@ -575,7 +575,17 @@ Alles unter **Integrationen** (Partnerebene, Recht „API und Integrationen“).
 
 **Erwartet:** Ein `POST` mit JSON und den Headern `X-YLM-Event`, `X-YLM-Delivery`, `X-YLM-Timestamp` und `X-YLM-Signature: sha256=…` (HMAC-SHA256 über `Timestamp + "." + Body` mit dem Geheimnis). Im **Protokoll** steht jede Zustellung; Fehlschläge werden nach 1 und 5 Minuten, 30 Minuten, 2 und 6 Stunden wiederholt.
 
-### 6.2 Mail-Berichte
+### 6.2 Mail-Alarme
+
+Voraussetzung: Mailserver ist im Reiter **Mail-Berichte** eingetragen (siehe 6.3).
+
+1. Reiter **Mail-Alarme** → **Mail-Alarm anlegen** → Name, Empfänger (mehrere mit Komma), unter **Nur ausgewählte** z. B. „Key gesperrt“ und „Freigabe beantragt“ anhaken → **Speichern**.
+2. **Testen**: eine Testmail kommt an.
+3. Einen Key sperren, danach eine Person in die ToDo-Liste eintragen.
+
+**Erwartet:** Für das Sperren kommt innerhalb einer Minute eine Mail mit Betreff „[YubiKey] Key gesperrt: …“ und Tenant, Seriennummer und Auslöser im Text. Für das ToDo kommt keine Mail, weil es nicht ausgewählt ist. Im **Protokoll** des Alarms steht nur die Mail zum Sperren.
+
+### 6.3 Mail-Berichte
 
 1. Reiter **Mail-Berichte** → **SMTP** eintragen (Server, Port, STARTTLS/SSL, Absender, optional Anmeldung) → **Testmail senden**.
 2. **Bericht anlegen**: Empfänger, täglich/wöchentlich/monatlich, Uhrzeit, Tenants, optional mit CSV → **Jetzt senden**.
@@ -684,7 +694,8 @@ YubiKey 2:         Modell ________  FW ______  SN ________
 [ ] 5.14 Nacherfassen
 [ ] 5.15 ToDo-Liste (Oberfläche und API)
 [ ] 6.1  Webhooks mit Signatur
-[ ] 6.2  Mail-Bericht mit PDF
+[ ] 6.2  Mail-Alarm nur für ausgewählte Ereignisse
+[ ] 6.3  Mail-Bericht mit PDF
 [ ] 7    Anmeldung nur mit YubiKey erzwungen
 
 Abweichungen:

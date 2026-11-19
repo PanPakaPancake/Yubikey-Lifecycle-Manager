@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.EntityFrameworkCore;
 using Ylm.Server.Audit;
 using Ylm.Server.Data;
+using Ylm.Server.Infrastructure;
 
 namespace Ylm.Server.Integrations;
 
@@ -14,7 +15,7 @@ public sealed record WebhookEventType(string Type, string Group, string Label);
 /// Webhooks (planning 8, V2). Ereignisse kommen aus dem Audit-Log: was im Audit-Log steht, geht als Webhook raus.
 /// Jede Zustellung ist mit HMAC-SHA256 signiert und wird bei Fehlern mit wachsendem Abstand wiederholt.
 /// </summary>
-public sealed class WebhookService(YlmDbContext db, IHttpClientFactory http, IDataProtectionProvider dataProtection, ILogger<WebhookService> logger)
+public sealed class WebhookService(YlmDbContext db, IHttpClientFactory http, IDataProtectionProvider dataProtection, ReportMailService mail, ILogger<WebhookService> logger)
 {
     public const string SecretPurpose = "Ylm.Webhook.Secret";
     public const string HttpClientName = "integrations";
@@ -181,7 +182,15 @@ public sealed class WebhookService(YlmDbContext db, IHttpClientFactory http, IDa
         var timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString();
         string? error = null;
         int? status = null;
-        try
+        if (s.Channel == WebhookChannel.Mail)
+        {
+            try { await mail.SendMailAsync(AlertMail(s, d.Payload), ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
+            {
+                error = ex is ApiException api ? api.Message : ex.Message;
+            }
+        }
+        else try
         {
             using var req = new HttpRequestMessage(HttpMethod.Post, s.Url) { Content = new StringContent(d.Payload, Encoding.UTF8, "application/json") };
             req.Headers.Add(EventHeader, d.EventType);
@@ -213,6 +222,43 @@ public sealed class WebhookService(YlmDbContext db, IHttpClientFactory http, IDa
             logger.LogInformation("Webhook {Name} delivery {Delivery} failed finally: {Error}", s.Name, d.Id, error);
         }
         else d.NextAttemptAt = DateTimeOffset.UtcNow.Add(RetryDelays[d.Attempts - 1]);
+    }
+
+    /// <summary>Builds the alert mail for one event from the webhook payload.</summary>
+    public static OutgoingMail AlertMail(WebhookSubscription s, string payload)
+    {
+        using var doc = JsonDocument.Parse(payload);
+        var r = doc.RootElement;
+        string? Str(JsonElement e, string name) => e.ValueKind == JsonValueKind.Object && e.TryGetProperty(name, out var v) && v.ValueKind != JsonValueKind.Null ? v.ToString() : null;
+        var label = Str(r, "label") ?? Str(r, "event") ?? "Ereignis";
+        var tenant = r.TryGetProperty("tenant", out var t) ? Str(t, "name") : null;
+        var serial = r.TryGetProperty("key", out var k) ? Str(k, "serialNumber") : null;
+        var target = Str(r, "target");
+        var actor = r.TryGetProperty("actor", out var a) ? Str(a, "name") : null;
+        var when = r.TryGetProperty("occurredAt", out var o) && o.TryGetDateTimeOffset(out var at) ? at : DateTimeOffset.UtcNow;
+        TimeZoneInfo tz;
+        try { tz = TimeZoneInfo.FindSystemTimeZoneById("Europe/Berlin"); } catch (Exception) { tz = TimeZoneInfo.Utc; }
+        var local = TimeZoneInfo.ConvertTime(when, tz);
+        var details = r.TryGetProperty("details", out var dt) && dt.ValueKind is JsonValueKind.Object ? dt.EnumerateObject()
+            .Where(p => p.Value.ValueKind is not (JsonValueKind.Null or JsonValueKind.Object or JsonValueKind.Array)).Take(12)
+            .Select(p => (p.Name, p.Value.ToString())).ToList() : [];
+        var rows = new List<(string, string)> { ("Ereignis", label), ("Zeit", local.ToString("dd.MM.yyyy HH:mm") + " Uhr") };
+        if (tenant is not null) rows.Add(("Tenant", tenant));
+        if (target is not null) rows.Add(("Betrifft", target));
+        if (serial is not null) rows.Add(("Seriennummer", serial));
+        if (actor is not null) rows.Add(("Ausgelöst von", actor));
+        rows.AddRange(details);
+        var subject = $"[YubiKey] {label}" + (target is not null ? ": " + target : "") + (tenant is not null ? $" ({tenant})" : "");
+        var html = new StringBuilder($"<p>Alarm „{System.Net.WebUtility.HtmlEncode(s.Name)}“ aus dem Yubikey Lifecycle Manager:</p><table cellpadding=\"4\" style=\"border-collapse:collapse;font-family:sans-serif;font-size:14px\">");
+        var text = new StringBuilder($"Alarm „{s.Name}“ aus dem Yubikey Lifecycle Manager:\n\n");
+        foreach (var (n, v) in rows)
+        {
+            html.Append($"<tr><td style=\"color:#666\">{System.Net.WebUtility.HtmlEncode(n)}</td><td><strong>{System.Net.WebUtility.HtmlEncode(v)}</strong></td></tr>");
+            text.Append($"{n}: {v}\n");
+        }
+        html.Append("</table><p style=\"color:#888;font-size:12px\">Welche Ereignisse diese Mail auslösen, steht unter Integrationen → Mail-Alarme.</p>");
+        text.Append("\nWelche Ereignisse diese Mail auslösen, steht unter Integrationen → Mail-Alarme.\n");
+        return new OutgoingMail(s.Recipients, subject, html.ToString(), text.ToString(), []);
     }
 
     /// <summary>Sends one delivery right now (test button), regardless of its schedule.</summary>

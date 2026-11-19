@@ -60,7 +60,7 @@ Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images
 
 **V1.1 umgesetzt**: Stapelregistrierung (Liste aus Entra-Gruppe, CSV oder Suche; Keys der Reihe nach einstecken, optional feste Seriennummer pro Person; alle PIN-Briefe als ein PDF), geteilter Key und Breakglass (mehrere Konten auf einem Key, Pflichtfeld Verwahrer, ein PIN-Brief an den Verwahrer), Nacherfassen selbst registrierter Keys per Einstecken.
 
-**V2 umgesetzt**: ToDo-Liste (von Hand oder per `POST /api/v1/todos` aus dem Ticketsystem, wird mit der Registrierung erledigt), Vier-Augen-Freigabe für Breakglass (pro Tenant), signierte Webhooks mit Wiederholungen, Mail-Berichte per SMTP mit PDF/CSV. NinjaRMM bekommt Ereignisse über die Webhooks (keine eigene Anbindung, Entscheidung 2026-11-19).
+**V2 umgesetzt**: ToDo-Liste (von Hand oder per `POST /api/v1/todos` aus dem Ticketsystem, wird mit der Registrierung erledigt), Vier-Augen-Freigabe für Breakglass (pro Tenant), signierte Webhooks und Mail-Alarme mit frei wählbaren Ereignissen, Mail-Berichte per SMTP mit PDF/CSV. NinjaRMM bekommt Ereignisse über die Webhooks (keine eigene Anbindung, Entscheidung 2026-11-19).
 
 **Inventar mit „Wer hat welchen Key“**: alle Keys oder nach Person, pro Tenant oder über alle Tenants, mit Verwahrern geteilter Keys und Auffälligkeiten; Export als Excel, CSV und PDF; in der Lese-API unter `GET /api/v1/assignments`.
 

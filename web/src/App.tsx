@@ -125,7 +125,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           {can('ManagePartnerStock') && item('/partner/stock', 'box', 'Partnerlager')}
           {item('/profiles', 'sliders', 'Profile')}
           {can('ManageUsers') && item('/users', 'users', 'Benutzer & Rollen')}
-          {can('ManageApiKeys') && item('/partner/integrations', 'plug', 'Integrationen')}
+          {can('ManageApiKeys') && item('/partner/notifications', 'bell', 'Benachrichtigungen')}
           {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
           {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
 
@@ -173,7 +173,8 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/audit" element={<AuditPage />} />
           <Route path="/partner" element={<AllTenants to="/" />} />
           <Route path="/partner/stock" element={<PartnerStockPage />} />
-          <Route path="/partner/integrations" element={<IntegrationsPage />} />
+          <Route path="/partner/notifications" element={<IntegrationsPage />} />
+          <Route path="/partner/integrations" element={<Navigate to="/partner/notifications" replace />} />
           <Route path="/partner/audit" element={<AllTenants to="/audit" />} />
           <Route path="/tenants" element={<TenantsPage />} />
           <Route path="/tenants/:id" element={<TenantRoute />} />
