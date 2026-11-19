@@ -30,6 +30,8 @@ public enum Permission : long
     SyncTenants = 1 << 12,
     RetireKeys = 1 << 13,
     ManagePartnerStock = 1 << 14,
+    /// <summary>Vier-Augen: Breakglass-Registrierungen anderer Admins freigeben.</summary>
+    ApproveRegistrations = 1 << 15,
 }
 
 /// <summary>Beschreibung einer Berechtigung für die Rollenverwaltung.</summary>
@@ -80,12 +82,13 @@ public static class RolePermissions
         new(Permission.ResetKeys, "Keys", "Keys zurücksetzen", "Werksreset über den Agent, Key geht zurück ins Lager.", false),
         new(Permission.RetireKeys, "Keys", "Keys ausmustern", "Key endgültig ausmustern.", false),
         new(Permission.ManageInventory, "Lager", "Tenant-Lager pflegen", "Wareneingang, Import, Tags, Zusatzfelder und Notizen im Tenant.", false),
+        new(Permission.ApproveRegistrations, "Keys", "Breakglass freigeben", "Vier-Augen-Freigabe: Breakglass-Registrierungen anderer Admins freigeben oder ablehnen.", false),
         new(Permission.ManagePartnerStock, "Lager", "Partnerlager verwalten", "Keys im Partnerlager sehen, ins Partnerlager geben und Tenants zuweisen.", false),
         new(Permission.SyncTenants, "Tenants", "Synchronisieren", "Entra-Sync und Tenant-Prüfung anstoßen.", false),
         new(Permission.ManageTenants, "Tenants", "Tenants verwalten", "Tenants anbinden, Einstellungen, „Jetzt beheben“, Offboarding.", false),
         new(Permission.ManageProfiles, "Tenants", "Profile verwalten", "Registrierungsprofile und Zusatzfelder.", false),
         new(Permission.ManageUsers, "Partner", "Benutzer und Rollen", "Benutzer anlegen, Rollen vergeben und eigene Rollen definieren.", true),
-        new(Permission.ManageApiKeys, "Partner", "API-Schlüssel", "Globale API-Schlüssel erstellen und widerrufen.", true),
+        new(Permission.ManageApiKeys, "Partner", "API und Integrationen", "Globale API-Schlüssel, Webhooks, Mail-Berichte und NinjaOne.", true),
         new(Permission.ManageSettings, "Partner", "Plattform-Einstellungen", "Einstellungen der Installation.", true),
     ];
 

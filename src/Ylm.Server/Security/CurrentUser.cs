@@ -13,6 +13,8 @@ public static class YlmClaims
     /// <summary>One claim per tenant the API key may read.</summary>
     public const string ApiKeyTenant = "ylm_api_tenant";
     public const string AgentId = "ylm_agent";
+    /// <summary>API key may push ToDos (the only write function of the API).</summary>
+    public const string ApiKeyTodoWrite = "ylm_api_todo";
 }
 
 /// <summary>The signed-in platform user, loaded fresh from the database on each request.</summary>

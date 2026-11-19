@@ -13,7 +13,9 @@ public sealed record PinLetterData(
     string KeyModel,
     int? SerialNumber,
     bool PinChangeForced,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    /// <summary>Geteilter Key: Konten auf dem Key. Der Brief geht dann an den Verwahrer (UserDisplayName).</summary>
+    IReadOnlyList<string>? SharedAccounts = null);
 
 /// <summary>PIN letter for the end user with a simple illustrated guide (planning 6.2).</summary>
 public static class PinLetterPdf
@@ -45,7 +47,9 @@ public static class PinLetterPdf
         g.DrawRectangle(new XSolidBrush(Accent), 0, 0, pageWidth, 8);
         Text(g, d.OrganizationName, F(10, true), Muted, m, 30, w, 14);
         Text(g, "Ihr YubiKey und Ihre PIN", F(22, true), Ink, m, 46, w, 30);
-        Text(g, $"Persönlich für {d.UserDisplayName} ({d.UserPrincipalName})", F(11), Ink, m, 80, w, 16);
+        Text(g, d.SharedAccounts is { Count: > 0 }
+                ? $"Für den Verwahrer {d.UserDisplayName} · {d.UserPrincipalName} für {d.SharedAccounts.Count} Konto/Konten: {Shorten(string.Join(", ", d.SharedAccounts), 110)}"
+                : $"Persönlich für {d.UserDisplayName} ({d.UserPrincipalName})", F(11), Ink, m, 80, w, 16);
         Text(g, $"{d.KeyModel}{(d.SerialNumber is { } s ? $" · Seriennummer {s}" : "")} · erstellt am {d.CreatedAt:dd.MM.yyyy}", F(9.5), Muted, m, 97, w, 14);
 
         // PIN-Kasten
@@ -121,6 +125,8 @@ public static class PinLetterPdf
         Text(g, $"{d.OrganizationName} · {d.TenantName} · Erstellt mit dem Yubikey Lifecycle Manager. Die PIN wurde nicht gespeichert.",
             F(7.5), Muted, m, 806, w, 12);
     }
+
+    private static string Shorten(string s, int max) => s.Length <= max ? s : s[..(max - 1)] + "…";
 
     private static void DrawPin(XGraphics g, string pin, double x, double y, double maxW)
     {

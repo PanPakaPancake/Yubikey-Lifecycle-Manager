@@ -151,7 +151,7 @@ public sealed class RegistrationService(
             var activeRegs = existing?.Registrations.Where(r => r.RemovedAt is null).ToList() ?? [];
             if (activeRegs.Count > 0 && !reset)
                 throw ApiException.Conflict("already_registered",
-                    $"Der Key ist bereits für {string.Join(", ", activeRegs.Select(r => r.UserPrincipalName))} registriert. Geteilte Keys folgen in V1.1; für eine Neuvergabe bitte mit Werksreset registrieren.");
+                    $"Der Key ist bereits für {string.Join(", ", activeRegs.Select(r => r.UserPrincipalName))} registriert. Weitere Konten kommen über „Geteilter Key“ dazu; für eine Neuvergabe bitte mit Werksreset registrieren.");
 
             // 3. Werksreset (optional)
             if (reset)
@@ -232,6 +232,8 @@ public sealed class RegistrationService(
             inv.IsFips = key.IsFips;
             inv.ProfileId = profile.Id;
             inv.PinChangeForced = forced;
+            inv.Usage = KeyUsage.Personal;
+            inv.Custodian = null;
             KeyService.SetStatus(inv, KeyStatus.Active);
             db.Registrations.Add(new KeyRegistration
             {
@@ -258,6 +260,7 @@ public sealed class RegistrationService(
                 pinStrategy = profile.PinStrategy.ToString(), pinChangeForced = forced, reset, overrides = overridden.Select(o => o.Code.ToString()),
                 entraMethodId = method.Id, agent = agent.MachineName,
             });
+            await TodoService.CompleteForUserAsync(db, audit, tenantId, user.Id, inv.Id, actor, ct);
             await db.SaveChangesAsync(ct);
             job.KeyId = inv.Id;
             job.SerialNumber = key.SerialNumber;

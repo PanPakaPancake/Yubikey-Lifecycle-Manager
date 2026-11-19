@@ -29,6 +29,14 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
     public DbSet<ApiKey> ApiKeys => Set<ApiKey>();
     public DbSet<RegistrationBatch> Batches => Set<RegistrationBatch>();
     public DbSet<RegistrationBatchItem> BatchItems => Set<RegistrationBatchItem>();
+    public DbSet<RegistrationApproval> Approvals => Set<RegistrationApproval>();
+    public DbSet<RegistrationTodo> Todos => Set<RegistrationTodo>();
+    public DbSet<WebhookSubscription> Webhooks => Set<WebhookSubscription>();
+    public DbSet<WebhookDelivery> WebhookDeliveries => Set<WebhookDelivery>();
+    public DbSet<IntegrationState> IntegrationState => Set<IntegrationState>();
+    public DbSet<SmtpSettings> Smtp => Set<SmtpSettings>();
+    public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
+    public DbSet<NinjaSettings> Ninja => Set<NinjaSettings>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -175,6 +183,53 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
         {
             e.ToTable("api_keys");
             e.HasIndex(x => x.Prefix).IsUnique();
+        });
+
+        b.Entity<RegistrationApproval>(e =>
+        {
+            e.ToTable("registration_approvals");
+            e.HasIndex(x => new { x.TenantId, x.Status });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<RegistrationTodo>(e =>
+        {
+            e.ToTable("registration_todos");
+            e.HasIndex(x => new { x.TenantId, x.Status });
+            e.HasIndex(x => new { x.TenantId, x.EntraUserId });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<WebhookSubscription>(e => e.ToTable("webhooks"));
+
+        b.Entity<WebhookDelivery>(e =>
+        {
+            e.ToTable("webhook_deliveries");
+            e.HasIndex(x => new { x.Status, x.NextAttemptAt });
+            e.HasIndex(x => new { x.SubscriptionId, x.CreatedAt });
+            e.HasOne<WebhookSubscription>().WithMany().HasForeignKey(x => x.SubscriptionId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<IntegrationState>(e =>
+        {
+            e.ToTable("integration_state");
+            e.Property(x => x.Id).ValueGeneratedNever();
+        });
+
+        b.Entity<SmtpSettings>(e =>
+        {
+            e.ToTable("smtp_settings");
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Ignore(x => x.IsConfigured);
+        });
+
+        b.Entity<ReportSchedule>(e => e.ToTable("report_schedules"));
+
+        b.Entity<NinjaSettings>(e =>
+        {
+            e.ToTable("ninja_settings");
+            e.Property(x => x.Id).ValueGeneratedNever();
+            e.Property(x => x.FieldMap).HasColumnType("jsonb").HasConversion(JsonConverter<Dictionary<string, string>>(), JsonComparer<Dictionary<string, string>>());
         });
     }
 
