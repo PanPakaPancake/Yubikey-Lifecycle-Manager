@@ -12,6 +12,8 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 - Neu: Unten in der Seitenleiste erscheint das Profilbild aus Microsoft 365, sonst wie bisher die Initialen.
 - Verbessert: „Nacherfassen“ steht im Inventar direkt beim betroffenen Key statt oben als allgemeiner Knopf.
 - Verbessert: „Passkeys erklärt“ ohne den Knopf „Wie Endbenutzer öffnen“, der öffentliche Link lässt sich weiterhin kopieren.
+- Neu: Brief-Editor unter „Erscheinungsbild der Dokumente“. Alle Texte des PIN-Briefs lassen sich anpassen, mit Platzhaltern wie {{Vorname}} oder {{Seriennummer}} und einer Live-Vorschau als PDF. Tenants können einzelne Texte überschreiben.
+- Verbessert: Der PIN-Brief hat ein neues, helles Design passend zur App. Rahmen statt farbiger Flächen sparen beim Drucken Toner.
 - Behoben: In „Passkeys erklärt“ sind die Schritte unter „Am PC anmelden“ jetzt mit 1 bis 4 nummeriert.
 
 ## 0.9.2 · 2026-11-20

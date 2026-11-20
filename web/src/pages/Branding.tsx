@@ -153,13 +153,13 @@ function LetterPreview({ company, accent, contact, footer, logoUrl }: { company:
   return (
     <figure className="letter-preview" style={{ ['--brand' as string]: accent }} aria-label="Vorschau PIN-Brief">
       <div className="lp-page">
-        <div className="lp-bar" />
         <div className="lp-head">
           <span className="lp-org">{company}</span>
           {logoUrl && <img src={logoUrl} alt="" />}
         </div>
         <div className="lp-title">Ihr YubiKey und Ihre PIN</div>
         <div className="lp-sub">Persönlich für Erika Mustermann</div>
+        <div className="lp-bar" />
         <div className="lp-pin">
           <span className="lp-pin-label">Ihre persönliche PIN</span>
           <div className="lp-digits">{'482913'.split('').map((d, i) => <span key={i} style={{ animationDelay: i * 70 + 'ms' }}>{d}</span>)}</div>

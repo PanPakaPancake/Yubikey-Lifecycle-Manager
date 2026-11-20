@@ -11,6 +11,8 @@ namespace Ylm.Server.Setup;
 /// <summary>Whitelabeling: Erscheinungsbild der PIN-Briefe, Berichte und Exporte.</summary>
 public static class BrandingEndpoints
 {
+    public sealed record LetterRequest(Dictionary<string, string?>? Texts, bool? PinChangeForced);
+
     private static object Dto(Branding? b) => new
     {
         b?.CompanyName,
@@ -110,6 +112,46 @@ public static class BrandingEndpoints
             var row = await branding.GetAsync(tenantId);
             if (row?.Logo is not { Length: > 0 } && effective == true && tenantId is not null) row = await branding.GetAsync(null);
             return row?.Logo is { Length: > 0 } logo ? Results.File(logo, row.LogoContentType ?? "image/png") : Results.NotFound();
+        });
+
+        // ----- Brief-Editor: Texte des PIN-Briefs mit Platzhaltern -----
+        g.MapGet("/letter", async (Guid? tenantId, CurrentUser cu, BrandingService branding) =>
+        {
+            if (tenantId is { } t) await cu.RequireTenantAsync(t, Permission.ReadInventory);
+            else await cu.RequireAsync(Permission.ReadInventory);
+            var partner = BrandingService.ParseLetter((await branding.GetAsync(null))?.LetterTexts) ?? new Dictionary<string, string>();
+            var tenant = tenantId is null ? null : BrandingService.ParseLetter((await branding.GetAsync(tenantId))?.LetterTexts) ?? new Dictionary<string, string>();
+            return Results.Ok(new
+            {
+                Fields = LetterTemplate.Fields.Select(f => new { f.Key, f.Label, f.Default, f.Multiline, f.Hint }),
+                Variables = LetterTemplate.Variables,
+                Partner = partner,
+                Tenant = tenant,
+            });
+        });
+
+        g.MapPut("/letter", async (Guid? tenantId, LetterRequest body, CurrentUser cu, BrandingService branding, AuditService audit) =>
+        {
+            var user = await RequireEditAsync(cu, tenantId);
+            var before = (await branding.GetAsync(tenantId))?.LetterTexts;
+            var row = await branding.SaveLetterAsync(tenantId, body.Texts);
+            await audit.WriteAsync(AuditService.User(user), AuditActions.BrandingChanged, tenantId, details: new { letter = "Brieftexte geändert", before, after = row.LetterTexts });
+            return Results.Ok(new { Texts = BrandingService.ParseLetter(row.LetterTexts) ?? new Dictionary<string, string>() });
+        });
+
+        // Vorschau mit noch nicht gespeicherten Texten (für den Editor).
+        g.MapPost("/letter/preview.pdf", async (Guid? tenantId, LetterRequest body, CurrentUser cu, BrandingService branding, YlmDbContext db, HttpRequest request, Microsoft.Extensions.Options.IOptions<YlmOptions> options) =>
+        {
+            await RequireEditAsync(cu, tenantId);
+            var brand = await branding.ResolveAsync(tenantId);
+            var draft = LetterTemplate.Clean(body.Texts, dropDefaults: false);
+            brand = tenantId is null ? brand with { LetterPartner = draft } : brand with { LetterTenant = draft };
+            var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? "Tenant" : "Muster-Tenant";
+            using var _ = Theme.Use(brand);
+            var pdf = PinLetterPdf.Create(new PinLetterData(brand.CompanyName ?? "", tenantName, "Erika Mustermann", "erika.mustermann@example.com",
+                "482913", "YubiKey 5 NFC", 12345678, body.PinChangeForced ?? true, DateTime.Now,
+                InfoUrl: PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, options.Value, request), tenantId)));
+            return Results.File(pdf, "application/pdf");
         });
 
         // Muster-PIN-Brief mit dem wirksamen Erscheinungsbild.

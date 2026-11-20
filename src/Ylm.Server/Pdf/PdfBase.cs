@@ -59,7 +59,7 @@ internal static class Theme
         public void Dispose() => undo();
     }
 
-    private static XColor Mix(XColor c, double share) => XColor.FromArgb(
+    public static XColor Mix(XColor c, double share) => XColor.FromArgb(
         (int)(255 - (255 - c.R) * share), (int)(255 - (255 - c.G) * share), (int)(255 - (255 - c.B) * share));
 
     /// <summary>Logo rechtsbündig in das Feld zeichnen (Seitenverhältnis bleibt). Gibt false zurück, wenn kein Logo da ist.</summary>
@@ -94,6 +94,8 @@ internal static class Theme
     public static readonly XColor WarnSoft = XColor.FromArgb(0xfd, 0xf3, 0xe2);
     public static readonly XColor Gold = XColor.FromArgb(0xd4, 0xa5, 0x2a);
     public static readonly XColor KeyBody = XColor.FromArgb(0x2b, 0x2f, 0x36);
+    /// <summary>Hellgrauer Key-Körper für Zeichnungen (spart Toner gegenüber Schwarz).</summary>
+    public static readonly XColor KeyLight = XColor.FromArgb(0xee, 0xf0, 0xf4);
 
     public static XFont F(double size, bool bold = false) => new(Font, size, bold ? XFontStyleEx.Bold : XFontStyleEx.Regular);
 
@@ -105,7 +107,11 @@ internal static class Theme
 }
 
 /// <summary>Erscheinungsbild eines Dokuments (Whitelabeling).</summary>
-public sealed record PdfBrand(string? CompanyName, XColor Accent, byte[]? Logo, string? Contact, string? Footer)
+public sealed record PdfBrand(string? CompanyName, XColor Accent, byte[]? Logo, string? Contact, string? Footer,
+    IReadOnlyDictionary<string, string>? LetterTenant = null, IReadOnlyDictionary<string, string>? LetterPartner = null)
 {
     public static readonly PdfBrand Default = new(null, Theme.DefaultAccent, null, null, null);
+
+    /// <summary>Wirksamer Brieftext (Tenant, dann Partner, dann Standard), noch mit Platzhaltern.</summary>
+    public string Letter(string key) => LetterTemplate.Resolve(key, LetterTenant, LetterPartner);
 }

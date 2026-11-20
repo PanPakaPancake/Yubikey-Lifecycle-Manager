@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
 using Ylm.Core;
 using Ylm.Server.Audit;
@@ -45,7 +46,7 @@ public static class UserEndpoints
 
         // Profilbild des angemeldeten Entra-Benutzers aus Microsoft 365 (Heim-Tenant, App-Berechtigung User.Read.All).
         // Ohne Bild oder Berechtigung: 404, die Oberfläche zeigt dann die Initialen. Zwischengespeichert, damit nicht jede Seite Graph fragt.
-        app.MapGet("/api/me/photo", async (CurrentUser cu, SetupService setup, Graph.IGraphClientFactory graphs, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, ILogger<PlatformUser> logger, CancellationToken ct) =>
+        app.MapGet("/api/me/photo", async (CurrentUser cu, SetupService setup, Graph.IGraphClientFactory graphs, IMemoryCache cache, ILogger<PlatformUser> logger, CancellationToken ct) =>
         {
             var user = await cu.GetAsync();
             var settings = await setup.GetSettingsAsync();

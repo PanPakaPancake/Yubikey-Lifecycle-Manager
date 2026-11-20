@@ -43,6 +43,70 @@ public sealed class BrandingTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Letter_texts_are_saved_per_level_and_previewed()
+    {
+        var info = await Json(await _owner.GetAsync("/api/branding/letter"));
+        Assert.Contains(info.GetProperty("fields").EnumerateArray(), f => f.GetProperty("key").GetString() == "title");
+        Assert.Contains(info.GetProperty("variables").EnumerateArray(), v => v.GetProperty("name").GetString() == "Vorname");
+
+        // Partner: unbekannte Felder und unveränderte Standardtexte werden nicht gespeichert.
+        var saved = await Json(await _owner.PutAsJsonAsync("/api/branding/letter", new
+        {
+            texts = new Dictionary<string, string?> { ["title"] = "Willkommen, {{Vorname}}", ["unbekannt"] = "x", ["guideTitle"] = Pdf.LetterTemplate.Default("guideTitle"), ["intro"] = "  " },
+        }));
+        var partnerTexts = saved.GetProperty("texts");
+        Assert.Equal("Willkommen, {{Vorname}}", partnerTexts.GetProperty("title").GetString());
+        Assert.False(partnerTexts.TryGetProperty("unbekannt", out _));
+        Assert.False(partnerTexts.TryGetProperty("guideTitle", out _));
+        Assert.False(partnerTexts.TryGetProperty("intro", out _));
+
+        await Json(await _owner.PutAsJsonAsync($"/api/branding/letter?tenantId={_tenant}", new { texts = new Dictionary<string, string?> { ["hints"] = "Nur ein Hinweis" } }));
+        var t = await Json(await _owner.GetAsync($"/api/branding/letter?tenantId={_tenant}"));
+        Assert.Equal("Nur ein Hinweis", t.GetProperty("tenant").GetProperty("hints").GetString());
+        Assert.Equal("Willkommen, {{Vorname}}", t.GetProperty("partner").GetProperty("title").GetString());
+
+        var res = await _owner.PostAsJsonAsync($"/api/branding/letter/preview.pdf?tenantId={_tenant}", new { texts = new Dictionary<string, string?> { ["closing"] = "-" }, pinChangeForced = false });
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        Assert.Equal("%PDF", Encoding.ASCII.GetString((await res.Content.ReadAsByteArrayAsync())[..4]));
+
+        var auditor = await _app.LoginAsync("auditor@home.example", PlatformRole.Auditor);
+        Assert.Equal(HttpStatusCode.Forbidden, (await auditor.PutAsJsonAsync("/api/branding/letter", new { texts = new Dictionary<string, string?>() })).StatusCode);
+    }
+
+    /// <summary>Legt Muster-PIN-Briefe ab, wenn YLM_SAMPLE_DIR gesetzt ist (CI lädt sie als Artefakt hoch, zum Ansehen im PR).</summary>
+    [Fact]
+    public async Task Sample_letters_render()
+    {
+        var dir = Environment.GetEnvironmentVariable("YLM_SAMPLE_DIR");
+        foreach (var forced in new[] { true, false })
+        {
+            var res = await _owner.PostAsJsonAsync("/api/branding/letter/preview.pdf", new { texts = new Dictionary<string, string?>(), pinChangeForced = forced });
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            var pdf = await res.Content.ReadAsByteArrayAsync();
+            Assert.Equal("%PDF", Encoding.ASCII.GetString(pdf[..4]));
+            if (!string.IsNullOrEmpty(dir))
+            {
+                Directory.CreateDirectory(dir);
+                await File.WriteAllBytesAsync(Path.Combine(dir, forced ? "PIN-Brief-PIN-Wechsel-erzwungen.pdf" : "PIN-Brief-PIN-selbst-aendern.pdf"), pdf);
+            }
+        }
+    }
+
+    [Fact]
+    public void Letter_placeholders_and_layers()
+    {
+        var values = new Dictionary<string, string?> { ["Vorname"] = "Erika", ["Kontakt"] = null };
+        Assert.Equal("Hallo Erika, {{Unbekannt}} bleibt.", Pdf.LetterTemplate.Render("Hallo {{ Vorname }}, {{Unbekannt}} bleibt.", values));
+        Assert.Equal("IT: ", Pdf.LetterTemplate.Render("IT: {{Kontakt}}", values));
+        var tenant = new Dictionary<string, string> { ["title"] = "Tenant" };
+        var partner = new Dictionary<string, string> { ["title"] = "Partner", ["closing"] = "Gruß" };
+        Assert.Equal("Tenant", Pdf.LetterTemplate.Resolve("title", tenant, partner));
+        Assert.Equal("Gruß", Pdf.LetterTemplate.Resolve("closing", tenant, partner));
+        Assert.Equal(Pdf.LetterTemplate.Default("hints"), Pdf.LetterTemplate.Resolve("hints", tenant, partner));
+        Assert.True(Pdf.LetterTemplate.IsOmitted(" - "));
+    }
+
+    [Fact]
     public async Task Tenant_overrides_single_fields_and_inherits_the_rest()
     {
         await Json(await _owner.PutAsJsonAsync("/api/branding", new { companyName = "Partner IT", accentColor = "#0A7A50", contact = "Hotline 0800 123", footer = "Partner IT GmbH" }));

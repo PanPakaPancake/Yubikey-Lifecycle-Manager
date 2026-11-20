@@ -32,7 +32,28 @@ public sealed partial class BrandingService(YlmDbContext db)
             color is not null && TryParseColor(color, out var c) ? c : Theme.DefaultAccent,
             tenant?.Logo ?? partner?.Logo,
             Pick(b => b.Contact),
-            Pick(b => b.Footer));
+            Pick(b => b.Footer),
+            ParseLetter(tenant?.LetterTexts),
+            ParseLetter(partner?.LetterTexts));
+    }
+
+    public static Dictionary<string, string>? ParseLetter(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json); }
+        catch (System.Text.Json.JsonException) { return null; }
+    }
+
+    /// <summary>Eigene Brieftexte speichern; nur bekannte Felder, Standardtexte und leere Felder werden nicht gespeichert.</summary>
+    public async Task<Branding> SaveLetterAsync(Guid? tenantId, IReadOnlyDictionary<string, string?>? texts, CancellationToken ct = default)
+    {
+        // Partner: Standardtext nicht speichern. Tenant: auch den Standardtext behalten, er kann bewusst den Partnertext ersetzen.
+        var clean = LetterTemplate.Clean(texts, dropDefaults: tenantId is null);
+        var row = await RowAsync(tenantId, ct);
+        row.LetterTexts = clean.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(clean);
+        row.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return row;
     }
 
     public async Task<Branding> SaveAsync(Guid? tenantId, BrandingValues v, CancellationToken ct = default)
