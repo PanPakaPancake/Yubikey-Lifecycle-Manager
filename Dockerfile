@@ -1,7 +1,7 @@
 # Mehrstufiger Build: Web-Oberfläche (Node) + Backend (.NET) → schlankes ASP.NET-Image.
 # Web und .NET werden auf der Plattform des Build-Rechners gebaut (Ergebnis ist architekturunabhängig);
 # nur das End-Image gibt es je Zielarchitektur (linux/amd64, linux/arm64).
-FROM --platform=$BUILDPLATFORM node:22-alpine AS web
+FROM --platform=$BUILDPLATFORM node:26-alpine AS web
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
