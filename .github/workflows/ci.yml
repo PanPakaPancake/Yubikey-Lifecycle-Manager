@@ -45,12 +45,6 @@ jobs:
         env:
           YLM_SAMPLE_DIR: ${{ github.workspace }}/muster
         run: dotnet test YubikeyLifecycleManager.slnx -c Release --no-build --logger "console;verbosity=normal"
-      - name: TEMP Muster als Bild ins Log
-        if: always()
-        run: |
-          sudo apt-get install -y -qq poppler-utils >/dev/null 2>&1 || true
-          for f in muster/*.pdf; do pdftoppm -png -r 72 -f 1 -l 1 "$f" "${f%.pdf}"; done
-          for f in muster/*.png; do echo "IMG $f"; base64 -w 0 "$f"; echo; echo "END"; done
       - name: Muster-PIN-Briefe hochladen
         if: always()
         uses: actions/upload-artifact@v4
