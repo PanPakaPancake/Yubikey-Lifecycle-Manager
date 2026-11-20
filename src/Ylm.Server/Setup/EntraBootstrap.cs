@@ -30,11 +30,16 @@ public sealed record AppProvisioningResult(Guid ClientId, IReadOnlyList<string> 
 
 /// <summary>
 /// Creates the installation's own app registration with a delegated admin token, before the installation has an app identity.
-/// The sign-in uses the device code flow with Microsoft's public client "Microsoft Graph Command Line Tools"
-/// (the same app Connect-MgGraph uses), because it works for any server address without a redirect URI.
+/// The sign-in uses Microsoft's public client "Microsoft Graph Command Line Tools" (the same app Connect-MgGraph uses):
+/// interactively with authorization code + PKCE and the redirect URI http://localhost (registered for that client), or as a
+/// fallback with the device code flow. Before setup there is no app of our own on which the platform's address is registered.
 /// </summary>
 public interface IEntraBootstrap
 {
+    /// <summary>Microsoft sign-in page for the interactive flow (authorization code with PKCE).</summary>
+    string BuildAuthorizeUrl(string redirectUri, string state, string codeChallenge);
+    /// <summary>Redeems the code from the redirect for the admin's delegated token.</summary>
+    Task<DeviceCodePoll> RedeemCodeAsync(string code, string redirectUri, string codeVerifier, CancellationToken ct = default);
     Task<DeviceCodeStart> StartDeviceCodeAsync(CancellationToken ct = default);
     Task<DeviceCodePoll> PollDeviceCodeAsync(string deviceCode, CancellationToken ct = default);
     Task<SignedInAdmin> GetSignedInAdminAsync(string accessToken, CancellationToken ct = default);
@@ -46,10 +51,32 @@ public sealed class SetupSignInStore
 {
     public sealed record PendingDeviceCode(string DeviceCode, string UserCode, string VerificationUri, DateTimeOffset ExpiresAt, int IntervalSeconds, DateTimeOffset NextPollAt);
     public sealed record SignIn(string AccessToken, DateTimeOffset ExpiresAt, SignedInAdmin Admin);
+    public sealed record PendingInteractive(string State, string CodeVerifier, string RedirectUri, DateTimeOffset ExpiresAt);
 
     private readonly Lock _lock = new();
     private PendingDeviceCode? _pending;
+    private PendingInteractive? _interactive;
     private SignIn? _signIn;
+
+    public PendingInteractive? Interactive
+    {
+        get { lock (_lock) return _interactive is { } p && p.ExpiresAt > DateTimeOffset.UtcNow ? p : null; }
+        set { lock (_lock) _interactive = value; }
+    }
+
+    /// <summary>Takes the pending interactive sign-in if the state matches (single use).</summary>
+    public PendingInteractive? TakeInteractive(string state)
+    {
+        lock (_lock)
+        {
+            if (_interactive is not { } p || p.ExpiresAt <= DateTimeOffset.UtcNow
+                || !System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                    System.Text.Encoding.UTF8.GetBytes(p.State), System.Text.Encoding.UTF8.GetBytes(state ?? "")))
+                return null;
+            _interactive = null;
+            return p;
+        }
+    }
 
     public PendingDeviceCode? Pending
     {
@@ -72,6 +99,7 @@ public sealed class SetupSignInStore
         lock (_lock)
         {
             _pending = null;
+            _interactive = null;
             _signIn = null;
         }
     }
@@ -96,6 +124,44 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
     private string GraphV1 => options.Value.GraphBaseUrl.TrimEnd('/') + "/v1.0";
 
     private HttpClient Http() => httpFactory.CreateClient("graph");
+
+    private string ScopeParameter()
+    {
+        var graph = options.Value.GraphBaseUrl.TrimEnd('/');
+        return string.Join(' ', BootstrapScopes.Select(s => $"{graph}/{s}"));
+    }
+
+    public string BuildAuthorizeUrl(string redirectUri, string state, string codeChallenge) =>
+        Authority + "/authorize?" + string.Join("&", new Dictionary<string, string>
+        {
+            ["client_id"] = BootstrapClientId,
+            ["response_type"] = "code",
+            ["redirect_uri"] = redirectUri,
+            ["response_mode"] = "query",
+            ["scope"] = ScopeParameter(),
+            ["state"] = state,
+            ["code_challenge"] = codeChallenge,
+            ["code_challenge_method"] = "S256",
+            ["prompt"] = "select_account",
+        }.Select(kv => kv.Key + "=" + Uri.EscapeDataString(kv.Value)));
+
+    public async Task<DeviceCodePoll> RedeemCodeAsync(string code, string redirectUri, string codeVerifier, CancellationToken ct = default)
+    {
+        using var res = await Http().PostAsync(Authority + "/token", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["grant_type"] = "authorization_code",
+            ["client_id"] = BootstrapClientId,
+            ["code"] = code,
+            ["redirect_uri"] = redirectUri,
+            ["code_verifier"] = codeVerifier,
+            ["scope"] = ScopeParameter(),
+        }), ct);
+        var doc = await ReadJsonAsync(res, ct);
+        if (!res.IsSuccessStatusCode) return new DeviceCodePoll(DeviceCodeStatus.Failed, Error: ErrorText(doc));
+        var r = doc!.RootElement;
+        var expiresIn = r.TryGetProperty("expires_in", out var e) ? e.GetInt32() : 3600;
+        return new DeviceCodePoll(DeviceCodeStatus.SignedIn, r.GetProperty("access_token").GetString(), DateTimeOffset.UtcNow.AddSeconds(expiresIn));
+    }
 
     public async Task<DeviceCodeStart> StartDeviceCodeAsync(CancellationToken ct = default)
     {

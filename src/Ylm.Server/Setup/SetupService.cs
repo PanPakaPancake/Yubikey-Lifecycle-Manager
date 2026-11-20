@@ -221,10 +221,71 @@ public sealed class SetupService(
         return pending;
     }
 
+    /// <summary>
+    /// Interactive sign-in (authorization code + PKCE). Microsoft redirects to http://localhost: reached directly when the
+    /// platform itself runs on localhost, otherwise the admin copies the address from the browser back into the assistant.
+    /// </summary>
+    public (string Url, string RedirectUri, bool Automatic) StartInteractiveSignIn(HttpRequest request)
+    {
+        var host = request.Host.Host;
+        var automatic = string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) && request.Scheme == "http";
+        var redirectUri = automatic && request.Host.Port is { } port ? $"http://localhost:{port}" : "http://localhost";
+        var state = Base64Url(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
+        var verifier = Base64Url(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));
+        var challenge = Base64Url(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(verifier)));
+        signIns.Interactive = new SetupSignInStore.PendingInteractive(state, verifier, redirectUri, DateTimeOffset.UtcNow.AddMinutes(15));
+        return (bootstrap.BuildAuthorizeUrl(redirectUri, state, challenge), redirectUri, automatic);
+    }
+
+    /// <summary>Completes the interactive sign-in with the redirect address (or code and state taken from it).</summary>
+    public async Task<SignInPollResult> CompleteInteractiveSignInAsync(string? redirectedUrl, string? code, string? state, CancellationToken ct = default)
+    {
+        string? error = null, errorDescription = null;
+        if (!string.IsNullOrWhiteSpace(redirectedUrl))
+        {
+            var text = redirectedUrl.Trim();
+            var query = text.Contains('?') ? text[(text.IndexOf('?') + 1)..] : text;
+            var parsed = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(query.Split('#')[0]);
+            code ??= parsed.TryGetValue("code", out var c) ? c.ToString() : null;
+            state ??= parsed.TryGetValue("state", out var st) ? st.ToString() : null;
+            error = parsed.TryGetValue("error", out var er) ? er.ToString() : null;
+            errorDescription = parsed.TryGetValue("error_description", out var ed) ? ed.ToString() : null;
+        }
+        if (!string.IsNullOrEmpty(error))
+            return new SignInPollResult("failed", $"Microsoft hat die Anmeldung abgelehnt: {errorDescription ?? error}");
+        if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
+            return new SignInPollResult("failed", "In der Adresse fehlen code und state. Bitte die komplette Adresse aus der Adresszeile kopieren (beginnt mit http://localhost/?code=).");
+        var pending = signIns.TakeInteractive(state);
+        if (pending is null)
+            return new SignInPollResult("expired", "Dieser Anmeldevorgang ist abgelaufen oder gehört zu einem anderen Versuch. Bitte neu starten.");
+        var redeemed = await bootstrap.RedeemCodeAsync(code, pending.RedirectUri, pending.CodeVerifier, ct);
+        if (redeemed.Status != DeviceCodeStatus.SignedIn)
+            return new SignInPollResult("failed", "Die Anmeldung ist fehlgeschlagen: " + redeemed.Error);
+        return await SignedInAsync(redeemed, ct);
+    }
+
+    private static string Base64Url(byte[] bytes) => Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+
+    private async Task<SignInPollResult> SignedInAsync(DeviceCodePoll poll, CancellationToken ct)
+    {
+        var admin = await bootstrap.GetSignedInAdminAsync(poll.AccessToken!, ct);
+        signIns.Pending = null;
+        signIns.Current = new SetupSignInStore.SignIn(poll.AccessToken!, poll.ExpiresAt ?? DateTimeOffset.UtcNow.AddMinutes(30), admin);
+        var s = await GetSettingsAsync();
+        if (string.IsNullOrEmpty(s.BootstrapOwnerUpn) && admin.Upn.Contains('@'))
+        {
+            s.BootstrapOwnerUpn = admin.Upn;
+            await db.SaveChangesAsync(ct);
+        }
+        logger.LogInformation("Setup: {Upn} im Tenant {TenantId} bei Microsoft angemeldet", admin.Upn, admin.TenantId);
+        return new SignInPollResult("signed_in", Admin: admin);
+    }
+
     public async Task<SignInPollResult> PollSignInAsync(CancellationToken ct = default)
     {
         if (signIns.Current is { } current) return new SignInPollResult("signed_in", Admin: current.Admin);
         var pending = signIns.Pending;
+        if (pending is null && signIns.Interactive is not null) return new SignInPollResult("pending");
         if (pending is null) return new SignInPollResult("expired", "Kein Anmeldevorgang aktiv oder der Code ist abgelaufen. Bitte neu starten.");
         if (DateTimeOffset.UtcNow < pending.NextPollAt) return new SignInPollResult("pending");
 
@@ -239,17 +300,7 @@ public sealed class SetupService(
                 signIns.Pending = pending with { IntervalSeconds = interval, NextPollAt = DateTimeOffset.UtcNow.AddSeconds(interval) };
                 return new SignInPollResult("pending");
             case DeviceCodeStatus.SignedIn:
-                var admin = await bootstrap.GetSignedInAdminAsync(poll.AccessToken!, ct);
-                signIns.Pending = null;
-                signIns.Current = new SetupSignInStore.SignIn(poll.AccessToken!, poll.ExpiresAt ?? DateTimeOffset.UtcNow.AddMinutes(30), admin);
-                var s = await GetSettingsAsync();
-                if (string.IsNullOrEmpty(s.BootstrapOwnerUpn) && admin.Upn.Contains('@'))
-                {
-                    s.BootstrapOwnerUpn = admin.Upn;
-                    await db.SaveChangesAsync(ct);
-                }
-                logger.LogInformation("Setup: {Upn} im Tenant {TenantId} bei Microsoft angemeldet", admin.Upn, admin.TenantId);
-                return new SignInPollResult("signed_in", Admin: admin);
+                return await SignedInAsync(poll, ct);
             default:
                 signIns.Pending = null;
                 return new SignInPollResult(poll.Status == DeviceCodeStatus.Declined ? "declined" : poll.Status == DeviceCodeStatus.Expired ? "expired" : "failed",

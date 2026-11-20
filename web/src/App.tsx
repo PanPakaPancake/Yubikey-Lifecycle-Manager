@@ -8,6 +8,7 @@ import { ThemeToggle } from './theme';
 import { LogoMark, Wordmark } from './logo';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
+import SetupCallbackPage from './pages/SetupCallback';
 import AccountSetupPage from './pages/AccountSetup';
 import AccountPage from './pages/Account';
 import DashboardPage from './pages/Dashboard';
@@ -65,6 +66,8 @@ export default function App() {
   if (!me) return <div className="center-page"><Spinner label="Wird geladen …" /></div>;
   if (publicPasskey) return <PasskeyInfoPage authenticated={me.authenticated} />;
 
+  // Rücksprung der Microsoft-Anmeldung aus dem Setup-Assistenten (http://localhost:<port>/?code=…&state=…).
+  if (!me.setupComplete && location.pathname === '/' && /[?&](code|error)=/.test(location.search) && /[?&]state=/.test(location.search)) return <SetupCallbackPage />;
   if (location.pathname.startsWith('/setup')) return <SetupPage />;
   if (location.pathname.startsWith('/account-setup')) return <AccountSetupPage />;
   if (!me.authenticated) {

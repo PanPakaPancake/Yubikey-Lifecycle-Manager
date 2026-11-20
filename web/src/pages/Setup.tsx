@@ -14,7 +14,9 @@ interface DeviceCode { userCode: string; verificationUri: string; expiresAt: str
 interface PollResult { status: 'pending' | 'signed_in' | 'declined' | 'expired' | 'failed'; message?: string; admin?: SignedInAdmin }
 interface TestResult { ok: boolean; message: string; granted: string[]; missing: string[] }
 
-type Phase = 'idle' | 'code' | 'provisioning' | 'verifying' | 'done' | 'failed';
+interface Interactive { url: string; redirectUri: string; automatic: boolean }
+
+type Phase = 'idle' | 'interactive' | 'code' | 'provisioning' | 'verifying' | 'done' | 'failed';
 
 const steps = ['Setup-Token', 'Grunddaten', 'Microsoft-Anmeldung', 'Abschluss'];
 // Entra needs some time until a new certificate and new consent work for app-only sign-ins.
@@ -39,6 +41,8 @@ export default function SetupPage() {
   // Automatic path: sign-in with Microsoft and app registration in the background.
   const [phase, setPhase] = useState<Phase>('idle');
   const [code, setCode] = useState<DeviceCode>();
+  const [interactive, setInteractive] = useState<Interactive>();
+  const [pasted, setPasted] = useState('');
   const [copied, setCopied] = useState(false);
   const [admin, setAdmin] = useState<SignedInAdmin>();
   const [provisionSteps, setProvisionSteps] = useState<string[]>([]);
@@ -121,7 +125,29 @@ export default function SetupPage() {
     await verify();
   };
 
+  // Interaktive Anmeldung wie Connect-MgGraph: Microsoft leitet auf http://localhost zurück.
   const startSignIn = () => run(async () => {
+    setPhaseError(undefined);
+    setProvisionSteps([]);
+    setPasted('');
+    const r = await api.post<Interactive>('/api/setup/signin/interactive', {}, h);
+    setInteractive(r);
+    window.open(r.url, 'ylm-signin', 'width=520,height=720');
+    setPhase('interactive');
+  });
+
+  const finishPasted = () => run(async () => {
+    const r = await api.post<PollResult>('/api/setup/signin/complete', { url: pasted });
+    if (r.status === 'signed_in') {
+      setAdmin(r.admin);
+      void provision();
+    } else {
+      throw new Error(r.message ?? 'Die Anmeldung ist fehlgeschlagen.');
+    }
+  });
+
+  // Ausweichweg: Anmeldung mit Code (Device Code Flow), in vielen Tenants per Conditional Access gesperrt.
+  const startDeviceCode = () => run(async () => {
     setPhaseError(undefined);
     setProvisionSteps([]);
     setCopied(false);
@@ -131,7 +157,7 @@ export default function SetupPage() {
 
   // Poll the sign-in while the code is shown; the server only asks Microsoft at the allowed interval.
   useEffect(() => {
-    if (phase !== 'code') return;
+    if (phase !== 'code' && phase !== 'interactive') return;
     let stop = false;
     const tick = async () => {
       while (!stop && !cancelled.current) {
@@ -199,7 +225,7 @@ export default function SetupPage() {
   }
 
   const homeTenantName = admin && admin.tenantId === state?.homeTenantId ? admin.organizationName : undefined;
-  const working = phase === 'code' || phase === 'provisioning' || phase === 'verifying';
+  const working = phase === 'interactive' || phase === 'code' || phase === 'provisioning' || phase === 'verifying';
 
   return (
     <div className="main" style={{ maxWidth: 860, margin: '0 auto' }}>
@@ -232,8 +258,9 @@ export default function SetupPage() {
             {phase === 'idle' && (
               <>
                 <p>
-                  Melden Sie sich mit einem Konto <strong>Globaler Administrator</strong> (oder Privileged Role Administrator) des Heim-Tenants an.
-                  Danach legt die Plattform im Hintergrund an:
+                  <strong>Voraussetzung:</strong> ein Konto des Heim-Tenants mit der Rolle <strong>Globaler Administrator</strong>
+                  (alternativ Anwendungsadministrator zusammen mit Privileged Role Administrator, für den Admin-Consent der Anwendungsberechtigungen).
+                  Nach der Anmeldung legt die Plattform im Hintergrund an:
                 </p>
                 <ul>
                   <li>das App-Zertifikat (der private Schlüssel bleibt auf dem Server),</li>
@@ -248,9 +275,36 @@ export default function SetupPage() {
                 )}
                 <button className="primary" disabled={busy} onClick={startSignIn}>{busy ? <Spinner label="Wird gestartet …" /> : 'Bei Microsoft anmelden'}</button>
                 <p className="muted" style={{ marginTop: 8 }}>
-                  Die Anmeldung läuft über die Microsoft-App „Microsoft Graph Command Line Tools“ mit einem Code, weil die Plattform vor der Einrichtung noch keine eigene App hat.
-                  Ihr Konto wird nur für diese Einrichtung verwendet, das Token wird nicht gespeichert.
+                  Die Anmeldung läuft wie bei <code>Connect-MgGraph</code> über die Microsoft-App „Microsoft Graph Command Line Tools“, weil die Plattform vor der Einrichtung noch keine eigene App hat.
+                  Microsoft fragt dabei die Berechtigungen zum Anlegen der App ab. Ihr Konto wird nur für diese Einrichtung verwendet, das Token wird nicht gespeichert.
                 </p>
+              </>
+            )}
+
+            {phase === 'interactive' && interactive && (
+              <>
+                <p>1. Im geöffneten Fenster mit dem Admin-Konto anmelden und die angefragten Berechtigungen bestätigen.
+                  {' '}<a href={interactive.url} target="ylm-signin" rel="noreferrer">Fenster erneut öffnen</a></p>
+                {interactive.automatic ? (
+                  <>
+                    <p>2. Danach geht es hier automatisch weiter.</p>
+                    <Spinner label="Warte auf die Anmeldung bei Microsoft …" />
+                  </>
+                ) : (
+                  <>
+                    <p>
+                      2. Microsoft leitet danach auf <code>http://localhost/?code=…</code> weiter. Der Browser zeigt dort „Seite nicht erreichbar“, das ist richtig.
+                      Bitte die <strong>komplette Adresse aus der Adresszeile</strong> kopieren und hier einfügen:
+                    </p>
+                    <Field label="Adresse aus der Adresszeile">
+                      <input value={pasted} onChange={(e) => setPasted(e.target.value.trim())} placeholder="http://localhost/?code=…&state=…" autoFocus />
+                    </Field>
+                    <button className="primary" disabled={busy || !pasted.includes('code=')} onClick={finishPasted}>{busy ? <Spinner label="Wird geprüft …" /> : 'Anmeldung abschließen'}</button>
+                  </>
+                )}
+                <div className="actions" style={{ marginTop: 12 }}>
+                  <button className="link" onClick={() => setPhase('idle')}>Abbrechen</button>
+                </div>
               </>
             )}
 
@@ -294,15 +348,15 @@ export default function SetupPage() {
           </Card>
 
           <details style={{ margin: '16px 0' }}>
-            <summary>Alternativ: per PowerShell-Skript oder manuell anlegen</summary>
+            <summary>Alternativ: per PowerShell-Skript, manuell oder mit Code anmelden</summary>
             <Card>
               <p>
-                Nur nötig, wenn die Anmeldung mit Code bei Ihnen gesperrt ist (z. B. durch Conditional Access) oder Sie die App selbst anlegen möchten.
-                Das Skript als Globaler Administrator in PowerShell ausführen. Es legt die mandantenfähige App an, lädt das Zertifikat hoch und erteilt den Admin-Consent.
+                Nur nötig, wenn die Anmeldung oben bei Ihnen nicht geht (z. B. weil die Microsoft-App „Microsoft Graph Command Line Tools“ gesperrt ist) oder Sie die App selbst anlegen möchten.
+                Das Skript als Globaler Administrator in PowerShell ausführen (<code>Connect-MgGraph</code> meldet Sie im Browser an). Es legt die mandantenfähige App an, lädt das Zertifikat hoch und erteilt den Admin-Consent.
               </p>
               <div className="actions">
-                <button disabled={working} onClick={() => downloadWithToken('/api/setup/app-registration.ps1', 'ylm-app-registration.ps1')}>Skript herunterladen</button>
-                <button disabled={working} onClick={() => downloadWithToken('/api/setup/certificate.cer', 'ylm-app.cer')}>Öffentliches Zertifikat (.cer)</button>
+                <button onClick={() => downloadWithToken('/api/setup/app-registration.ps1', 'ylm-app-registration.ps1')}>Skript herunterladen</button>
+                <button onClick={() => downloadWithToken('/api/setup/certificate.cer', 'ylm-app.cer')}>Öffentliches Zertifikat (.cer)</button>
               </div>
               <details style={{ margin: '12px 0' }}>
                 <summary>Manuell im Entra Admin Center anlegen</summary>
@@ -326,6 +380,11 @@ export default function SetupPage() {
                   {test.ok && <button className="primary" onClick={() => setStep(3)}>Weiter</button>}
                 </div>
               )}
+              <details style={{ marginTop: 16 }}>
+                <summary>Anmeldung mit Code (Device Code)</summary>
+                <p className="muted">Für Rechner ohne Browser. In vielen Tenants per Conditional Access gesperrt („Authentifizierungsflüsse“).</p>
+                <button disabled={busy || working} onClick={startDeviceCode}>Mit Code anmelden</button>
+              </details>
             </Card>
           </details>
         </>
