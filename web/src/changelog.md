@@ -12,6 +12,7 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 - Neu: Die Übersicht zeigt, welche Version läuft und ob ein Update bereitsteht, mit direktem Weg zum Update.
 - Neu: Erscheinungsbild der Dokumente: „Farbe aus Logo“ schlägt bis zu drei Farben aus dem hochgeladenen Logo als Akzentfarbe vor.
 - Verbessert: Das Logo in der Seitenleiste ist größer.
+- Verbessert: Lokale Konten heißen einheitlich „Lokales Konto (Passkey)“ (empfohlen) und „Lokales Konto (Passwort + TOTP)“.
 - Neu: Die Tray-App des Agents im selben Design wie die Weboberfläche. Darstellung Dunkel, Hell oder wie Windows.
 - Neu: Passkey-Rollout zeigt bei Windows Hello das Gerät, z. B. „LAPTOP-TIMO (Windows)“.
 - Behoben: Passkeys im Microsoft Authenticator oder in Windows Hello wurden als Sicherheitsschlüssel gezählt.
