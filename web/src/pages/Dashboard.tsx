@@ -133,8 +133,8 @@ export default function DashboardPage() {
 }
 
 /**
- * Einstieg im Stil der Passkey-Seite: Begrüßung und Lage in einem Satz. Standardmäßig ausgeblendet,
- * die Designvorschläge blenden ihn ein (design-proposals.css).
+ * Einstieg im Stil der Passkey-Seite: Begrüßung, Lage in einem Satz und Abkürzungen.
+ * Gestaltung in bento.css.
  */
 function DashHero({ data }: { data: DashboardData }) {
   const { me } = useAuth();

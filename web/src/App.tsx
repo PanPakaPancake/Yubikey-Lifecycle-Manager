@@ -6,7 +6,6 @@ import { Empty, PageHeader, Spinner, useApi } from './ui';
 import { Icon, type IconName } from './icons';
 import { ThemeToggle } from './theme';
 import { LogoMark, Wordmark } from './logo';
-import { DesignPicker, useDesign } from './design';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
 import AccountSetupPage from './pages/AccountSetup';
@@ -102,7 +101,6 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   const item = (to: string, icon: IconName, label: ReactNode, end = false) => (
     <NavLink to={to} end={end} title={typeof label === 'string' ? label : undefined}><Icon name={icon} /><span className="nav-label">{label}</span></NavLink>
   );
-  const [design, setDesign] = useDesign();
   return (
     <div className={'shell ' + SidebarStyle + (menuOpen ? ' menu-open' : '')}>
       <header className="mobilebar">
@@ -203,7 +201,6 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         </Routes>
         </div>
       </main>
-      <DesignPicker design={design} setDesign={setDesign} />
     </div>
   );
 }
