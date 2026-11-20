@@ -623,7 +623,7 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
 
     public async Task DeleteAuthenticationMethodAsync(string userId, string kind, string methodId, CancellationToken ct = default)
     {
-        if (!AuthMethodCatalog.RemovablePaths.TryGetValue(kind, out var segment))
+        if (AuthMethodCatalog.DeleteSegment(kind) is not { } segment)
             throw new ArgumentException($"Methodentyp {kind} kann hier nicht entfernt werden.", nameof(kind));
         using var _ = await SendAsync(HttpMethod.Delete,
             $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/{segment}/{Uri.EscapeDataString(methodId)}", ct, allowNotFound: true);

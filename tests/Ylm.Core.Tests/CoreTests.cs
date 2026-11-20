@@ -436,6 +436,9 @@ public sealed class AuthMethodCatalogTests
         Assert.Equal("officePhone", AuthMethodCatalog.ReportNameFor("phone", "office"));
         Assert.False(AuthMethodCatalog.IsRemovable("password"));
         Assert.False(AuthMethodCatalog.IsRemovable("fido2"));
+        Assert.False(AuthMethodCatalog.IsRemovable("fido2", "passKeyDeviceBound"));
+        Assert.True(AuthMethodCatalog.IsRemovable("fido2", "passKeyDeviceBoundAuthenticator"));
+        Assert.True(AuthMethodCatalog.IsRemovable("fido2", "passKeySynced"));
         Assert.True(AuthMethodCatalog.IsRemovable("phone"));
     }
 }

@@ -179,8 +179,9 @@ public sealed class FakeGraph : IGraphClient
 
     public Task DeleteAuthenticationMethodAsync(string userId, string kind, string methodId, CancellationToken ct = default)
     {
-        if (!AuthMethodCatalog.IsRemovable(kind)) throw new ArgumentException(kind);
+        if (AuthMethodCatalog.DeleteSegment(kind) is null) throw new ArgumentException(kind);
         OtherMethods.GetValueOrDefault(userId)?.RemoveAll(m => m.Id == methodId);
+        if (kind == "fido2") Methods.GetValueOrDefault(userId)?.RemoveAll(m => m.Id == methodId);
         return Task.CompletedTask;
     }
 

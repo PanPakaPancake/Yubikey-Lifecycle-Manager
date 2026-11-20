@@ -143,6 +143,15 @@ public static class AuthMethodCatalog
         ["externalAuthentication"] = "externalAuthenticationMethods",
     };
 
-    /// <summary>Kennwort lässt sich nicht entfernen; Passkeys auf Sicherheitsschlüsseln laufen über das Inventar (Key sperren).</summary>
-    public static bool IsRemovable(string kind) => RemovablePaths.ContainsKey(kind);
+    /// <summary>
+    /// Kennwort lässt sich nicht entfernen; Passkeys auf Sicherheitsschlüsseln laufen über das Inventar (Key sperren).
+    /// Andere Passkeys (Authenticator, Windows Hello, synchronisiert) sind ebenfalls fido2 und dürfen entfernt werden;
+    /// dafür muss <paramref name="reportName"/> der konkreten Methode bekannt sein.
+    /// </summary>
+    public static bool IsRemovable(string kind, string? reportName = null) =>
+        RemovablePaths.ContainsKey(kind) || (kind == "fido2" && reportName is not null && Get(reportName) is { IsPasskey: true, IsSecurityKey: false });
+
+    /// <summary>Graph-Pfad zum Löschen einer Methode dieses Typs (inkl. fido2), null wenn nicht vorgesehen.</summary>
+    public static string? DeleteSegment(string kind) =>
+        RemovablePaths.TryGetValue(kind, out var s) ? s : kind == "fido2" ? "fido2Methods" : null;
 }

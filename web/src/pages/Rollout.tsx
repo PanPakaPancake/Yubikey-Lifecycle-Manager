@@ -28,8 +28,8 @@ interface RemovalResult { userId: string; upn: string; removed: number; removedL
 export const stages: { key: Stage; label: string; short: string; text: string; icon: IconName; tone: 'error' | 'warn' | 'info' | 'ok'; color: string }[] = [
   { key: 'NoMfa', label: 'Keine MFA', short: 'Keine MFA', text: 'Nur Kennwort. Höchste Priorität: am besten direkt mit TAP und Key starten.', icon: 'alert', tone: 'error', color: 'var(--error)' },
   { key: 'ClassicMfa', label: 'Nur klassische MFA', short: 'Klassisch', text: 'Authenticator, SMS oder OTP. Lässt sich abfangen (Phishing).', icon: 'phone', tone: 'warn', color: 'var(--warn)' },
-  { key: 'OtherPasskey', label: 'Anderer Passkey', short: 'Anderer Passkey', text: 'Windows Hello oder Passkey im Authenticator, aber kein Sicherheitsschlüssel.', icon: 'monitor', tone: 'info', color: 'var(--accent-2)' },
-  { key: 'SecurityKey', label: 'Sicherheitsschlüssel', short: 'Ziel erreicht', text: 'Passkey auf einem YubiKey bzw. FIDO2-Key. Ziel des Rollouts.', icon: 'key', tone: 'ok', color: 'var(--ok)' },
+  { key: 'OtherPasskey', label: 'Passkey (App / Windows Hello)', short: 'Ausreichend', text: 'Passkey im Authenticator, Windows Hello oder ein anderer Passkey. Phishing-resistent, gilt als ausreichend.', icon: 'monitor', tone: 'info', color: 'var(--accent-2)' },
+  { key: 'SecurityKey', label: 'Sicherheitsschlüssel', short: 'Ausreichend', text: 'Passkey auf einem YubiKey bzw. FIDO2-Key. Phishing-resistent, gilt als ausreichend.', icon: 'key', tone: 'ok', color: 'var(--ok)' },
 ];
 const stageOf = (k: Stage) => stages.find((s) => s.key === k)!;
 
@@ -101,8 +101,9 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
   }, [base, stageFilter, method, q, data]);
 
   const total = base.length;
-  const goal = total ? Math.round((counts.SecurityKey / total) * 100) : 0;
-  const phishingResistant = total ? Math.round(((counts.SecurityKey + counts.OtherPasskey) / total) * 100) : 0;
+  // Ziel erreicht: jeder Passkey bzw. jede phishing-resistente Methode (Entscheidung Timo, 2026-11-20), nicht nur Sicherheitsschlüssel.
+  const atGoal = counts.SecurityKey + counts.OtherPasskey;
+  const goal = total ? Math.round((atGoal / total) * 100) : 0;
   const selectedUsers = (data?.users ?? []).filter((u) => selected.has(u.id));
   const allVisibleSelected = filtered.length > 0 && filtered.slice(0, limit).every((u) => selected.has(u.id));
 
@@ -150,9 +151,9 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
           <section className="ro-hero">
             <div>
               <div className="pk-eyebrow">{tenantName}</div>
-              <h2 className="ro-title">{goal >= 100 ? 'Alle haben einen Sicherheitsschlüssel.' : <><CountUp value={counts.SecurityKey} /> von {total} Personen sind am Ziel.</>}</h2>
+              <h2 className="ro-title">{goal >= 100 ? 'Alle melden sich mit Passkey an.' : <><CountUp value={atGoal} /> von {total} Personen melden sich mit Passkey an.</>}</h2>
               <p className="ro-lead">
-                {phishingResistant}&nbsp;% melden sich bereits phishing-resistent an. <strong>{counts.NoMfa}</strong> haben noch gar keine MFA,
+                Davon <strong>{counts.SecurityKey}</strong> mit Sicherheitsschlüssel und <strong>{counts.OtherPasskey}</strong> mit Passkey im Authenticator oder Windows Hello. <strong>{counts.NoMfa}</strong> haben noch gar keine MFA,
                 {' '}<strong>{counts.ClassicMfa}</strong> nur klassische MFA wie SMS oder Authenticator-Push.
               </p>
               <div className="ro-journey" role="img" aria-label={stages.map((s) => `${s.label}: ${counts[s.key]}`).join(', ')}>

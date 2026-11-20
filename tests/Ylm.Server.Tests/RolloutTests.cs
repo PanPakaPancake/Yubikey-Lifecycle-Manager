@@ -91,9 +91,16 @@ public sealed class RolloutTests : IAsyncLifetime
         // FIDO2 läuft über das Inventar.
         Assert.Equal(HttpStatusCode.BadRequest, (await _owner.DeleteAsync(Url("/users/u-key/methods/fido2/f1"))).StatusCode);
 
+        // Passkeys im Authenticator sind ebenfalls fido2, dürfen aber hier entfernt werden.
+        _graph.OtherMethods["u-whfb"].Add(new GraphAuthMethod("fa", "fido2", "passKeyDeviceBoundAuthenticator", "Authenticator - iOS", "Microsoft Authenticator - iOS", null));
+        var whfb = await Json(await _owner.GetAsync(Url("/users/u-whfb/methods")));
+        Assert.True(whfb.EnumerateArray().Single(m => m.GetProperty("id").GetString() == "fa").GetProperty("removable").GetBoolean());
+        await Json(await _owner.DeleteAsync(Url("/users/u-whfb/methods/fido2/fa")));
+        Assert.DoesNotContain(_graph.OtherMethods["u-whfb"], m => m.Id == "fa");
+
         await _app.WithDbAsync(async db =>
         {
-            var entry = await db.AuditEntries.SingleAsync(a => a.Action == "authmethod.removed");
+            var entry = await db.AuditEntries.SingleAsync(a => a.Action == "authmethod.removed" && a.Target == "bernd@contoso.com");
             Assert.Equal("bernd@contoso.com", entry.Target);
             Assert.Contains("4321", entry.Details);
             Assert.DoesNotContain("7654321", entry.Details);
