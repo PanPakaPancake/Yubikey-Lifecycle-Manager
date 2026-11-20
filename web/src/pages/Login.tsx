@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '../api';
 import { ErrorBox, Field, useAction } from '../ui';
-import { BrandMark, HeroKey } from '../brand';
+import { HeroKey } from '../brand';
+import { LogoMark, Wordmark } from '../logo';
 import { Icon } from '../icons';
 import { getPasskey, passkeyError, passkeysSupported } from '../webauthn';
 
@@ -70,7 +71,7 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
   return (
     <div className="login-page">
       <aside className="login-hero">
-        <div className="brand"><BrandMark size={38} /><div>Yubikey Lifecycle Manager</div></div>
+        <div className="brand"><LogoMark size={42} /><Wordmark /></div>
         <div>
           <HeroKey />
           <span className="eyebrow">YubiKeys im Griff</span>
@@ -86,7 +87,7 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
       </aside>
       <div className="login-side">
       <div className="login-card card">
-        <div className="brand compact"><BrandMark /><div>Yubikey Lifecycle Manager</div></div>
+        <div className="brand compact"><LogoMark /><Wordmark /></div>
         <h1>Anmelden</h1>
         {!setupComplete && <div className="alert warn">Die Einrichtung ist noch nicht abgeschlossen. <a href="/setup">Zur Einrichtung</a></div>}
         {err && <ErrorBox error={errorTexts[err] ?? decodeURIComponent(err)} />}

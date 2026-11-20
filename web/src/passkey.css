@@ -296,3 +296,11 @@
   .pk *, .pk *::before, .pk *::after { animation: none !important; transition: none !important; }
   .pk-reveal { opacity: 1; transform: none; }
 }
+
+/* Angemeldet im App-Rahmen (embedded): kein eigener Hintergrund, keine eigene Kopfzeile, Breite der App. */
+.pk.pk-embedded { min-height: 0; background: none; font-size: 15px; }
+.pk-embedded .pk-main { max-width: none; padding: 0; }
+.pk-embedded .pk-hero { padding: 18px 0 18px; }
+.pk-embedded-head .actions { align-items: center; }
+.pk-embedded-head .pk-tabs { margin: 0; }
+.pk-embedded .pk-section { scroll-margin-top: 90px; }

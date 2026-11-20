@@ -60,7 +60,11 @@ function useStepper(count: number, ms: number) {
 
 type View = 'endbenutzer' | 'techniker';
 
-export default function PasskeyInfoPage({ authenticated }: { authenticated: boolean }) {
+/**
+ * embedded: angemeldet im App-Rahmen (Menü links, gewähltes Design), ohne eigene Kopfzeile.
+ * Öffentlich (PIN-Brief-Link, ohne Anmeldung) bleibt die Seite eigenständig.
+ */
+export default function PasskeyInfoPage({ authenticated, embedded = false }: { authenticated: boolean; embedded?: boolean }) {
   const { pathname, search } = useLocation();
   const navigate = useNavigate();
   // Früher zwei Seiten: /passkey/anleitung landet jetzt in der Endbenutzer-Ansicht.
@@ -83,9 +87,38 @@ export default function PasskeyInfoPage({ authenticated }: { authenticated: bool
     document.title = (tech ? 'Passkeys für Techniker' : 'Was ist ein Passkey?') + (brand?.companyName ? ' · ' + brand.companyName : '');
   }, [tech, brand?.companyName]);
   useEffect(() => { window.scrollTo(0, 0); }, [view]);
+  const [copied, setCopied] = useState(false);
+  const publicUrl = window.location.origin + '/passkey' + (tech ? '?ansicht=techniker' : '');
+  const copyLink = () => { void navigator.clipboard?.writeText(publicUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }); };
 
   const keep = tenant ? '?t=' + encodeURIComponent(tenant) : '';
   const style = brand?.accentColor && /^#[0-9a-f]{6}$/i.test(brand.accentColor) ? ({ '--pk-brand': brand.accentColor } as React.CSSProperties) : undefined;
+
+  const tabs = (
+    <div className="pk-tabs" role="tablist" aria-label="Ansicht">
+      <button type="button" role="tab" aria-selected={!tech} className={tech ? '' : 'active'} onClick={() => switchTo('endbenutzer')}><Icon name="user" size={15} />Endbenutzer</button>
+      <button type="button" role="tab" aria-selected={tech} className={tech ? 'active' : ''} onClick={() => switchTo('techniker')}><Icon name="settings" size={15} />Techniker</button>
+    </div>
+  );
+
+  if (embedded) return (
+    <div className="pk pk-embedded" ref={ref}>
+      <header className="page-header pk-embedded-head">
+        <div>
+          <h1>Passkeys erklärt</h1>
+          <p className="muted">Dieselbe Seite, die Endbenutzer über den Link im PIN-Brief sehen. Die Techniker-Ansicht erklärt Kryptografie und Entra-Anbindung.</p>
+        </div>
+        <div className="actions">
+          {tabs}
+          <button type="button" onClick={copyLink} title={publicUrl}><Icon name={copied ? 'check' : 'copy'} size={16} />{copied ? 'Kopiert' : 'Öffentlichen Link kopieren'}</button>
+          <a className="btn" href={'/passkey?oeffentlich=1' + (tech ? '&ansicht=techniker' : '')} target="_blank" rel="noreferrer"><Icon name="share" size={16} />Wie Endbenutzer öffnen</a>
+        </div>
+      </header>
+      <main className="pk-main" key={view}>
+        {tech ? <Technical onSwitch={() => switchTo('endbenutzer')} /> : <EndUser brand={brand} onSwitch={() => switchTo('techniker')} />}
+      </main>
+    </div>
+  );
 
   return (
     <div className={'pk' + (style ? ' branded' : '')} style={style} ref={ref}>
@@ -97,10 +130,7 @@ export default function PasskeyInfoPage({ authenticated }: { authenticated: bool
               : <KeyArt size={34} />}
             <span>{brand?.companyName || 'YubiKey & Passkey'}</span>
           </div>
-          <div className="pk-tabs" role="tablist" aria-label="Ansicht">
-            <button type="button" role="tab" aria-selected={!tech} className={tech ? '' : 'active'} onClick={() => switchTo('endbenutzer')}><Icon name="user" size={15} />Endbenutzer</button>
-            <button type="button" role="tab" aria-selected={tech} className={tech ? 'active' : ''} onClick={() => switchTo('techniker')}><Icon name="settings" size={15} />Techniker</button>
-          </div>
+          {tabs}
           <div className="pk-top-actions">
             <ThemeToggle />
             {authenticated && <Link className="btn small" to="/">Zur Plattform</Link>}

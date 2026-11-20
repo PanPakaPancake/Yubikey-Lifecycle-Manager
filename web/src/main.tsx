@@ -7,6 +7,7 @@ import { applyStoredTheme } from './theme';
 import '@fontsource-variable/inter/wght.css';
 import './styles.css';
 import './design.css';
+import './bento.css';
 
 applyStoredTheme();
 

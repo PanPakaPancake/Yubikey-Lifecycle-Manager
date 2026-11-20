@@ -5,7 +5,7 @@ import { AuthContext } from './auth';
 import { Empty, PageHeader, Spinner, useApi } from './ui';
 import { Icon, type IconName } from './icons';
 import { ThemeToggle } from './theme';
-import { BrandMark } from './brand';
+import { LogoMark, Wordmark } from './logo';
 import LoginPage from './pages/Login';
 import SetupPage from './pages/Setup';
 import AccountSetupPage from './pages/AccountSetup';
@@ -59,8 +59,11 @@ export default function App() {
   useEffect(() => { void reload(); }, [reload]);
 
   // Öffentliche Infoseiten für Endnutzer (Link im PIN-Brief): ohne Anmeldung, ohne Navigation der Plattform.
-  if (location.pathname === '/passkey' || location.pathname.startsWith('/passkey/')) return <PasskeyInfoPage authenticated={!!me?.authenticated} />;
+  // Angemeldet läuft sie im App-Rahmen mit Menü; ?oeffentlich=1 zeigt sie so, wie Endbenutzer sie sehen.
+  const passkeyPath = location.pathname === '/passkey' || location.pathname.startsWith('/passkey/');
+  const publicPasskey = passkeyPath && (!me?.authenticated || new URLSearchParams(location.search).has('oeffentlich'));
   if (!me) return <div className="center-page"><Spinner label="Wird geladen …" /></div>;
+  if (publicPasskey) return <PasskeyInfoPage authenticated={me.authenticated} />;
 
   if (location.pathname.startsWith('/setup')) return <SetupPage />;
   if (location.pathname.startsWith('/account-setup')) return <AccountSetupPage />;
@@ -96,33 +99,36 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   const { data: updates } = useApi<{ updateAvailable: boolean; latestVersion?: string }>(can('ManageSettings') ? '/api/platform/updates' : null);
   useReveal(location.pathname);
   const item = (to: string, icon: IconName, label: ReactNode, end = false) => (
-    <NavLink to={to} end={end}><Icon name={icon} />{label}</NavLink>
+    <NavLink to={to} end={end} title={typeof label === 'string' ? label : undefined}><Icon name={icon} /><span className="nav-label">{label}</span></NavLink>
   );
   return (
     <div className={'shell ' + SidebarStyle + (menuOpen ? ' menu-open' : '')}>
       <header className="mobilebar">
         <button type="button" className="icon-btn" aria-label="Menü öffnen" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" size={22} /></button>
-        <span className="mobilebar-title">Lifecycle Manager</span>
+        <span className="mobilebar-title"><LogoMark size={28} /><Wordmark /></span>
       </header>
       <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />
       <aside className="sidebar">
         <div className="brand">
-          <BrandMark />
-          <div>Lifecycle Manager<small>{me.organizationName || 'YubiKeys'}</small></div>
+          <LogoMark />
+          <Wordmark sub={me.organizationName || undefined} />
           <button type="button" className="icon-btn sidebar-close" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}><Icon name="x" size={20} /></button>
         </div>
         <nav className="nav">
+          <div className="nav-group nav-group-customer">
           <div className="section customer"><span className="context-dot" />Kunde</div>
           <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
           {can('ReadReports') && item('/rollout', 'target', 'Passkey-Rollout')}
-          {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" />Registrieren</NavLink>}
+          {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" /><span className="nav-label">Registrieren</span></NavLink>}
           {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
           {fourEyes && item('/approvals', 'shield', 'Freigaben')}
           {tenant && item('/tenant', 'building', 'Tenant-Einstellungen')}
           {can('ReadAudit') && item('/audit', 'scroll', 'Audit-Log')}
+          </div>
 
+          <div className="nav-group nav-group-partner" tabIndex={-1}>
           <div className="section partner"><span className="context-dot" />Partner</div>
           {item('/tenants', 'building', 'Tenants')}
           {can('ManagePartnerStock') && item('/partner/stock', 'box', 'Partnerlager')}
@@ -131,9 +137,12 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           {can('ManageApiKeys') && item('/partner/notifications', 'bell', 'Benachrichtigungen')}
           {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
           {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
+          </div>
 
+          <div className="nav-group nav-group-help">
           <div className="section">Hilfe</div>
           {item('/passkey', 'info', 'Passkeys erklärt')}
+          </div>
         </nav>
         <div className="sidebar-foot">
           <NavLink to="/account" className="account-link">
@@ -186,6 +195,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/users" element={<UsersPage />} />
           <Route path="/platform" element={<PlatformPage />} />
           <Route path="/account" element={<AccountPage />} />
+          <Route path="/passkey/*" element={<PasskeyInfoPage authenticated embedded />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
           <Route path="*" element={<Empty>Seite nicht gefunden. <Link to="/">Zur Übersicht</Link></Empty>} />
         </Routes>
