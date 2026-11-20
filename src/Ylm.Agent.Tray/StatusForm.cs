@@ -1,60 +1,65 @@
+using System.Drawing.Drawing2D;
 using Ylm.Contracts;
 
 namespace Ylm.Agent.Tray;
 
-/// <summary>Small status window: connection, detected key, current operation.</summary>
-internal sealed class StatusForm : Form
+/// <summary>Kleines Statusfenster unten rechts: Verbindung, erkannter Key, laufender Vorgang mit Anweisung.</summary>
+internal sealed class StatusForm : BentoForm
 {
-    private readonly Label _connection = new() { AutoSize = true, Font = new Font(SystemFonts.MessageBoxFont!.FontFamily, 10, FontStyle.Bold) };
-    private readonly Label _instance = new() { AutoSize = true, ForeColor = Color.DimGray };
-    private readonly Label _key = new() { AutoSize = false, Width = 380, Height = 70 };
-    private readonly Label _operation = new() { AutoSize = false, Width = 380, Height = 60, ForeColor = Color.FromArgb(31, 95, 191) };
-    private readonly ProgressBar _progress = new() { Width = 380, Height = 10, Visible = false };
-    private readonly Label _instruction = new()
-    {
-        AutoSize = false, Width = 380, Height = 64, Visible = false, TextAlign = ContentAlignment.MiddleCenter,
-        Font = new Font(SystemFonts.MessageBoxFont!.FontFamily, 15, FontStyle.Bold), ForeColor = Color.White,
-        BackColor = Color.FromArgb(31, 95, 191), Margin = new Padding(0, 10, 0, 4),
-    };
-    private readonly System.Windows.Forms.Timer _pulse = new() { Interval = 450 };
-    private bool _pulseOn;
-    private string? _instructionText;
+    private const int W = 400;
+    private readonly Pill _connection = new("Verbinde", Theme.P.Warn);
+    private readonly Label _instance = Txt.Muted("", W - 36);
+    private readonly Label _model = Txt.Body("", W - 36, null, Theme.Ui(11f, FontStyle.Bold));
+    private readonly Label _serial = Txt.Value("", W - 36);
+    private readonly Row _badges = new();
+    private readonly Instruction _instruction = new(W);
+    private readonly Card _operationCard = new(Theme.P.Violet);
+    private readonly Label _operation = Txt.Body("", W - 36);
+    private readonly Meter _progress = new(W - 36);
+    private readonly Label _lastError = Txt.Body("", W, Theme.P.Error);
 
     public StatusForm()
     {
-        Text = "Yubikey Lifecycle Manager – Agent";
-        FormBorderStyle = FormBorderStyle.FixedSingle;
-        MaximizeBox = false;
+        Text = "YubiKey LC Manager – Agent";
         StartPosition = FormStartPosition.Manual;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        Padding = new Padding(14);
         ShowInTaskbar = false;
         TopMost = true;
-        var layout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, Dock = DockStyle.Fill };
-        layout.Controls.Add(_connection);
-        layout.Controls.Add(_instance);
-        layout.Controls.Add(new Label { Text = "Erkannter Key", AutoSize = true, Margin = new Padding(0, 12, 0, 2), Font = new Font(SystemFonts.MessageBoxFont!.FontFamily, 9, FontStyle.Bold) });
-        layout.Controls.Add(_key);
-        layout.Controls.Add(_instruction);
-        layout.Controls.Add(_progress);
-        layout.Controls.Add(_operation);
-        Controls.Add(layout);
-        // Simple animation: the instruction box pulses and an arrow/dot moves, so it is obvious something is expected.
-        _pulse.Tick += (_, _) =>
-        {
-            _pulseOn = !_pulseOn;
-            _instruction.BackColor = _pulseOn ? Color.FromArgb(31, 95, 191) : Color.FromArgb(70, 130, 220);
-            _instruction.Text = Decorate(_instructionText ?? "", _pulseOn);
-        };
-        Load += (_, _) =>
-        {
-            var wa = Screen.PrimaryScreen!.WorkingArea;
-            Location = new Point(wa.Right - Width - 16, wa.Bottom - Height - 16);
-        };
+        var p = Theme.P;
+
+        var stack = new Stack(W);
+        stack.Controls.Add(new Header("Agent", _connection, W));
+        stack.Controls.Add(_instance);
+
+        var key = new Card(p.Green);
+        var k = new Stack(W - 36);
+        k.Controls.Add(new Eyebrow("Erkannter Key", p.Green, dot: true));
+        k.Controls.Add(_model);
+        k.Controls.Add(_serial);
+        k.Controls.Add(_badges);
+        key.Controls.Add(k);
+        stack.Controls.Add(key);
+
+        stack.Controls.Add(_instruction);
+        var o = new Stack(W - 36);
+        o.Controls.Add(new Eyebrow("Vorgang", p.Violet, dot: true));
+        o.Controls.Add(_operation);
+        o.Controls.Add(_progress);
+        _operationCard.Controls.Add(o);
+        stack.Controls.Add(_operationCard);
+        stack.Controls.Add(_lastError);
+        Controls.Add(stack);
+
+        Load += (_, _) => PlaceBottomRight();
+        SizeChanged += (_, _) => { if (Visible) PlaceBottomRight(); };
     }
 
-    /// <summary>Closing only hides the window; it is reused for every status update.</summary>
+    private void PlaceBottomRight()
+    {
+        var wa = Screen.PrimaryScreen!.WorkingArea;
+        Location = new Point(wa.Right - Width - 16, wa.Bottom - Height - 16);
+    }
+
+    /// <summary>Schließen blendet nur aus; das Fenster wird für jede Statusänderung wiederverwendet.</summary>
     protected override void OnFormClosing(FormClosingEventArgs e)
     {
         if (e.CloseReason == CloseReason.UserClosing)
@@ -66,47 +71,104 @@ internal sealed class StatusForm : Form
         base.OnFormClosing(e);
     }
 
-    private static string Decorate(string prompt, bool phase)
-    {
-        var p = prompt.ToLowerInvariant();
-        var symbol = p.Contains("abziehen") ? (phase ? "⇧" : "↑")
-            : p.Contains("einstecken") || p.Contains("anstecken") ? (phase ? "⇩" : "↓")
-            : p.Contains("berühren") ? (phase ? "◉" : "○")
-            : (phase ? "▶" : "▷");
-        return $"{symbol}  {prompt}";
-    }
-
-    protected override void Dispose(bool disposing)
-    {
-        if (disposing) _pulse.Dispose();
-        base.Dispose(disposing);
-    }
-
     public void Show(TrayStatus s, bool pipeConnected)
     {
-        _instructionText = s.Operation?.Prompt;
-        _instruction.Visible = _instructionText is not null;
-        _instruction.Text = Decorate(_instructionText ?? "", _pulseOn);
-        if (_instruction.Visible && !_pulse.Enabled) _pulse.Start();
-        if (!_instruction.Visible && _pulse.Enabled) _pulse.Stop();
-        _connection.Text = !pipeConnected ? "Agent-Dienst nicht erreichbar" : TrayContext.Describe(s.Connection);
-        _connection.ForeColor = TrayContext.ColorFor(s.Connection, pipeConnected);
+        var p = Theme.P;
+        SuspendLayout();
+        var (text, color, live) = TrayContext.Describe(s.Connection, pipeConnected);
+        _connection.Set(text, color, live);
         _instance.Text = s.ServerUrl is null ? "Nicht gekoppelt" : $"{s.InstanceName} · {s.ServerUrl}{(s.PairedUser is null ? "" : $" · {s.PairedUser}")}";
-        _key.Text = s.Key is null
-            ? "Kein YubiKey eingesteckt."
-            : $"{s.Key.Model}\nSeriennummer {s.Key.SerialNumber} · Firmware {s.Key.FirmwareVersion}\n" +
-              (s.Key.SupportsForcePinChange ? "PIN-Wechsel erzwingbar: ja" : "PIN-Wechsel erzwingbar: nein (erst ab Firmware 5.7)") +
-              (s.Key.PinIsSet ? " · PIN gesetzt" : "");
-        if (s.Operation is { } op)
+
+        foreach (var old in _badges.Controls.Cast<Control>().ToList()) old.Dispose();
+        if (s.Key is null)
         {
-            _operation.Text = op.Title + (op.Step is { } n && op.Total is { } t ? $" ({n}/{t})" : "");
-            _progress.Visible = op.Step is not null && op.Total is > 0;
-            if (_progress.Visible) { _progress.Maximum = op.Total!.Value; _progress.Value = Math.Min(op.Step!.Value, op.Total.Value); }
+            _model.Text = "Kein YubiKey eingesteckt";
+            _model.ForeColor = p.Muted;
+            _serial.Text = "Key einstecken, der Agent erkennt ihn sofort.";
         }
         else
         {
-            _operation.Text = s.LastError is null ? "" : "Letzter Fehler: " + s.LastError;
-            _progress.Visible = false;
+            _model.Text = s.Key.Model ?? "YubiKey";
+            _model.ForeColor = p.Ink;
+            _serial.Text = $"SN {s.Key.SerialNumber}  ·  FW {s.Key.FirmwareVersion}";
+            _badges.Controls.Add(new Pill(s.Key.SupportsForcePinChange ? "PIN-Wechsel erzwingbar" : "PIN-Wechsel nicht erzwingbar (FW < 5.7)",
+                s.Key.SupportsForcePinChange ? p.Ok : p.Warn) { Margin = new Padding(0, 4, 6, 0) });
+            if (s.Key.PinIsSet) _badges.Controls.Add(new Pill("PIN gesetzt", p.Cyan) { Margin = new Padding(0, 4, 6, 0) });
+        }
+
+        _instruction.Prompt = s.Operation?.Prompt;
+        if (s.Operation is { } op)
+        {
+            _operationCard.Visible = true;
+            _operation.Text = op.Title + (op.Step is { } n && op.Total is { } t ? $"  ·  Schritt {n} von {t}" : "");
+            // Visible liefert false, solange das Fenster noch nicht angezeigt wird, daher die Bedingung selbst prüfen.
+            var hasSteps = op.Step is not null && op.Total is > 0;
+            _progress.Visible = hasSteps;
+            if (hasSteps) _progress.Set(op.Step!.Value, op.Total!.Value);
+            _lastError.Visible = false;
+        }
+        else
+        {
+            _operationCard.Visible = false;
+            _lastError.Visible = s.LastError is not null;
+            _lastError.Text = s.LastError is null ? "" : "Letzter Fehler: " + s.LastError;
+        }
+        ResumeLayout(true);
+    }
+
+    /// <summary>Was der Admin am Key tun soll: große, pulsierende Fläche mit Pfeil oder Punkt.</summary>
+    private sealed class Instruction : Control
+    {
+        private readonly System.Windows.Forms.Timer _pulse = new() { Interval = 50 };
+        private float _phase;
+        private string? _prompt;
+
+        public Instruction(int width)
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.SupportsTransparentBackColor | ControlStyles.ResizeRedraw, true);
+            BackColor = Color.Transparent;
+            Size = new Size(width, 76);
+            Margin = new Padding(0, 0, 0, 12);
+            Visible = false;
+            _pulse.Tick += (_, _) => { _phase += .09f; Invalidate(); };
+        }
+
+        public string? Prompt
+        {
+            get => _prompt;
+            set
+            {
+                _prompt = value;
+                Visible = value is not null;
+                _pulse.Enabled = Visible && Theme.Animations;
+                Invalidate();
+            }
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            var p = Theme.P;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            var wave = .5f + .5f * MathF.Sin(_phase);
+            var r = new RectangleF(1.5f, 1.5f, Width - 3, Height - 3);
+            using var path = Theme.Rounded(r, LogicalToDeviceUnits(18));
+            using (var glow = new Pen(Theme.Alpha(p.Accent2, (int)(60 + 120 * wave)), 3f)) g.DrawPath(glow, path);
+            using (var fill = new LinearGradientBrush(r, Theme.Mix(p.Accent, p.Accent2, .15f * wave), Theme.Mix(p.Accent2, p.Accent, .25f * wave), 0f)) g.FillPath(fill, path);
+            var prompt = _prompt ?? "";
+            var lower = prompt.ToLowerInvariant();
+            var symbol = lower.Contains("abziehen") ? "↑" : lower.Contains("einstecken") || lower.Contains("anstecken") ? "↓" : lower.Contains("berühren") ? "◉" : "▶";
+            var symbolBox = new RectangleF(r.X + 14, r.Y + (r.Height - 44) / 2 + (symbol is "↑" ? -4 * wave : symbol is "↓" ? 4 * wave : 0), 44, 44);
+            using (var circle = new SolidBrush(Theme.Alpha(p.AccentInk, 40))) g.FillEllipse(circle, symbolBox);
+            TextRenderer.DrawText(g, symbol, Theme.Ui(16f, FontStyle.Bold), Rectangle.Round(symbolBox), p.AccentInk, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
+            var textBox = new Rectangle((int)symbolBox.Right + 12, (int)r.Y, (int)(r.Right - symbolBox.Right - 24), (int)r.Height);
+            TextRenderer.DrawText(g, prompt, Theme.Display(13.5f), textBox, p.AccentInk, TextFormatFlags.VerticalCenter | TextFormatFlags.WordBreak);
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing) _pulse.Dispose();
+            base.Dispose(disposing);
         }
     }
 }
