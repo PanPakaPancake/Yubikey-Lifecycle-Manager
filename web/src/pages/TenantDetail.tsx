@@ -241,7 +241,7 @@ export function FieldExplanation() {
       <summary>Was bedeuten die Spalten?</summary>
       <dl className="explain" style={{ marginTop: 8 }}>
         <dt>Bezeichnung</dt><dd>Name des Feldes, wie er im Inventar und in den Formularen angezeigt wird. Kann jederzeit geändert werden.</dd>
-        <dt>Schlüssel</dt><dd>Technischer Name des Feldes. Er ist der Spaltenname im CSV-Export und CSV-Import und der Name unter <code>customFields</code> in der Lese-API. Erlaubt sind Buchstaben, Ziffern, _ und -. Nach dem Speichern nicht mehr änderbar, damit gespeicherte Werte und angebundene Tools weiter passen.</dd>
+        <dt>Schlüssel</dt><dd>Technischer Name des Feldes. Er ist der Spaltenname im CSV-Export und CSV-Import und der Name unter <code>customFields</code> in der API. Erlaubt sind Buchstaben, Ziffern, _ und -. Nach dem Speichern nicht mehr änderbar, damit gespeicherte Werte und angebundene Tools weiter passen.</dd>
         <dt>Typ</dt><dd>Text, Zahl, Datum (JJJJ-MM-TT), Auswahl aus festen Optionen oder Ja/Nein. Die Eingabe wird beim Speichern geprüft.</dd>
         <dt>Optionen</dt><dd>Nur bei Typ „Auswahl“: die erlaubten Werte, mit Komma getrennt.</dd>
         <dt>Pflicht</dt><dd>Das Feld muss bei jedem Key ausgefüllt werden, auch beim Lagerzugang und beim CSV-Import.</dd>
@@ -289,7 +289,7 @@ function FieldsCard({ tenantId, editable }: { tenantId: string; editable: boolea
         <span className="level">Plattform (global)</span><span aria-hidden>→</span><span className="level current">Tenant</span>
         <span className="muted">Globale Felder pflegen Sie unter <Link to="/platform#fields">Plattform</Link>.</span>
       </div>
-      <p className="muted small" style={{ marginTop: 0 }}>Eigene Merkmale für jeden Key, z. B. Kostenstelle, Standort oder Inventarnummer. Sie erscheinen im Inventar, beim Lagerzugang, im Export und in der Lese-API.</p>
+      <p className="muted small" style={{ marginTop: 0 }}>Eigene Merkmale für jeden Key, z. B. Kostenstelle, Standort oder Inventarnummer. Sie erscheinen im Inventar, beim Lagerzugang, im Export und in der API.</p>
       <FieldExplanation />
       {globals.length === 0 && localList.length === 0 && <p className="muted">Keine Zusatzfelder.</p>}
       {(globals.length > 0 || localList.length > 0) && (

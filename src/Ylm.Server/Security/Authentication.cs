@@ -213,7 +213,8 @@ public sealed class ApiKeyAuthenticationHandler(
         }
         var identity = new ClaimsIdentity(
             [new Claim(YlmClaims.ApiKeyId, key.Id.ToString()), new Claim(ClaimTypes.Name, "api:" + key.Name), .. tenantIds.Select(id => new Claim(YlmClaims.ApiKeyTenant, id.ToString())),
-             .. key.AllowTodoWrite ? [new Claim(YlmClaims.ApiKeyTodoWrite, "true")] : Array.Empty<Claim>()],
+             .. key.Scopes.Select(s => new Claim(YlmClaims.ApiKeyScope, s)),
+             .. key.AllTenants ? [new Claim(YlmClaims.ApiKeyAllTenants, "true")] : Array.Empty<Claim>()],
             Scheme.Name);
         return AuthenticateResult.Success(new AuthenticationTicket(new ClaimsPrincipal(identity), Scheme.Name));
     }

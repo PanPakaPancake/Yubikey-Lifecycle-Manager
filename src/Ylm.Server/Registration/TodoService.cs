@@ -5,6 +5,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
+using Ylm.Server.PublicApi;
 using Ylm.Server.Security;
 
 namespace Ylm.Server.Registration;
@@ -169,12 +170,6 @@ public static class TodoService
             return items.Select(t => Map(t, tenants, profiles, serials)).ToList();
         }
 
-        static void RequireWrite(ClaimsPrincipal p)
-        {
-            if (!p.HasClaim(YlmClaims.ApiKeyTodoWrite, "true"))
-                throw ApiException.Forbidden("Dieser API-Schlüssel darf keine ToDos schreiben. Das Recht wird beim Schlüssel unter „Globale Einstellungen → API-Schlüssel“ vergeben.");
-        }
-
         g.MapGet("/todos", async (ClaimsPrincipal p, YlmDbContext db, string? tenant, string? status, string? ticketId, string? upn) =>
         {
             var ids = await scope(p, db, tenant);
@@ -184,18 +179,17 @@ public static class TodoService
             if (!string.IsNullOrWhiteSpace(upn)) q = q.Where(t => t.UserPrincipalName.ToLower() == upn.ToLower());
             var items = await q.OrderByDescending(t => t.CreatedAt).Take(1000).ToListAsync();
             return TypedResults.Ok(await MapAll(db, items));
-        }).WithSummary("ToDo-Liste lesen").WithDescription("Filter: tenant, status (Open, Done, Cancelled), ticketId, upn.");
+        }).WithSummary("ToDo-Liste lesen").WithDescription("Filter: tenant, status (Open, Done, Cancelled), ticketId, upn.").RequireScope(ApiScopes.TodosRead);
 
         g.MapGet("/todos/{id:guid}", async Task<Microsoft.AspNetCore.Http.HttpResults.Results<Microsoft.AspNetCore.Http.HttpResults.Ok<ApiTodo>, Microsoft.AspNetCore.Http.HttpResults.NotFound>> (Guid id, ClaimsPrincipal p, YlmDbContext db) =>
         {
             var ids = await scope(p, db, null);
             var t = await db.Todos.AsNoTracking().FirstOrDefaultAsync(x => x.Id == id && ids.Contains(x.TenantId));
             return t is null ? TypedResults.NotFound() : TypedResults.Ok((await MapAll(db, [t]))[0]);
-        }).WithSummary("Ein ToDo abrufen");
+        }).WithSummary("Ein ToDo abrufen").RequireScope(ApiScopes.TodosRead);
 
         g.MapPost("/todos", async (ApiCreateTodo body, ClaimsPrincipal p, YlmDbContext db, IGraphClientFactory graphs, AuditService audit) =>
         {
-            RequireWrite(p);
             var ids = await scope(p, db, body.Tenant);
             if (ids.Count != 1) throw ApiException.BadRequest("tenant_required", "Bitte den Tenant angeben (ID der Plattform, Entra-Tenant-ID oder Standard-Domain).");
             if (string.IsNullOrWhiteSpace(body.UserPrincipalName)) throw ApiException.BadRequest("no_user", "userPrincipalName fehlt.");
@@ -209,20 +203,20 @@ public static class TodoService
                     ?? throw ApiException.BadRequest("invalid_profile", $"Das Profil „{name}“ gibt es in diesem Tenant nicht.");
             }
             var keyName = p.Identity?.Name?.Replace("api:", "") ?? "API";
-            var actor = new AuditActor(ActorType.Api, Guid.TryParse(p.FindFirstValue(YlmClaims.ApiKeyId), out var kid) ? kid : null, p.Identity?.Name);
+            var actor = ApiScopes.Actor(p);
+            var kid = actor.Id;
             var (todo, created) = await CreateAsync(db, graphs, audit, actor, ids[0], body.UserPrincipalName.Trim(), body.TicketId, body.TicketUrl, body.Note, profileId, body.DueDate, "API: " + keyName, kid);
             var dto = (await MapAll(db, [todo]))[0];
             return created ? Results.Created($"/api/v1/todos/{todo.Id}", dto) : Results.Ok(dto);
         }).WithSummary("Person auf die ToDo-Liste setzen")
-          .WithDescription("Einzige schreibende Funktion der API. Gibt es für die Person schon ein offenes ToDo, kommt dieses mit 200 zurück, sonst 201. Braucht einen API-Schlüssel mit ToDo-Schreibrecht.");
+          .WithDescription("Gibt es für die Person schon ein offenes ToDo, kommt dieses mit 200 zurück, sonst 201.").RequireScope(ApiScopes.TodosWrite);
 
         g.MapDelete("/todos/{id:guid}", async (Guid id, string? reason, ClaimsPrincipal p, YlmDbContext db, AuditService audit) =>
         {
-            RequireWrite(p);
             var ids = await scope(p, db, null);
             var t = await db.Todos.FirstOrDefaultAsync(x => x.Id == id && ids.Contains(x.TenantId)) ?? throw ApiException.NotFound("ToDo");
-            await CancelAsync(db, audit, new AuditActor(ActorType.Api, null, p.Identity?.Name), t, reason ?? "Im Ticketsystem zurückgezogen");
+            await CancelAsync(db, audit, ApiScopes.Actor(p), t, reason ?? "Im Ticketsystem zurückgezogen");
             return Results.NoContent();
-        }).WithSummary("Offenes ToDo zurückziehen");
+        }).WithSummary("Offenes ToDo zurückziehen").RequireScope(ApiScopes.TodosWrite);
     }
 }

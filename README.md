@@ -46,7 +46,7 @@ Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images
 
 | Pfad | Inhalt |
 |---|---|
-| `src/Ylm.Server` | ASP.NET-Core-Backend: Einrichtung, Tenants, Inventar, Wizard, PDFs, Reporting, Lese-API, SignalR-Hub für Agents |
+| `src/Ylm.Server` | ASP.NET-Core-Backend: Einrichtung, Tenants, Inventar, Wizard, PDFs, Reporting, REST-API mit Rechten pro Schlüssel, SignalR-Hub für Agents |
 | `src/Ylm.Core` | Fachlogik ohne Abhängigkeiten: Rollen, Lebenszyklus, Profile, Firmware-Hinweise, Richtlinien-Prüfungen, Audit-Hash-Kette |
 | `src/Ylm.Agent`, `src/Ylm.Agent.Core` | Windows-Dienst mit Yubico .NET SDK |
 | `src/Ylm.Agent.Tray` | Tray-App (WinForms) |

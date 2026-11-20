@@ -115,12 +115,13 @@ public sealed class IntegrationTests : IAsyncLifetime
         Assert.Equal(HttpStatusCode.NoContent, (await ticket.DeleteAsync($"/api/v1/todos/{annaTodo}?reason=Storniert")).StatusCode);
         Assert.Empty((await Json(await _owner.GetAsync($"/api/todos?tenantId={_tenantId}"))).EnumerateArray());
 
-        // Die übrigen Endpunkte der API bleiben nur lesend.
+        // Schreibend nur die bewusst freigegebenen Funktionen (ToDo, Inventar pflegen, sperren); kein Reset, Ausmustern, Löschen.
         var openapi = await (await _app.Client().GetAsync("/openapi/v1.json")).Content.ReadAsStringAsync();
         using var doc = JsonDocument.Parse(openapi);
+        string[] allowedWrites = ["post /api/v1/todos", "delete /api/v1/todos/{id}", "patch /api/v1/keys/{id}", "post /api/v1/keys/{id}/lock"];
         foreach (var path in doc.RootElement.GetProperty("paths").EnumerateObject())
             foreach (var op in path.Value.EnumerateObject().Where(o => o.Name is "post" or "put" or "patch" or "delete"))
-                Assert.StartsWith("/api/v1/todos", path.Name);
+                Assert.Contains($"{op.Name} {path.Name}", allowedWrites);
     }
 
     [Fact]

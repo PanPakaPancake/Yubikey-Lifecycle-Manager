@@ -337,7 +337,7 @@ public sealed class PairingCode
     public DateTimeOffset? UsedAt { get; set; }
 }
 
-/// <summary>Read API key, managed on platform level. Valid for all tenants or only for the listed ones.</summary>
+/// <summary>API key, managed on platform level. Valid for all tenants or only for the listed ones, with its own rights (ApiScopes).</summary>
 public sealed class ApiKey
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -351,8 +351,8 @@ public sealed class ApiKey
     public DateTimeOffset? LastUsedAt { get; set; }
     public DateTimeOffset? ExpiresAt { get; set; }
     public DateTimeOffset? RevokedAt { get; set; }
-    /// <summary>Darf ToDos (Personen, die einen Key bekommen sollen) in die Warteschlange schreiben. Einzige Schreibfunktion der API.</summary>
-    public bool AllowTodoWrite { get; set; }
+    /// <summary>Rechte des Schlüssels, z. B. inventory.read oder todos.write (siehe ApiScopes). Gelten für alle Tenants des Schlüssels.</summary>
+    public List<string> Scopes { get; set; } = [];
 }
 
 public enum BatchStatus { Open = 0, Completed = 1, Cancelled = 2 }

@@ -74,9 +74,6 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<bool>("AllTenants")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("AllowTodoWrite")
-                        .HasColumnType("boolean");
-
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -99,6 +96,10 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<DateTimeOffset?>("RevokedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.PrimitiveCollection<List<string>>("Scopes")
+                        .IsRequired()
+                        .HasColumnType("text[]");
 
                     b.Property<string>("SecretHash")
                         .IsRequired()
