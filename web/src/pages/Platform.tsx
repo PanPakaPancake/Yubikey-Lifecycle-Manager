@@ -273,8 +273,8 @@ function LoginSettingsCard() {
     <Card title="Anmeldung an der Plattform">
       <dl className="explain">
         <dt>Entra-SSO</dt><dd>Konten aus dem Heim-Tenant melden sich über Microsoft an (passwortlos mit YubiKey).</dd>
-        <dt>Lokale Konten</dt><dd>Anmeldung mit Passkey direkt an der Plattform, unabhängig von Entra. Immer verfügbar.</dd>
-        <dt>Notfallkonten</dt><dd>Passwort plus Authenticator-Code, für den Fall, dass Entra oder Passkeys ausfallen.</dd>
+        <dt>Lokale Konten (Passkey)</dt><dd>Anmeldung mit Passkey direkt an der Plattform, unabhängig von Entra. Empfohlen für Kundenzugriffe und Breakglass.</dd>
+        <dt>Lokale Konten (Passwort + TOTP)</dt><dd>Passwort plus Authenticator-Code, wenn kein Passkey möglich ist.</dd>
       </dl>
       {data && (
         <label className="check">
@@ -282,7 +282,7 @@ function LoginSettingsCard() {
           Anmeldung mit Entra-SSO erlauben {!data.entraConfigured && <span className="muted small">(keine App-Registrierung eingerichtet)</span>}
         </label>
       )}
-      <p className="small muted">Lokale Konten und Notfallkonten legen Sie unter <Link to="/users">Benutzer &amp; Rollen</Link> an. Entra-SSO lässt sich nur abschalten, wenn ein Owner ein eingerichtetes lokales Konto hat.</p>
+      <p className="small muted">Lokale Konten legen Sie unter <Link to="/users">Benutzer &amp; Rollen</Link> an. Entra-SSO lässt sich nur abschalten, wenn ein Owner ein eingerichtetes lokales Konto hat.</p>
       <ErrorBox error={error} />
     </Card>
   );

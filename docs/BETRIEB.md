@@ -261,8 +261,10 @@ Tag setzen und pushen, z. B. `git tag v0.2.0 && git push origin v0.2.0`. Der Wor
 Unter **Partner → Benutzer & Rollen** gibt es drei Anmeldearten:
 
 - **Entra-SSO:** Konten aus dem Heim-Tenant melden sich über Microsoft an, passwortlos mit YubiKey.
-- **Lokal mit Passkey:** Das Konto existiert nur auf der Plattform. Nach dem Anlegen zeigt die Oberfläche einen Einmal-Link, der drei Tage gilt. Darüber registriert die Person ihren YubiKey als Passkey. Weitere Schlüssel fügt sie unter „Mein Konto“ hinzu.
-- **Notfallkonto:** Anmeldung mit Passwort (mindestens 14 Zeichen) und TOTP-Code aus einer Authenticator-App, ebenfalls per Einmal-Link eingerichtet. Nach fünf Fehlversuchen ist das Konto 15 Minuten gesperrt. Ein neuer Link setzt Passwort und TOTP zurück.
+- **Lokales Konto (Passkey), empfohlen:** Für Kundenzugriffe oder Breakglass. Das Konto existiert nur auf der Plattform. Nach dem Anlegen zeigt die Oberfläche einen Einmal-Link, der drei Tage gilt. Darüber registriert die Person ihren YubiKey als Passkey. Weitere Schlüssel fügt sie unter „Mein Konto“ hinzu.
+- **Lokales Konto (Passwort + TOTP):** Nur, wenn kein Passkey möglich ist. Anmeldung mit Passwort (mindestens 14 Zeichen) und TOTP-Code aus einer Authenticator-App, ebenfalls per Einmal-Link eingerichtet. Nach fünf Fehlversuchen ist das Konto 15 Minuten gesperrt. Ein neuer Link setzt Passwort und TOTP zurück.
+
+Auf der Anmeldeseite erscheint „Mit Passkey anmelden“, sobald das erste lokale Konto einen Passkey eingerichtet hat, und „Lokales Konto mit Passwort und Code“, sobald das erste Konto mit Passwort + TOTP eingerichtet ist. Vorher sind die Wege ausgeblendet, weil sich darüber noch niemand anmelden kann.
 
 **Notfallcodes:** Jeder Owner kann unter **Mein Konto → Notfallcodes** acht Einmal-Codes erzeugen und ausdrucken. Solange es keine gibt (oder nur noch zwei übrig sind), weist ein Hinweis oben auf jeder Seite darauf hin, auch direkt nach der ersten Anmeldung nach der Installation. Auf der Anmeldeseite meldet „Mit Notfallcode anmelden“ den Owner ohne Microsoft oder Passkey an. Jeder Code gilt einmal; gespeichert ist nur ein SHA-256-Hash. Neue Codes machen alle alten ungültig. Jede Nutzung steht als `auth.recovery_code_used` im Audit-Log und lässt sich unter **Benachrichtigungen** als Webhook oder Mail-Alarm („Anmeldung mit Notfallcode“) melden. Codes eines Kontos, das kein aktiver Owner mehr ist, funktionieren nicht.
 

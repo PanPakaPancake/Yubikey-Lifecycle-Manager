@@ -6,7 +6,7 @@ import { createPasskey, passkeyError, passkeysSupported } from '../webauthn';
 
 type SetupInfo = { upn: string; displayName: string; loginKind: 'Local' | 'Emergency'; setupTokenExpiresAt: string };
 
-/** Einmal-Link für lokale Konten: Passkey registrieren bzw. Passwort + TOTP für ein Notfallkonto festlegen. */
+/** Einmal-Link für lokale Konten: Passkey registrieren bzw. Passwort + TOTP für ein lokales Konto festlegen. */
 export default function AccountSetupPage() {
   const token = window.location.hash.slice(1);
   const [info, setInfo] = useState<SetupInfo>();
@@ -71,7 +71,7 @@ function EmergencySetup({ token, upn }: { token: string; upn: string }) {
   });
   return (
     <>
-      <Info tone="warn">Notfallkonten sind für den Fall gedacht, dass Entra oder die Passkey-Anmeldung nicht funktioniert. Bewahren Sie Passwort und Authenticator sicher und getrennt auf.</Info>
+      <Info tone="warn">Passwort und Authenticator-Code sind weniger sicher als ein Passkey. Bewahren Sie beides sicher und getrennt auf.</Info>
       {!totp && <>
         <p className="muted">Schritt 1: Authenticator-App (z. B. Microsoft Authenticator) mit dem Konto verbinden.</p>
         <button className="primary" disabled={start.busy} onClick={begin}>QR-Code anzeigen</button>
@@ -92,7 +92,7 @@ function EmergencySetup({ token, upn }: { token: string; upn: string }) {
           </div>
           <Field label="Code aus der App"><input inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code} onChange={(e) => setCode(e.target.value)} /></Field>
           {repeat && password !== repeat && <Info tone="warn">Die Passwörter stimmen nicht überein.</Info>}
-          <button type="submit" className="primary" disabled={finish.busy || password.length < 14 || password !== repeat || code.length < 6}>Notfallkonto einrichten</button>
+          <button type="submit" className="primary" disabled={finish.busy || password.length < 14 || password !== repeat || code.length < 6}>Konto einrichten</button>
           <ErrorBox error={finish.error} />
         </form>
       </>}
