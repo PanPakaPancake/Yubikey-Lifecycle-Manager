@@ -39,6 +39,17 @@ public sealed class GraphClientFactory(
         return _credentials.GetOrAdd(tenantId, credential);
     }
 
+    public async Task TestCertificateAsync(Guid entraTenantId, System.Security.Cryptography.X509Certificates.X509Certificate2 certificate, CancellationToken ct = default)
+    {
+        using var scope = scopes.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<YlmDbContext>();
+        var settings = await db.Installation.AsNoTracking().FirstOrDefaultAsync(ct);
+        if (settings?.ClientId is null) throw new ApiException(409, "setup_incomplete", "Die App-Registrierung der Installation ist noch nicht eingerichtet.");
+        var credential = new ClientCertificateCredential(entraTenantId.ToString(), settings.ClientId.Value.ToString(), certificate,
+            new ClientCertificateCredentialOptions { AuthorityHost = new Uri(options.Value.LoginAuthority), SendCertificateChain = false });
+        await credential.GetTokenAsync(new TokenRequestContext([options.Value.GraphBaseUrl.TrimEnd('/') + "/.default"]), ct);
+    }
+
     public void Invalidate(Guid entraTenantId) => _credentials.TryRemove(entraTenantId, out _);
 
     public void Reset() => _credentials.Clear();

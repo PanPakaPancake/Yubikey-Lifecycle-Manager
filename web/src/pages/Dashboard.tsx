@@ -6,6 +6,7 @@ import type { ReactNode } from 'react';
 import { Badge, Card, CountUp, Donut, download, Empty, ErrorBox, MenuButton, PageHeader, Spinner, useApi } from '../ui';
 import { Icon, type IconName } from '../icons';
 import { useTenant } from '../tenant';
+import type { CertificateStatus } from './Platform';
 
 interface DashboardData {
   generatedAt: string; byStatus: Record<string, number>; inStock: number; total: number; needsDetails: number;
@@ -25,6 +26,7 @@ export default function DashboardPage() {
   const can = useCan();
   const q = tenantId ? '?tenantId=' + tenantId : '';
   const { data, error, loading } = useApi<DashboardData>('/api/dashboard' + q, [tenantId]);
+  const { data: cert } = useApi<CertificateStatus>(can('ManageSettings') ? '/api/platform/certificate' : null);
   // Kennzahlen führen ins passend gefilterte Inventar (auf Partnerebene: über alle Tenants).
   const keysLink = (status: KeyStatus) => '/keys?status=' + status;
   const maxMonth = Math.max(1, ...(data?.issuedPerMonth.map((m) => m.count) ?? [1]));
@@ -48,8 +50,8 @@ export default function DashboardPage() {
       {data && (
         <>
           <div className="dash">
-          <DashHero data={data} />
-          <ActionItems data={data} keysLink={keysLink} />
+          <DashHero data={data} cert={cert} />
+          <ActionItems data={data} keysLink={keysLink} cert={cert} />
 
           <div className="grid cols-4 dash-kpis">
             <Kpi icon="users" className="kpi-coverage" label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
@@ -136,13 +138,13 @@ export default function DashboardPage() {
  * Einstieg im Stil der Passkey-Seite: Begrüßung, Lage in einem Satz und Abkürzungen.
  * Gestaltung in bento.css.
  */
-function DashHero({ data }: { data: DashboardData }) {
+function DashHero({ data, cert }: { data: DashboardData; cert?: CertificateStatus }) {
   const { me } = useAuth();
   const h = new Date().getHours();
   const hello = h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend';
   const first = me.user?.displayName?.split(/\s+/)[0];
   const todo = data.tenants.reduce((n, t) => n + (t.checksFailed > 0 ? 1 : 0) + (t.lastSyncSucceeded === false ? 1 : 0), 0)
-    + (data.byStatus.Locked ? 1 : 0) + (data.vulnerableKeys ? 1 : 0) + (data.pendingApprovals ? 1 : 0) + (data.openTodos ? 1 : 0) + (data.needsDetails ? 1 : 0);
+    + (cert && cert.state !== 'ok' && cert.state !== 'missing' ? 1 : 0) + (data.byStatus.Locked ? 1 : 0) + (data.vulnerableKeys ? 1 : 0) + (data.pendingApprovals ? 1 : 0) + (data.openTodos ? 1 : 0) + (data.needsDetails ? 1 : 0);
   return (
     <section className="dash-hero">
       <div className="dash-hero-text">
@@ -179,8 +181,15 @@ function Kpi({ label, value, sub, to, tone, children, aside, icon, className = '
 }
 
 /** „Handlungsbedarf“: alles, was ein Admin heute anfassen sollte, mit direktem Link. */
-function ActionItems({ data, keysLink }: { data: DashboardData; keysLink: (s: KeyStatus) => string }) {
+function ActionItems({ data, keysLink, cert }: { data: DashboardData; keysLink: (s: KeyStatus) => string; cert?: CertificateStatus }) {
   const items: { tone: 'error' | 'warn' | 'info'; text: ReactNode; to: string; cta: string }[] = [];
+  if (cert && cert.state !== 'ok' && cert.state !== 'missing') items.push({
+    tone: cert.state === 'warning' ? 'warn' : 'error',
+    text: cert.state === 'expired'
+      ? <>Das App-Zertifikat ist abgelaufen. Die Plattform kann sich bei keinem Tenant mehr anmelden.</>
+      : <>Das App-Zertifikat läuft in {cert.daysLeft} Tag(en) ab{cert.lastError ? ', die automatische Erneuerung ist fehlgeschlagen' : cert.nextThumbprint ? ', ein neues wartet auf Entra' : ''}.</>,
+    to: '/platform#certificate', cta: 'Zertifikat',
+  });
   for (const t of data.tenants) {
     if (t.checksFailed > 0) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: {t.checksFailed} FIDO2-Prüfung(en) fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Beheben' });
     if (t.lastSyncSucceeded === false) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: letzte Synchronisation fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Ansehen' });

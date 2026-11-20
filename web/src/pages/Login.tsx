@@ -17,11 +17,25 @@ const errorTexts: Record<string, string> = {
   sso_not_configured: 'Für die Anmeldung mit Microsoft ist keine Entra-App eingetragen. Bitte den Setup-Assistenten abschließen oder mit Passkey anmelden.',
 };
 
+/**
+ * Nur Pfade dieser Plattform als Ziel nach der Anmeldung. Sonst ließe sich mit einem präparierten Link
+ * auf eine fremde Seite (Phishing) oder auf eine javascript:-Adresse (Skript im Kontext der Plattform) weiterleiten.
+ */
+function safeReturnUrl(value: string | null): string {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return '/';
+  try {
+    const url = new URL(value, window.location.origin);
+    return url.origin === window.location.origin ? url.pathname + url.search + url.hash : '/';
+  } catch {
+    return '/';
+  }
+}
+
 type Methods = { entraSso: boolean; passkey: boolean; emergency: boolean };
 
 export default function LoginPage({ setupComplete }: { setupComplete: boolean }) {
     const params = new URLSearchParams(window.location.search);
-  const returnUrl = params.get('returnUrl') ?? '/';
+  const returnUrl = safeReturnUrl(params.get('returnUrl'));
   const err = params.get('error');
   const [devUpn, setDevUpn] = useState('admin@contoso.dev');
   const [devError, setDevError] = useState<string>();

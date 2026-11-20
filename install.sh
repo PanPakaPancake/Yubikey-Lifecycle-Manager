@@ -6,11 +6,17 @@
 #
 # Optionen:
 #   --dir PFAD         Installationsordner (Standard: /opt/ylm)
-#   --mode MODUS       https  = eigene Domain mit automatischem HTTPS (Caddy + Let's Encrypt)
-#                      proxy  = hinter einem vorhandenen Reverse Proxy (nginx, Traefik, ...)
-#                      local  = nur auf diesem Rechner unter http://localhost:8080
-#   --domain NAME      Domain für --mode https (setzt den Modus automatisch)
-#   --url URL          öffentliche Adresse für --mode proxy, z. B. https://ylm.example.com
+#   --mode MODUS       internal = internes Netz/ZTNA, HTTPS mit eigener interner Zertifizierungsstelle (Caddy)
+#                      cert     = internes Netz/ZTNA, HTTPS mit eigenem Zertifikat (z. B. Firmen-PKI)
+#                      proxy    = hinter einem vorhandenen Reverse Proxy oder ZTNA-Connector (nginx, Traefik,
+#                                 Cloudflare Tunnel, Entra Private Access/App Proxy, ...)
+#                      https    = öffentliche Domain mit Let's Encrypt (Server muss aus dem Internet erreichbar sein)
+#                      local    = nur auf diesem Rechner unter http://localhost:8080
+#   --domain NAME      DNS-Name für internal, cert und https (z. B. ylm.firma.intern)
+#   --cert DATEI       Zertifikat (PEM, mit Zwischenzertifikaten) für --mode cert
+#   --key DATEI        privater Schlüssel (PEM) für --mode cert
+#   --url URL          Adresse für --mode proxy, z. B. https://ylm.firma.de
+#   --bind ADRESSE     Netzwerkadresse, auf der die Plattform lauscht (Standard je Modus, z. B. 10.0.0.5)
 #   --version vX.Y.Z   bestimmte Version statt der neuesten
 #   --yes              keine Rückfragen (Standardwerte bzw. Optionen verwenden)
 #
@@ -25,6 +31,9 @@ DIR="/opt/ylm"
 MODE=""
 DOMAIN=""
 URL=""
+CERT=""
+KEY=""
+BIND=""
 VERSION=""
 YES=0
 
@@ -32,14 +41,19 @@ while [ $# -gt 0 ]; do
 	case "$1" in
 		--dir) DIR="$2"; shift 2 ;;
 		--mode) MODE="$2"; shift 2 ;;
-		--domain) DOMAIN="$2"; MODE="${MODE:-https}"; shift 2 ;;
+		--domain) DOMAIN="$2"; shift 2 ;;
+		--cert) CERT="$2"; MODE="${MODE:-cert}"; shift 2 ;;
+		--key) KEY="$2"; shift 2 ;;
 		--url) URL="$2"; MODE="${MODE:-proxy}"; shift 2 ;;
+		--bind) BIND="$2"; shift 2 ;;
 		--version) VERSION="$2"; shift 2 ;;
 		--yes|-y) YES=1; shift ;;
-		-h|--help) sed -n '2,20p' "$0" 2>/dev/null || true; exit 0 ;;
+		-h|--help) sed -n '2,26p' "$0" 2>/dev/null || true; exit 0 ;;
 		*) echo "Unbekannte Option: $1" >&2; exit 2 ;;
 	esac
 done
+# Wie bisher: --domain ohne --mode heißt Let's Encrypt. Für interne Netze --mode internal angeben.
+[ -n "$MODE" ] || [ -z "$DOMAIN" ] || MODE=https
 
 bold() { printf '\033[1m%s\033[0m\n' "$*"; }
 info() { printf '  %s\n' "$*"; }
@@ -97,7 +111,7 @@ fi
 REF="$VERSION"
 info "Version: $VERSION"
 
-mkdir -p "$DIR/deploy" "$DIR/backups"
+mkdir -p "$DIR/deploy" "$DIR/backups" "$DIR/certs"
 cd "$DIR"
 if [ -d .git ]; then
 	info "$DIR ist ein Git-Checkout: Dateien kommen aus Git (git pull), es wird nichts heruntergeladen."
@@ -118,13 +132,68 @@ else
 	chmod 644 docker-compose.yml deploy/Caddyfile deploy/backup.sh .env.example
 fi
 
+# --- Erreichbarkeit -------------------------------------------------------------------------------
+NEW_PASSPHRASE=0
+CADDY_TLS=""
+configure_mode() { # fragt die Angaben zum Modus ab und setzt URL, DOMAIN, CADDY_TLS
+	case "$MODE" in
+		internal|cert|https)
+			if [ -z "$DOMAIN" ]; then
+				if [ "$MODE" = https ]; then DOMAIN=$(ask "Öffentliche Domain (DNS-Eintrag zeigt auf diesen Server)" "")
+				else DOMAIN=$(ask "DNS-Name im internen Netz (z. B. ylm.firma.intern)" "$(hostname -f 2>/dev/null || hostname)"); fi
+			fi
+			[ -n "$DOMAIN" ] || fail "Ohne DNS-Namen kein HTTPS. Mit --domain angeben."
+			DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN%%/*}"
+			URL="https://$DOMAIN"
+			case "$MODE" in
+				internal) CADDY_TLS="tls internal" ;;
+				https) CADDY_TLS="" ;;
+				cert)
+					[ -n "$CERT" ] || [ -f certs/ylm.crt ] || CERT=$(ask "Zertifikatsdatei (PEM, mit Zwischenzertifikaten)" "")
+					[ -n "$KEY" ] || [ -f certs/ylm.key ] || KEY=$(ask "Datei mit dem privaten Schlüssel (PEM, ohne Passwort)" "")
+					if [ -n "$CERT" ]; then [ -f "$CERT" ] || fail "Zertifikat nicht gefunden: $CERT"; cp "$CERT" certs/ylm.crt; fi
+					if [ -n "$KEY" ]; then [ -f "$KEY" ] || fail "Schlüssel nicht gefunden: $KEY"; cp "$KEY" certs/ylm.key; fi
+					[ -f certs/ylm.crt ] && [ -f certs/ylm.key ] || fail "Für --mode cert bitte --cert und --key angeben (oder certs/ylm.crt und certs/ylm.key ablegen)."
+					chmod 644 certs/ylm.crt; chmod 600 certs/ylm.key
+					CADDY_TLS="tls /certs/ylm.crt /certs/ylm.key" ;;
+			esac ;;
+		proxy)
+			[ -n "$URL" ] || URL=$(ask "Adresse, unter der Benutzer die Plattform aufrufen" "https://ylm.firma.de")
+			case "$URL" in https://*) ;; *) fail "Die Adresse muss mit https:// beginnen (Passkeys und Entra verlangen HTTPS)." ;; esac
+			URL="${URL%/}"
+			if [ -z "$BIND" ]; then
+				if confirm "Läuft der Reverse Proxy bzw. ZTNA-Connector auf diesem Server?"; then BIND=127.0.0.1
+				else BIND=$(ask "Interne IP-Adresse dieses Servers, die der Proxy erreicht" "$(hostname -I 2>/dev/null | awk '{print $1}')"); fi
+			fi ;;
+		local) URL="http://localhost:8080" ;;
+		*) fail "Unbekannter Modus: $MODE (internal, cert, proxy, https oder local)" ;;
+	esac
+}
+apply_mode() { # schreibt den Modus in .env
+	env_set YLM_PUBLIC_URL "$URL"
+	case "$MODE" in
+		internal|cert|https)
+			env_set COMPOSE_PROFILES https; env_set YLM_DOMAIN "$DOMAIN"; env_set YLM_CADDY_TLS "$CADDY_TLS"
+			[ -z "$BIND" ] || env_set YLM_HTTPS_BIND "$BIND" ;;
+		proxy|local)
+			env_set COMPOSE_PROFILES ""
+			[ "$MODE" = local ] || env_set YLM_BIND "${BIND:-127.0.0.1}:8080" ;;
+	esac
+	env_set YLM_MODE "$MODE"
+}
+
 # --- 3. .env --------------------------------------------------------------------------------------
 if [ -f .env ]; then
 	info "Vorhandene .env wird beibehalten."
 	[ -n "$(env_get UPDATER_TOKEN)" ] || { env_set UPDATER_TOKEN "$(secret 32)"; info "UPDATER_TOKEN ergänzt (Update per Klick)."; }
-	if [ -n "$DOMAIN" ]; then
-		env_set COMPOSE_PROFILES https; env_set YLM_DOMAIN "$DOMAIN"; env_set YLM_PUBLIC_URL "https://$DOMAIN"
-		info "HTTPS für $DOMAIN eingestellt."
+	if [ -z "$(env_get BACKUP_PASSPHRASE)" ]; then
+		env_set BACKUP_PASSPHRASE "$(secret 24)"; NEW_PASSPHRASE=1
+		info "BACKUP_PASSPHRASE ergänzt: neue Sicherungen werden verschlüsselt (ältere bleiben lesbar)."
+	fi
+	if [ -n "$MODE" ]; then
+		configure_mode
+		apply_mode
+		info "Erreichbarkeit umgestellt auf: $MODE ($URL)."
 	fi
 else
 	if curl -fsS -m 3 http://127.0.0.1:8080/healthz >/dev/null 2>&1; then
@@ -133,34 +202,27 @@ else
 	if [ -z "$MODE" ]; then
 		echo
 		bold "Wie soll die Plattform erreichbar sein?"
-		info "1) Eigene Domain mit automatischem HTTPS (Server/VPS, empfohlen)"
-		info "2) Hinter einem vorhandenen Reverse Proxy"
-		info "3) Nur auf diesem Rechner (http://localhost:8080)"
-		case "$(ask "Auswahl" "1")" in 2) MODE=proxy ;; 3) MODE=local ;; *) MODE=https ;; esac
+		info "1) Internes Netz oder ZTNA, HTTPS mit eigener interner Zertifizierungsstelle (empfohlen)"
+		info "2) Internes Netz oder ZTNA, HTTPS mit eigenem Zertifikat (z. B. Firmen-PKI)"
+		info "3) Hinter einem vorhandenen Reverse Proxy oder ZTNA-Connector"
+		info "4) Öffentliche Domain mit Let's Encrypt (nur wenn der Server aus dem Internet erreichbar sein soll)"
+		info "5) Nur auf diesem Rechner (http://localhost:8080)"
+		case "$(ask "Auswahl" "1")" in 2) MODE=cert ;; 3) MODE=proxy ;; 4) MODE=https ;; 5) MODE=local ;; *) MODE=internal ;; esac
 	fi
-	case "$MODE" in
-		https)
-			[ -n "$DOMAIN" ] || DOMAIN=$(ask "Domain (DNS-Eintrag muss auf diesen Server zeigen)" "")
-			[ -n "$DOMAIN" ] || fail "Ohne Domain kein HTTPS. Mit --domain angeben oder --mode local/proxy wählen."
-			DOMAIN="${DOMAIN#https://}"; DOMAIN="${DOMAIN%%/*}"
-			URL="https://$DOMAIN" ;;
-		proxy)
-			[ -n "$URL" ] || URL=$(ask "Öffentliche HTTPS-Adresse" "https://ylm.example.com")
-			case "$URL" in https://*) ;; *) fail "Die öffentliche Adresse muss mit https:// beginnen (Passkeys und Entra verlangen HTTPS)." ;; esac
-			URL="${URL%/}" ;;
-		local) URL="http://localhost:8080" ;;
-		*) fail "Unbekannter Modus: $MODE (https, proxy oder local)" ;;
-	esac
+	configure_mode
 	{
 		echo "# Angelegt von install.sh am $(date '+%Y-%m-%d %H:%M'). Erklärung aller Werte: .env.example"
 		echo "COMPOSE_PROJECT_NAME=ylm"
 		echo "POSTGRES_PASSWORD=$(secret 24)"
 		echo "YLM_PUBLIC_URL=$URL"
 		echo "UPDATER_TOKEN=$(secret 32)"
-		if [ "$MODE" = https ]; then echo "COMPOSE_PROFILES=https"; echo "YLM_DOMAIN=$DOMAIN"; fi
+		echo "# Verschlüsselt die Sicherungen. Zusätzlich im Passwortmanager ablegen, ohne sie ist keine Wiederherstellung möglich."
+		echo "BACKUP_PASSPHRASE=$(secret 24)"
 		echo "TZ=$( (timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone 2>/dev/null) | head -n1 | grep . || echo Europe/Berlin)"
 	} > .env
 	chmod 600 .env
+	NEW_PASSPHRASE=1
+	apply_mode
 	info ".env mit neuen Zufallsgeheimnissen angelegt ($DIR/.env)."
 fi
 
@@ -173,7 +235,8 @@ if [[ "$PROFILES" == *https* ]]; then
 	[ -n "$DOMAIN" ] || fail "COMPOSE_PROFILES=https ist gesetzt, aber YLM_DOMAIN fehlt in .env."
 	resolved=$(getent ahosts "$DOMAIN" 2>/dev/null | awk '{print $1}' | sort -u | tr '\n' ' ' || true)
 	if [ -z "$resolved" ]; then
-		warn "$DOMAIN lässt sich (noch) nicht auflösen. Let's Encrypt klappt erst, wenn der DNS-Eintrag auf diesen Server zeigt."
+		if [ -z "$(env_get YLM_CADDY_TLS)" ]; then warn "$DOMAIN lässt sich (noch) nicht auflösen. Let's Encrypt klappt erst, wenn der DNS-Eintrag auf diesen Server zeigt."
+		else warn "$DOMAIN lässt sich auf diesem Server nicht auflösen. Bitte einen DNS-Eintrag im internen DNS anlegen, der auf diesen Server zeigt."; fi
 	else
 		info "$DOMAIN zeigt auf: $resolved"
 	fi
@@ -211,6 +274,29 @@ if [ -n "$token" ]; then
 	echo
 	echo "      $token"
 	echo
+fi
+if [ "$(env_get YLM_CADDY_TLS)" = "tls internal" ]; then
+	for _ in $(seq 1 20); do
+		docker compose exec -T caddy cat /data/caddy/pki/authorities/local/root.crt > ylm-root-ca.crt 2>/dev/null && [ -s ylm-root-ca.crt ] && break
+		sleep 2
+	done
+	if [ -s ylm-root-ca.crt ]; then
+		chmod 644 ylm-root-ca.crt
+		bold "Stammzertifikat der internen Zertifizierungsstelle: $DIR/ylm-root-ca.crt"
+		info "Bitte auf allen Admin-PCs (Browser und Agent) als vertrauenswürdige Stammzertifizierungsstelle verteilen,"
+		info "z. B. per Gruppenrichtlinie oder Intune. Einzelner PC: certutil -addstore -f Root ylm-root-ca.crt (als Administrator)."
+		echo
+	else
+		rm -f ylm-root-ca.crt
+		warn "Stammzertifikat noch nicht verfügbar. Später: docker compose exec caddy cat /data/caddy/pki/authorities/local/root.crt > ylm-root-ca.crt"
+	fi
+fi
+if [ "$NEW_PASSPHRASE" = 1 ]; then
+	bold "Passphrase für die Datensicherung (bitte jetzt im Passwortmanager ablegen):"
+	echo
+	echo "      $(env_get BACKUP_PASSPHRASE)"
+	echo
+	info "Ohne diese Passphrase lässt sich keine Sicherung einspielen. Sie steht auch in $DIR/.env."
 fi
 info "Installationsordner: $DIR (Einstellungen in .env, Sicherungen in backups/)"
 info "Status: docker compose ps   Protokoll: docker compose logs -f server"

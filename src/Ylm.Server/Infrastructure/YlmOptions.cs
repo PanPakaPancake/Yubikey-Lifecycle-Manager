@@ -13,6 +13,12 @@ public sealed class YlmOptions
     /// <summary>Require a phishing-resistant sign-in (amr claim) for platform admins.</summary>
     public bool RequirePhishingResistantSignIn { get; set; } = true;
 
+    /// <summary>App-Zertifikat vor dem Ablauf selbst erneuern (Graph addKey). Aus: nur warnen.</summary>
+    public bool AutoRenewAppCertificate { get; set; } = true;
+
+    /// <summary>So viele Tage vor dem Ablauf warnt die Plattform und erneuert das App-Zertifikat.</summary>
+    public int AppCertificateRenewalDays { get; set; } = 30;
+
     /// <summary>amr values accepted as phishing resistant. Entra sends "fido" for FIDO2/passkeys.</summary>
     public string[] PhishingResistantAmrValues { get; set; } = ["fido"];
 
@@ -51,6 +57,12 @@ public sealed class YlmOptions
 
     /// <summary>Gemeinsames Geheimnis mit dem Updater-Container.</summary>
     public string? UpdaterToken { get; set; }
+
+    /// <summary>
+    /// Absender, deren X-Forwarded-For/-Proto/-Host-Header gelten (IP-Adressen oder Netze in CIDR-Schreibweise).
+    /// Leer = Loopback und private Netze (Docker, Caddy, Reverse Proxy im internen Netz). "*" = allen vertrauen (alte Voreinstellung).
+    /// </summary>
+    public string[] TrustedProxies { get; set; } = [];
 
     /// <summary>Run background jobs (sync, retention). Disabled in tests.</summary>
     public bool EnableBackgroundJobs { get; set; } = true;

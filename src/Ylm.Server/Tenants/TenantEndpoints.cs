@@ -17,7 +17,8 @@ public static class TenantEndpoints
 {
     public sealed record ConsentRequest(string? TenantHint);
     public sealed record FixRequest(List<string> CheckIds);
-    public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes, bool? RequireBreakglassApproval = null);
+    public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes, bool? RequireBreakglassApproval = null,
+        bool? ProtectAdmins = null, List<GroupRef>? ProtectedGroups = null);
     public sealed record OffboardRequest(bool Confirm);
 
     private sealed record ConsentState(Guid UserId, DateTimeOffset ExpiresAt, string Nonce);
@@ -44,6 +45,8 @@ public static class TenantEndpoints
         t.OffboardedAt,
         t.DataDeletionDueAt,
         t.RequireBreakglassApproval,
+        t.ProtectAdmins,
+        t.ProtectedGroups,
     };
 
     private static List<GroupRef> NormalizeGroups(IEnumerable<GroupRef> groups)
@@ -107,6 +110,9 @@ public static class TenantEndpoints
                 return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString("Der Admin-Consent wurde nicht erteilt."));
 
             var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.EntraTenantId == entraTenantId);
+            // Einen vorhandenen (auch offboardeten) Tenant darf nur reaktivieren, wer für ihn zuständig ist.
+            if (tenant is not null && !CurrentUser.CanAccessTenant(user, tenant.Id))
+                return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString("Dieser Tenant ist bereits angebunden, Sie sind aber nicht für ihn zuständig."));
             var isNew = tenant is null;
             tenant ??= new Tenant { EntraTenantId = entraTenantId, SyncIntervalMinutes = opt.Value.DefaultSyncIntervalMinutes };
             tenant.Status = TenantStatus.Active;
@@ -114,7 +120,12 @@ public static class TenantEndpoints
             tenant.ConsentedBy = user.Upn;
             tenant.OffboardedAt = null;
             tenant.DataDeletionDueAt = null;
-            if (isNew) db.Tenants.Add(tenant);
+            if (isNew)
+            {
+                db.Tenants.Add(tenant);
+                // Wer nur für einzelne Tenants zuständig ist, soll den selbst angebundenen Tenant danach auch sehen.
+                if (!user.AllTenants) db.PlatformUserTenants.Add(new PlatformUserTenant { PlatformUserId = user.Id, TenantId = tenant.Id });
+            }
             try
             {
                 // A token issued before this consent would still carry the old permissions.
@@ -151,6 +162,17 @@ public static class TenantEndpoints
                 t.SyncIntervalMinutes = interval;
             }
             if (body.RequireBreakglassApproval is { } four) t.RequireBreakglassApproval = four;
+            var protectedGroups = body.ProtectedGroups is null ? null : NormalizeGroups(body.ProtectedGroups);
+            var protectionChanged = (body.ProtectAdmins is { } pa && pa != t.ProtectAdmins)
+                || (protectedGroups is not null && !protectedGroups.Select(x => x.Id).Order().SequenceEqual(t.ProtectedGroups.Select(x => x.Id).Order()));
+            if (protectionChanged)
+            {
+                // Sonst könnte sich jemand ohne dieses Recht den Schutz selbst abschalten.
+                if (!CurrentUser.Has(user, Permission.ManageProtectedAccounts))
+                    throw ApiException.Forbidden("Den Schutz von Konten ändern darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat.");
+                if (body.ProtectAdmins is { } protectAdmins) t.ProtectAdmins = protectAdmins;
+                if (protectedGroups is not null) t.ProtectedGroups = protectedGroups;
+            }
             audit.Add(AuditService.User(user), AuditActions.TenantUpdated, t.Id, details: body);
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(t));

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router';
 import { api, fieldTypes, fmtDate, keyFromLabel, type AgentUpdatePolicy, type CustomField, type GlobalField, type Tenant } from '../api';
 import { useAuth, useCan } from '../auth';
-import { Badge, Card, ErrorBox, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
+import { Badge, Card, download, ErrorBox, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { FieldExplanation } from './TenantDetail';
 import { useConfirm } from '../feedback';
 import { BrandingCard } from './Branding';
@@ -30,6 +30,7 @@ export default function PlatformPage() {
         </dl>
       </Card>
       {can('ManageSettings') && <UpdatesCard />}
+      {can('ManageSettings') && <AppCertificateCard />}
       {can('ManageSettings') && <LoginSettingsCard />}
       <BrandingCard editable={!!can('ManageSettings')} />
       <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
@@ -212,6 +213,55 @@ function ScopeModal({ keyRow, tenants, canAll, onClose, onSaved }: { keyRow: Api
       <label className="check"><input type="checkbox" checked={todoWrite} onChange={(e) => setTodoWrite(e.target.checked)} /> Darf Personen auf die ToDo-Liste setzen</label>
       <ErrorBox error={error} />
     </Modal>
+  );
+}
+
+export type CertificateStatus = {
+  state: 'ok' | 'warning' | 'critical' | 'expired' | 'missing';
+  thumbprint?: string; notAfter?: string; daysLeft?: number; renewalDays: number;
+  autoRenew: boolean; autoRenewPossible: boolean;
+  nextCreatedAt?: string; nextThumbprint?: string; lastAttemptAt?: string; lastError?: string;
+};
+
+const certTone = { ok: 'ok', warning: 'warn', critical: 'error', expired: 'error', missing: 'neutral' } as const;
+const certLabel = { ok: 'Gültig', warning: 'Läuft bald ab', critical: 'Läuft in Kürze ab', expired: 'Abgelaufen', missing: 'Nicht vorhanden' } as const;
+
+/** App-Zertifikat: Anmeldung der Plattform in allen Tenants. Warnung, automatische Erneuerung, Fallback von Hand. */
+function AppCertificateCard() {
+  const { data, reload } = useApi<CertificateStatus>('/api/platform/certificate');
+  const { busy, error, run } = useAction();
+  const act = (path: string) => run(async () => { await api.post('/api/platform/certificate/' + path, {}); reload(); });
+  const discard = () => run(async () => { await api.del('/api/platform/certificate/next'); reload(); });
+  if (!data || data.state === 'missing') return null;
+  return (
+    <Card title={<span id="certificate">App-Zertifikat</span>}
+      actions={data.autoRenewPossible && !data.nextThumbprint && <button disabled={busy} onClick={() => act('renew')}>Jetzt erneuern</button>}>
+      <p className="small muted">Mit diesem Zertifikat meldet sich die Plattform in jedem angebundenen Tenant bei Microsoft Graph an. Läuft es ab, funktionieren Sync, Registrierung und Rollout nicht mehr.</p>
+      <dl className="props">
+        <dt>Status</dt><dd><Badge tone={certTone[data.state]}>{certLabel[data.state]}</Badge>{data.daysLeft != null && data.daysLeft >= 0 && <span className="muted small"> noch {data.daysLeft} Tage</span>}</dd>
+        <dt>Gültig bis</dt><dd>{data.notAfter ? fmtDate(data.notAfter) : '–'}</dd>
+        <dt>Fingerabdruck</dt><dd className="mono small">{data.thumbprint}</dd>
+        <dt>Erneuerung</dt><dd>{data.autoRenew
+          ? <>automatisch {data.renewalDays} Tage vor dem Ablauf</>
+          : <>nur Warnung (automatische Erneuerung abgeschaltet: <span className="mono">YLM_CERT_AUTO_RENEW=false</span>)</>}</dd>
+      </dl>
+      {data.lastError && <Info tone="error">Letzter Versuch {data.lastAttemptAt ? fmtDate(data.lastAttemptAt) : ''} fehlgeschlagen: {data.lastError}</Info>}
+      {data.nextThumbprint ? (
+        <Info tone="warn">
+          <strong>Neues Zertifikat wartet auf Entra</strong> (<span className="mono">{data.nextThumbprint}</span>). Die Plattform prüft jede Minute und schaltet um, sobald Entra es annimmt.
+          Bei der Erneuerung von Hand: Zertifikat herunterladen und im Entra Admin Center unter App-Registrierungen, YLM-App, „Zertifikate und Geheimnisse“ hochladen, dann aktivieren.
+          <div className="toolbar mt">
+            <button onClick={() => download('/api/platform/certificate/next.cer')}>Zertifikat herunterladen (.cer)</button>
+            <button disabled={busy} onClick={() => act('activate')}>Jetzt aktivieren</button>
+            <button className="ghost" disabled={busy} onClick={discard}>Verwerfen</button>
+          </div>
+        </Info>
+      ) : (data.state !== 'ok' || !data.autoRenewPossible || data.lastError) && (
+        <p className="small">Klappt die automatische Erneuerung nicht (zum Beispiel weil das Zertifikat schon abgelaufen ist):{' '}
+          <button className="link" disabled={busy} onClick={() => act('prepare')}>Neues Zertifikat von Hand vorbereiten</button></p>
+      )}
+      <ErrorBox error={error} />
+    </Card>
   );
 }
 

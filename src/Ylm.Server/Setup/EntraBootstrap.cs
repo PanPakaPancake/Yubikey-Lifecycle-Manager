@@ -26,7 +26,7 @@ public sealed record AppProvisioningRequest(
     IReadOnlyList<string> ApplicationPermissions,
     IReadOnlyList<string> DelegatedScopes);
 
-public sealed record AppProvisioningResult(Guid ClientId, IReadOnlyList<string> Steps);
+public sealed record AppProvisioningResult(Guid ClientId, IReadOnlyList<string> Steps, string? ApplicationObjectId = null);
 
 /// <summary>
 /// Creates the installation's own app registration with a delegated admin token, before the installation has an app identity.
@@ -195,13 +195,14 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
         };
 
         // 1. App registration: reuse the one from an earlier attempt, otherwise create it.
-        string? appId = null;
+        string? appId = null, objectId = null;
         if (request.ExistingClientId is { } existing)
         {
             using var found = await GraphAsync(token, HttpMethod.Get, $"{GraphV1}/applications(appId='{existing}')?$select=id,appId", ct, allowNotFound: true);
             if (found is not null)
             {
-                await GraphAsync(token, HttpMethod.Patch, $"{GraphV1}/applications/{found.RootElement.GetProperty("id").GetString()}", ct, AppBody());
+                objectId = found.RootElement.GetProperty("id").GetString();
+                await GraphAsync(token, HttpMethod.Patch, $"{GraphV1}/applications/{objectId}", ct, AppBody());
                 appId = existing.ToString();
                 steps.Add("Vorhandene App-Registrierung aktualisiert");
             }
@@ -213,6 +214,7 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
             body["signInAudience"] = "AzureADMultipleOrgs";
             using var created = await GraphAsync(token, HttpMethod.Post, $"{GraphV1}/applications", ct, body);
             appId = created!.RootElement.GetProperty("appId").GetString()!;
+            objectId = created.RootElement.GetProperty("id").GetString();
             steps.Add("App-Registrierung angelegt");
         }
         steps.Add("Zertifikat hochgeladen");
@@ -253,7 +255,7 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
         steps.Add("Admin-Consent für die Anmeldung erteilt");
 
         logger.LogInformation("App-Registrierung {AppId} per Setup-Assistent eingerichtet", appId);
-        return new AppProvisioningResult(Guid.Parse(appId), steps);
+        return new AppProvisioningResult(Guid.Parse(appId), steps, objectId);
     }
 
     private static string FindPermissionId(JsonElement graphSp, string collection, string value)

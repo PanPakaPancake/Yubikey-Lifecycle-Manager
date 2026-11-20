@@ -175,6 +175,16 @@ public sealed class BackgroundJobs(IServiceScopeFactory scopes, IOptions<YlmOpti
             }
         }
 
+        try
+        {
+            using var c = scopes.CreateScope();
+            await c.ServiceProvider.GetRequiredService<Ylm.Server.Secrets.CertificateRenewalService>().RunAsync(ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            logger.LogWarning(ex, "Prüfung des App-Zertifikats fehlgeschlagen");
+        }
+
         var expired = await db.Tenants.Where(t => t.Status == TenantStatus.Offboarded && t.DataDeletionDueAt != null && t.DataDeletionDueAt <= now).ToListAsync(ct);
         foreach (var t in expired)
         {

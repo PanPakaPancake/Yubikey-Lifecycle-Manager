@@ -58,7 +58,10 @@ jobs:
           COMPOSE_PROFILES=https YLM_DOMAIN=ylm.example.com docker compose config -q
           docker compose -f docker-compose.yml -f docker-compose.build.yml config -q
       - name: Caddyfile
-        run: docker run --rm -e YLM_DOMAIN=ylm.example.com -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+        run: |
+          for tls in "" "tls internal"; do
+            docker run --rm -e YLM_DOMAIN=ylm.example.com -e YLM_CADDY_TLS="$tls" -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+          done
       - name: Installation lokal (Skript, Sicherung, Wiederherstellung)
         run: |
           rm .env

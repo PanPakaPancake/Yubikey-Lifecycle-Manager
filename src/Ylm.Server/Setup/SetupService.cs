@@ -182,6 +182,7 @@ public sealed class SetupService(
     public async Task<InstallationSettings> SaveAppRegistrationAsync(Guid clientId, Guid homeTenantId)
     {
         var s = await GetSettingsAsync();
+        if (s.ClientId != clientId) s.ApplicationObjectId = null;
         s.ClientId = clientId;
         s.HomeTenantId = homeTenantId;
         await db.SaveChangesAsync();
@@ -278,6 +279,7 @@ public sealed class SetupService(
 
         s.ClientId = result.ClientId;
         s.HomeTenantId = signIn.Admin.TenantId;
+        s.ApplicationObjectId = result.ApplicationObjectId;
         if (string.IsNullOrEmpty(s.BootstrapOwnerUpn) && signIn.Admin.Upn.Contains('@')) s.BootstrapOwnerUpn = signIn.Admin.Upn;
         audit.Add(AuditService.System, AuditActions.SetupAppProvisioned, details: new
         {
