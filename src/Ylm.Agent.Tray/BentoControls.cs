@@ -141,15 +141,22 @@ internal static class Txt
 
 internal enum ButtonKind { Primary, Secondary }
 
-/// <summary>Knopf mit runden Ecken; Primär mit Verlauf (violett → cyan), sekundär als Fläche mit Kante.</summary>
-internal sealed class BentoButton : Button
+/// <summary>
+/// Knopf mit runden Ecken; Primär mit Verlauf (violett → cyan), sekundär als Fläche mit Kante.
+/// Bewusst kein <see cref="Button"/>: dessen eigene Hintergrundzeichnung hinterließ Reste an Ecken und unter dem Knopf.
+/// </summary>
+internal sealed class BentoButton : Control, IButtonControl
 {
-    private bool _hover, _down;
+    private bool _hover, _down, _default;
     public ButtonKind Kind { get; }
+    public DialogResult DialogResult { get; set; }
 
     public BentoButton(string text, ButtonKind kind = ButtonKind.Secondary)
     {
-        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+        SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor
+            | ControlStyles.Selectable | ControlStyles.StandardClick, true);
+        TabStop = true;
+        AccessibleRole = AccessibleRole.PushButton;
         BackColor = Color.Transparent;
         Text = text;
         Kind = kind;
@@ -166,6 +173,19 @@ internal sealed class BentoButton : Button
     protected override void OnMouseDown(MouseEventArgs e) { _down = true; Invalidate(); base.OnMouseDown(e); }
     protected override void OnMouseUp(MouseEventArgs e) { _down = false; Invalidate(); base.OnMouseUp(e); }
     protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+    protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+    protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+    protected override void OnTextChanged(EventArgs e) { Invalidate(); base.OnTextChanged(e); }
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        // Enter erledigt das Formular (aktiver IButtonControl bzw. AcceptButton).
+        if (e.KeyCode == Keys.Space && Enabled) PerformClick();
+        base.OnKeyUp(e);
+    }
+
+    public void NotifyDefault(bool value) { _default = value; Invalidate(); }
+
+    public void PerformClick() { if (Enabled && Visible) OnClick(EventArgs.Empty); }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -202,13 +222,13 @@ internal sealed class BentoButton : Button
         {
             using var fill = new SolidBrush(_hover ? Theme.Mix(p.Surface2, p.Accent, .08f) : p.Surface2);
             g.FillPath(fill, path);
-            using var border = new Pen(_hover ? Theme.Alpha(p.Accent, 200) : (p.IsDark ? Theme.Mix(p.Line, p.Accent2, .2f) : p.Line));
+            using var border = new Pen(_hover || _default ? Theme.Alpha(p.Accent, 200) : (p.IsDark ? Theme.Mix(p.Line, p.Accent2, .2f) : p.Line));
             g.DrawPath(border, path);
             text = p.Ink;
         }
         if (Focused && ShowFocusCues)
         {
-            using var focus = new Pen(Theme.Alpha(p.Accent2, 200), 1.5f) { DashStyle = DashStyle.Solid };
+            using var focus = new Pen(Theme.Alpha(p.Accent2, 200), 1.5f);
             using var fp = Theme.Rounded(RectangleF.Inflate(r, -2.5f, -2.5f), LogicalToDeviceUnits(10));
             g.DrawPath(focus, fp);
         }
