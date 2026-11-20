@@ -228,10 +228,10 @@ public sealed class SetupService(
     /// Interactive sign-in (authorization code + PKCE). Microsoft redirects to http://localhost: reached directly when the
     /// platform itself runs on localhost, otherwise the admin copies the address from the browser back into the assistant.
     /// </summary>
-    public (string Url, string RedirectUri, bool Automatic) StartInteractiveSignIn(HttpRequest request)
+    public (string Url, string RedirectUri, bool Automatic) StartInteractiveSignIn(HttpRequest request, bool allowAutomatic = true)
     {
         var host = request.Host.Host;
-        var automatic = string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) && request.Scheme == "http";
+        var automatic = allowAutomatic && string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase) && request.Scheme == "http";
         var redirectUri = automatic && request.Host.Port is { } port ? $"http://localhost:{port}" : "http://localhost";
         var state = Base64Url(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24));
         var verifier = Base64Url(System.Security.Cryptography.RandomNumberGenerator.GetBytes(48));

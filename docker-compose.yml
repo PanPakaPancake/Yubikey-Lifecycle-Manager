@@ -87,21 +87,33 @@ services:
       - ${BACKUP_DIR:-./backups}:/backups
       - data:/data
 
-  # HTTPS vor der Plattform: interne Zertifizierungsstelle, eigenes Zertifikat oder Let's Encrypt (YLM_CADDY_TLS).
-  # Aktiv mit COMPOSE_PROFILES=https in .env (setzt das Installationsskript). Braucht YLM_DOMAIN und die Ports 80/443.
+  # HTTPS vor der Plattform: interne Zertifizierungsstelle, eigenes Zertifikat oder Let's Encrypt (YLM_CADDY_TLS),
+  # auch per DNS-Prüfung (YLM_DNS_*). Aktiv mit COMPOSE_PROFILES=https in .env (setzt das Installationsskript bzw.
+  # die Oberfläche unter Adresse und Zertifikat). Braucht YLM_DOMAIN und die Ports YLM_HTTP_PORT/YLM_HTTPS_PORT.
+  # Caddy mit DNS-Anbietern (caddy/Dockerfile), wird wie der Server bei Schwachstellen neu gebaut.
   caddy:
-    image: caddy:2-alpine
+    image: ghcr.io/panpakapancake/yubikey-lifecycle-manager-caddy:latest
     profiles: [https]
     restart: unless-stopped
     depends_on:
       - server
     environment:
       YLM_DOMAIN: ${YLM_DOMAIN:-}
+      YLM_DOMAIN_ALIASES: ${YLM_DOMAIN_ALIASES:-}
       YLM_CADDY_TLS: ${YLM_CADDY_TLS:-}
+      YLM_ACME_EMAIL: ${YLM_ACME_EMAIL:-}
+      YLM_DNS_TOKEN: ${YLM_DNS_TOKEN:-}
+      YLM_DNS_KEY_ID: ${YLM_DNS_KEY_ID:-}
+      YLM_DNS_SECRET: ${YLM_DNS_SECRET:-}
+      YLM_DNS_REGION: ${YLM_DNS_REGION:-}
+      YLM_DNS_AZURE_TENANT: ${YLM_DNS_AZURE_TENANT:-}
+      YLM_DNS_AZURE_SUBSCRIPTION: ${YLM_DNS_AZURE_SUBSCRIPTION:-}
+      YLM_DNS_AZURE_RESOURCE_GROUP: ${YLM_DNS_AZURE_RESOURCE_GROUP:-}
+      YLM_DNS_NETCUP_CUSTOMER: ${YLM_DNS_NETCUP_CUSTOMER:-}
     ports:
-      - "${YLM_HTTPS_BIND:-0.0.0.0}:80:80"
-      - "${YLM_HTTPS_BIND:-0.0.0.0}:443:443"
-      - "${YLM_HTTPS_BIND:-0.0.0.0}:443:443/udp"
+      - "${YLM_HTTPS_BIND:-0.0.0.0}:${YLM_HTTP_PORT:-80}:80"
+      - "${YLM_HTTPS_BIND:-0.0.0.0}:${YLM_HTTPS_PORT:-443}:443"
+      - "${YLM_HTTPS_BIND:-0.0.0.0}:${YLM_HTTPS_PORT:-443}:443/udp"
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       # Eigenes Zertifikat (YLM_CADDY_TLS=tls /certs/ylm.crt /certs/ylm.key)

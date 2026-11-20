@@ -19,6 +19,8 @@ public static class AuditActions
     public const string RecoveryCodesCreated = "auth.recovery_codes_created";
     public const string RecoveryCodeUsed = "auth.recovery_code_used";
     public const string UpdateStarted = "platform.update_started";
+    public const string HostingChanged = "platform.hosting_changed";
+    public const string RedirectUrisAdded = "platform.redirect_uris_added";
     public const string LoginSettingsChanged = "settings.login_changed";
     public const string AgentUpdatePolicyChanged = "settings.agent_update_policy_changed";
     public const string AgentUpdateRequested = "agent.update_requested";

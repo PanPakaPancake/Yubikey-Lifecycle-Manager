@@ -39,7 +39,7 @@ public sealed class AgentRegistry
 }
 
 [Authorize(AuthenticationSchemes = AuthSchemes.Agent)]
-public sealed class AgentHub(AgentRegistry registry, YlmDbContext db, ILogger<AgentHub> logger) : Hub<IAgentClient>
+public sealed class AgentHub(AgentRegistry registry, YlmDbContext db, Microsoft.Extensions.Options.IOptions<Ylm.Server.Infrastructure.YlmOptions> options, ILogger<AgentHub> logger) : Hub<IAgentClient>
 {
     private Guid AgentId => Guid.Parse(Context.User!.FindFirstValue(YlmClaims.AgentId)!);
     private Guid UserId => Guid.Parse(Context.User!.FindFirstValue(YlmClaims.UserId)!);
@@ -72,6 +72,11 @@ public sealed class AgentHub(AgentRegistry registry, YlmDbContext db, ILogger<Ag
         agent.UpdateError = hello.UpdateError is { Length: > 500 } e ? e[..500] : hello.UpdateError;
         await db.SaveChangesAsync();
         if (registry.Get(AgentId) is { } a) registry.Connected(a with { MachineName = hello.MachineName, Version = hello.AgentVersion });
+        // Nach einem Umzug (Adresse und Zertifikat) erfährt der Agent die neue Adresse über die alte Verbindung.
+        var url = string.IsNullOrWhiteSpace(options.Value.PublicBaseUrl)
+            ? (await db.Installation.AsNoTracking().FirstOrDefaultAsync())?.PublicBaseUrl
+            : options.Value.PublicBaseUrl;
+        if (!string.IsNullOrWhiteSpace(url)) await Clients.Caller.ServerAddress(url);
     }
 
     public Task ReportPrompt(string? text)

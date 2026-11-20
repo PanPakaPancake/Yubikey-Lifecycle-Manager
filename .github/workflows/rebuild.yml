@@ -2,7 +2,7 @@ name: Sicherheits-Neubau
 
 # Hält die veröffentlichten Images der aktuellen Version auf dem Stand der Basis-Images (Ubuntu/.NET, Alpine):
 # täglich Schwachstellen-Scan (Trivy); bei behebbaren HIGH/CRITICAL-Funden und ohnehin einmal pro Woche
-# werden Server- und Updater-Image der neuesten Version ohne Cache neu gebaut und unter demselben Tag
+# werden Server-, Updater- und Caddy-Image der neuesten Version ohne Cache neu gebaut und unter demselben Tag
 # veröffentlicht. Installationen holen sie mit den täglichen Sicherheitsupdates des Updaters (YLM_AUTO_REFRESH).
 on:
   schedule:
@@ -41,6 +41,7 @@ jobs:
           OWNER="${GITHUB_REPOSITORY_OWNER,,}"
           echo "server=ghcr.io/$OWNER/yubikey-lifecycle-manager" >> "$GITHUB_OUTPUT"
           echo "updater=ghcr.io/$OWNER/yubikey-lifecycle-manager-updater" >> "$GITHUB_OUTPUT"
+          echo "caddy=ghcr.io/$OWNER/yubikey-lifecycle-manager-caddy" >> "$GITHUB_OUTPUT"
       - uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -50,7 +51,10 @@ jobs:
         id: scan
         run: |
           need=0
-          for img in "${{ steps.rel.outputs.server }}:${{ steps.rel.outputs.version }}" "${{ steps.rel.outputs.updater }}:${{ steps.rel.outputs.version }}"; do
+          imgs=("${{ steps.rel.outputs.server }}:${{ steps.rel.outputs.version }}" "${{ steps.rel.outputs.updater }}:${{ steps.rel.outputs.version }}")
+          # Caddy-Image gibt es erst ab 0.10 (vorher caddy:2-alpine direkt von Docker Hub).
+          if docker manifest inspect "${{ steps.rel.outputs.caddy }}:latest" >/dev/null 2>&1; then imgs+=("${{ steps.rel.outputs.caddy }}:latest"); fi
+          for img in "${imgs[@]}"; do
             echo "### $img" >> "$GITHUB_STEP_SUMMARY"
             if ! docker run --rm -v /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" image --quiet --scanners vuln \
                  --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 --format table "$img" > scan.txt 2>&1; then
@@ -103,11 +107,29 @@ jobs:
             ${{ steps.rel.outputs.updater }}:${{ steps.rel.outputs.version }}
             ${{ steps.rel.outputs.updater }}:latest
           push: true
+      - name: Caddy-Image vorhanden?
+        id: caddy
+        if: steps.scan.outputs.need == '1'
+        run: echo "build=$([ -f caddy/Dockerfile ] && echo 1 || echo 0)" >> "$GITHUB_OUTPUT"
+      - name: Caddy-Image neu bauen
+        if: steps.scan.outputs.need == '1' && steps.caddy.outputs.build == '1'
+        uses: docker/build-push-action@v6
+        with:
+          context: ./caddy
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          no-cache: true
+          tags: |
+            ${{ steps.rel.outputs.caddy }}:${{ steps.rel.outputs.version }}
+            ${{ steps.rel.outputs.caddy }}:latest
+          push: true
       - name: Ergebnis nach dem Neubau
         if: steps.scan.outputs.need == '1'
         run: |
           echo "## Nach dem Neubau" >> "$GITHUB_STEP_SUMMARY"
-          for img in "${{ steps.rel.outputs.server }}:${{ steps.rel.outputs.version }}" "${{ steps.rel.outputs.updater }}:${{ steps.rel.outputs.version }}"; do
+          imgs=("${{ steps.rel.outputs.server }}:${{ steps.rel.outputs.version }}" "${{ steps.rel.outputs.updater }}:${{ steps.rel.outputs.version }}")
+          if [ "${{ steps.caddy.outputs.build }}" = 1 ]; then imgs+=("${{ steps.rel.outputs.caddy }}:latest"); fi
+          for img in "${imgs[@]}"; do
             docker run --rm "$TRIVY_IMAGE" image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL --format table "$img" > scan.txt 2>&1 || true
             { echo "### $img"; echo '```'; cat scan.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
           done

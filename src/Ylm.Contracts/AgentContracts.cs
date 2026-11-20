@@ -84,6 +84,8 @@ public interface IAgentClient
     Task ShowProgress(AgentProgress progress);
     /// <summary>Der Server bittet den Agent, sofort nach einem Update zu suchen und es zu installieren. Antwort: Ergebnistext.</summary>
     Task<string> CheckForUpdate(CancellationToken cancellationToken);
+    /// <summary>Öffentliche Adresse des Servers (nach jedem Hello). Weicht sie ab, zieht der Agent dorthin um, sobald sie erreichbar ist.</summary>
+    Task ServerAddress(string publicUrl);
 }
 
 public static class AgentProtocol

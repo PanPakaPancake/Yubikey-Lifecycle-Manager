@@ -27,6 +27,7 @@ public static class ApiScopes
     public const string InventoryWrite = "inventory.write";
     public const string TodosWrite = "todos.write";
     public const string KeysLock = "keys.lock";
+    public const string CertificateWrite = "certificate.write";
 
     public static readonly IReadOnlyList<ApiScopeInfo> Catalog =
     [
@@ -38,6 +39,7 @@ public static class ApiScopes
         new(InventoryWrite, "Inventar", "Inventar pflegen", "Tags, Zusatzfelder und Notiz eines Keys ändern. Ändert nichts in Entra.", true),
         new(TodosWrite, "ToDo-Liste", "ToDo-Liste schreiben", "Personen auf die ToDo-Liste setzen und offene ToDos zurückziehen.", true),
         new(KeysLock, "Keys", "Keys sperren", "Key sperren, z. B. bei Verlust. Entfernt den Passkey der Person in Entra, die Person kann sich mit dem Key nicht mehr anmelden.", true),
+        new(CertificateWrite, "Plattform", "HTTPS-Zertifikat tauschen", "Das eigene HTTPS-Zertifikat der Plattform lesen und durch ein neues ersetzen, z. B. automatisch aus der Firmen-PKI. Nur für Schlüssel mit allen Tenants.", true),
     ];
 
     public static IReadOnlyList<string> All => Catalog.Select(s => s.Id).ToList();

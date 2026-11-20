@@ -7,6 +7,14 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.10.0 · 2026-11-20
+- Neu: Adresse und Zertifikat in der Oberfläche ändern (Globale Einstellungen → Adresse und Zertifikat): DNS-Name, weitere Namen, Ports, Betriebsart. Vorher wird geprüft, bei Fehlern bleibt der alte Stand.
+- Neu: Zertifikate: interne Zertifizierungsstelle, eigenes Zertifikat hochladen (auch Wildcard), Let's Encrypt und Let's Encrypt per DNS (Cloudflare, Hetzner, IONOS, netcup, Azure DNS, Route 53, DigitalOcean), auch für interne Server und andere Ports.
+- Neu: Das eigene Zertifikat lässt sich per API tauschen (Recht „HTTPS-Zertifikat tauschen“), z. B. automatisch aus der Firmen-PKI.
+- Neu: Bei einer neuen Adresse trägt die Plattform sie nach einer Microsoft-Anmeldung selbst in Entra ein, und verbundene Agents ziehen automatisch um.
+- Verbessert: Neue Windows-Installationen laufen standardmäßig unter https://localhost; das Stammzertifikat wird in Windows eingetragen.
+- Verbessert: Globale Einstellungen sind in Bereiche aufgeteilt (Allgemein, Adresse und Zertifikat, Anmeldung und Sicherheit, Updates, API).
+
 ## 0.9.3 · 2026-11-20
 - Verbessert: Der Versionsverlauf öffnet sich mit einem Klick auf die Versionsangabe unten in der Seitenleiste. Der eigene Menüpunkt unter „Hilfe“ entfällt.
 - Neu: Unten in der Seitenleiste erscheint das Profilbild aus Microsoft 365, sonst wie bisher die Initialen.
@@ -15,6 +23,7 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 - Neu: Brief-Editor unter „Erscheinungsbild der Dokumente“. Alle Texte des PIN-Briefs lassen sich anpassen, mit Platzhaltern wie {{Vorname}} oder {{Seriennummer}} und einer Live-Vorschau als PDF. Tenants können einzelne Texte überschreiben.
 - Verbessert: Der PIN-Brief hat ein neues, helles Design passend zur App. Rahmen statt farbiger Flächen sparen beim Drucken Toner.
 - Behoben: In „Passkeys erklärt“ sind die Schritte unter „Am PC anmelden“ jetzt mit 1 bis 4 nummeriert.
+- Behoben: „Sicherheitsupdates der Container – Jetzt einspielen“ schlug unter Docker Desktop für Windows fehl.
 
 ## 0.9.2 · 2026-11-20
 - Neu: Rechte pro API-Schlüssel, ähnlich wie Rollen. Jeder Schlüssel bekommt eigene Lese- und Schreibrechte (Inventar, Zuweisungen, Kennzahlen, ToDo-Liste, Audit-Log), kombiniert mit allen oder ausgewählten Tenants. Vorlagen: „Nur lesen“, „Lesen + ToDo“, „Lesen + Schreiben“; „Keys sperren“ wird immer einzeln vergeben.
