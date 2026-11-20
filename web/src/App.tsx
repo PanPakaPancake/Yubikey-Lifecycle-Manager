@@ -147,7 +147,6 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div className="nav-group nav-group-help">
           <div className="section">Hilfe</div>
           {item('/passkey', 'info', 'Passkeys erklärt')}
-          {item('/versionen', 'history', <>Versionsverlauf{updates?.updateAvailable && <span className="dot-warn pulse" title={`Version ${updates.latestVersion} ist verfügbar`} />}</>)}
           </div>
         </nav>
         <div className="sidebar-foot">
@@ -162,7 +161,8 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
             <ThemeToggle />
             <button type="button" className="ghost small" onClick={logout}><Icon name="logout" size={16} />Abmelden</button>
           </div>
-          {me.version && <Link to="/versionen" className="small muted version" title="Versionsverlauf">Version {me.version}{updates?.updateAvailable && <> · Update auf {updates.latestVersion}</>}</Link>}
+          {/* Klick auf die Version öffnet den Versionsverlauf (kein eigener Menüpunkt). */}
+          {me.version && <Link to="/versionen" className="small muted version" title="Versionsverlauf anzeigen"><Icon name="history" size={13} /><span>Version {me.version}</span>{updates?.updateAvailable && <span className="version-update"><span className="dot-warn pulse" />Update auf {updates.latestVersion}</span>}</Link>}
         </div>
       </aside>
       <main className="main">
