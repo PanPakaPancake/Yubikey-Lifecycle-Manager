@@ -609,7 +609,7 @@ Voraussetzung: Mailserver ist im Reiter **Mail-Berichte** eingetragen (siehe 6.3
 
 ## 6.5 Rechte pro API-Schlüssel
 
-1. **Globale Einstellungen** → **API-Schlüssel**: Schlüssel „Nur lesen Mandant 1“ mit **Nur ausgewählte Tenants** (ein Tenant) und Vorlage **Nur lesen** anlegen. Einen zweiten „Ticketsystem“ mit **Alle Tenants** und Vorlage **Lesen + Schreiben**. Erwartung: Spalte **Rechte** zeigt „Nur lesen“ bzw. „Lesen + Schreiben“, beim Haken **Keys sperren** erscheint ein Warnhinweis.
+1. **Globale Einstellungen** → **API-Schlüssel**: Schlüssel „Nur lesen Mandant 1“ mit **Nur ausgewählte Tenants** (ein Tenant) und Vorlage **Nur lesen** anlegen. Einen zweiten „Ticketsystem“ mit **Alle Tenants**, Vorlage **Lesen + Schreiben** und zusätzlich dem Einzelrecht **Keys sperren**. Erwartung: die Vorlage setzt „Keys sperren“ nicht mit; beim Haken erscheint ein Warnhinweis. Spalte **Rechte** zeigt „Nur lesen“ bzw. „Lesen + Schreiben“ und „Keys sperren“.
 2. Mit dem ersten Schlüssel:
 
 ```bash

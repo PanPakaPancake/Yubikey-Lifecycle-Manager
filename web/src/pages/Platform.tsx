@@ -104,32 +104,39 @@ interface ApiKeyRow {
 
 interface ApiScopeInfo { id: string; area: string; label: string; description: string; write: boolean }
 
-/** Vorlagen für häufige Fälle; danach lässt sich jedes Recht einzeln an- und abwählen. */
+/** Rechte, die keine Vorlage mitbringt und die nur einzeln vergeben werden (greifen in Entra ein). */
+const SEPARATE = ['keys.lock'];
+
+/** Vorlagen für häufige Fälle; danach lässt sich jedes Recht einzeln an- und abwählen. „Keys sperren“ gehört zu keiner Vorlage. */
 function presets(catalog: ApiScopeInfo[]) {
   const read = catalog.filter((s) => !s.write).map((s) => s.id);
   return [
     { id: 'read', label: 'Nur lesen', scopes: read },
     { id: 'todo', label: 'Lesen + ToDo', scopes: [...read, 'todos.write'] },
-    { id: 'all', label: 'Lesen + Schreiben', scopes: catalog.map((s) => s.id) },
+    { id: 'all', label: 'Lesen + Schreiben', scopes: catalog.map((s) => s.id).filter((id) => !SEPARATE.includes(id)) },
   ];
 }
+
+const withoutSeparate = (scopes: string[]) => scopes.filter((x) => !SEPARATE.includes(x));
 
 const sameSet = (a: string[], b: string[]) => a.length === b.length && a.every((x) => b.includes(x));
 
 /** Kurzfassung der Rechte für die Tabelle. */
 function rightsSummary(scopes: string[], catalog: ApiScopeInfo[]) {
-  const preset = presets(catalog).find((p) => sameSet(p.scopes, scopes));
-  if (preset) return [preset.label];
-  return catalog.filter((s) => scopes.includes(s.id)).map((s) => s.label);
+  const preset = presets(catalog).find((p) => sameSet(p.scopes, withoutSeparate(scopes)));
+  const base = preset ? [preset.label] : catalog.filter((s) => scopes.includes(s.id) && !SEPARATE.includes(s.id)).map((s) => s.label);
+  return [...base, ...catalog.filter((s) => SEPARATE.includes(s.id) && scopes.includes(s.id)).map((s) => s.label)];
 }
 
 export function ApiRightsEditor({ scopes, setScopes, catalog }: { scopes: string[]; setScopes: (v: string[]) => void; catalog: ApiScopeInfo[] }) {
   const toggle = (id: string, on: boolean) => setScopes(on ? [...scopes, id] : scopes.filter((x) => x !== id));
-  const active = presets(catalog).find((p) => sameSet(p.scopes, scopes))?.id ?? 'custom';
-  const column = (write: boolean) => (
+  const active = presets(catalog).find((p) => sameSet(p.scopes, withoutSeparate(scopes)))?.id ?? 'custom';
+  // Eine Vorlage lässt die einzeln vergebenen Rechte, wie sie sind.
+  const applyPreset = (p: string[]) => setScopes([...p, ...scopes.filter((x) => SEPARATE.includes(x))]);
+  const column = (title: string, items: ApiScopeInfo[]) => (
     <div>
-      <span className="field-label">{write ? 'Schreiben' : 'Lesen'}</span>
-      {catalog.filter((s) => s.write === write).map((s) => (
+      <span className="field-label">{title}</span>
+      {items.map((s) => (
         <label key={s.id} className="check" title={s.description} style={{ alignItems: 'flex-start' }}>
           <input type="checkbox" style={{ flexShrink: 0, marginTop: 3 }} checked={scopes.includes(s.id)} onChange={(e) => toggle(s.id, e.target.checked)} />
           <span>{s.label} <span className="mono muted small">{s.id}</span><br /><span className="muted small">{s.description}</span></span>
@@ -141,12 +148,15 @@ export function ApiRightsEditor({ scopes, setScopes, catalog }: { scopes: string
     <div className="field-group">
       <span className="field-label">Rechte</span>
       <div className="segmented" role="group" aria-label="Vorlage" style={{ marginBottom: 8 }}>
-        {presets(catalog).map((p) => <button type="button" key={p.id} className={active === p.id ? 'on' : ''} onClick={() => setScopes(p.scopes)}>{p.label}</button>)}
+        {presets(catalog).map((p) => <button type="button" key={p.id} className={active === p.id ? 'on' : ''} onClick={() => applyPreset(p.scopes)}>{p.label}</button>)}
         <button type="button" className={active === 'custom' ? 'on' : ''} disabled>Eigene Auswahl</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
-        {column(false)}
-        {column(true)}
+        {column('Lesen', catalog.filter((s) => !s.write))}
+        {column('Schreiben', catalog.filter((s) => s.write && !SEPARATE.includes(s.id)))}
+      </div>
+      <div style={{ marginTop: 12 }}>
+        {column('Einzeln vergeben (nicht in den Vorlagen)', catalog.filter((s) => SEPARATE.includes(s.id)))}
       </div>
       {scopes.includes('keys.lock') && <Info tone="warn">„Keys sperren“ entfernt den Passkey in Entra: Die Person kann sich mit dem Key nicht mehr anmelden. Nur für Tools vergeben, denen Sie das zutrauen, z. B. dem Ticketsystem für Verlustmeldungen.</Info>}
     </div>

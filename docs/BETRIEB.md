@@ -319,7 +319,7 @@ API-Schlüssel legen Owner unter „Globale Einstellungen → API-Schlüssel“ 
 | `todos.write` | schreiben | `POST /todos`, `DELETE /todos/{id}` |
 | `keys.lock` | schreiben | `POST /keys/{id}/lock`: sperren, entfernt die Passkeys in Entra |
 
-`GET /api/v1/me` braucht kein Recht und zeigt Name, Tenants und Rechte des Schlüssels. Fehlt ein Recht, antwortet die API mit `403` und nennt es. Vorlagen in der Oberfläche: „Nur lesen“, „Lesen + ToDo“, „Lesen + Schreiben“; jedes Recht lässt sich einzeln an- und abwählen. Wer z. B. für alle Tenants lesen, aber nur in einem schreiben will, legt zwei Schlüssel an.
+`GET /api/v1/me` braucht kein Recht und zeigt Name, Tenants und Rechte des Schlüssels. Fehlt ein Recht, antwortet die API mit `403` und nennt es. Vorlagen in der Oberfläche: „Nur lesen“, „Lesen + ToDo“, „Lesen + Schreiben“; jedes Recht lässt sich einzeln an- und abwählen. „Keys sperren“ gehört zu keiner Vorlage und wird immer einzeln gesetzt. Wer z. B. für alle Tenants lesen, aber nur in einem schreiben will, legt zwei Schlüssel an.
 
 Bewusst nicht über die API: Keys zurücksetzen, ausmustern oder löschen, Anmeldemethoden entfernen, TAP erzeugen. Alle Änderungen über die API stehen im Audit-Log mit dem Schlüssel als Akteur (`api:<Name>`).
 
