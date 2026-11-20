@@ -50,6 +50,15 @@ public sealed class FakeEntraBootstrap : IEntraBootstrap
         Requests.Add(request);
         return Task.FromResult(new AppProvisioningResult(ClientId, ["App-Registrierung angelegt"]));
     }
+
+    public List<string> RedirectUris { get; } = [];
+
+    public Task<IReadOnlyList<string>> AddRedirectUrisAsync(string accessToken, Guid clientId, IReadOnlyList<string> redirectUris, CancellationToken ct = default)
+    {
+        Assert.Equal("delegated-token", accessToken);
+        RedirectUris.AddRange(redirectUris.Except(RedirectUris));
+        return Task.FromResult<IReadOnlyList<string>>(RedirectUris.ToList());
+    }
 }
 
 public sealed class SetupAssistantTests : IAsyncLifetime

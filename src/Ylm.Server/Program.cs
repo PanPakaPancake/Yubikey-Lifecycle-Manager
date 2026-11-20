@@ -68,6 +68,7 @@ builder.Services.AddScoped<PlatformSignIn>();
 builder.Services.AddScoped<LocalAuthService>();
 builder.Services.AddScoped<RecoveryCodeService>();
 builder.Services.AddSingleton<Ylm.Server.Updates.UpdateService>();
+builder.Services.AddScoped<Ylm.Server.Updates.HostingService>();
 builder.Services.AddHttpClient("updates", c => c.Timeout = TimeSpan.FromSeconds(20));
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<SetupService>();
@@ -206,6 +207,7 @@ app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous()
 app.MapAuth(app.Environment, ylm);
 app.MapLocalAuth();
 Ylm.Server.Updates.UpdateEndpoints.MapUpdates(app);
+Ylm.Server.Updates.HostingEndpoints.MapHosting(app);
 app.MapSetup();
 app.MapUsers();
 app.MapRoles();

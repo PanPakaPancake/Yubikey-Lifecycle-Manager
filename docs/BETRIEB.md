@@ -192,11 +192,15 @@ In `.env`:
 |---|---|---|
 | `POSTGRES_PASSWORD` | – | Datenbank-Passwort (Pflicht, nach der Installation nicht mehr ändern) |
 | `YLM_PUBLIC_URL` | aus der Einrichtung | Adresse für Browser, Entra und Agents |
-| `YLM_MODE` | – | gewählte Variante (nur Information; umstellen per Installationsskript) |
+| `YLM_MODE` | – | gewählte Variante (nur Information; umstellen unter **Adresse und Zertifikat** oder per Installationsskript) |
 | `COMPOSE_PROFILES` | leer | `https` schaltet Caddy ein |
 | `YLM_DOMAIN` | – | DNS-Name für Caddy |
-| `YLM_CADDY_TLS` | leer | `tls internal` (interne CA), `tls /certs/ylm.crt /certs/ylm.key` (eigenes Zertifikat), leer = Let's Encrypt |
-| `YLM_HTTPS_BIND` | `0.0.0.0` | Adresse, auf der Caddy die Ports 80/443 öffnet |
+| `YLM_DOMAIN_ALIASES` | leer | weitere Namen, auf die Caddy antwortet (Leerzeichen-getrennt), z. B. die alte Adresse nach einem Umzug |
+| `YLM_CADDY_TLS` | leer | `tls internal` (interne CA), `tls /certs/ylm.crt /certs/ylm.key` (eigenes Zertifikat), `import dns-<anbieter>` (Let's Encrypt per DNS), leer oder `tls <E-Mail>` = Let's Encrypt |
+| `YLM_HTTPS_BIND` | `0.0.0.0` | Adresse, auf der Caddy seine Ports öffnet (`127.0.0.1` = nur dieser PC) |
+| `YLM_HTTPS_PORT`, `YLM_HTTP_PORT` | `443`, `80` | Ports von Caddy auf dem Host |
+| `YLM_ACME_EMAIL` | leer | Kontakt für Let's Encrypt bei der DNS-Prüfung |
+| `YLM_DNS_PROVIDER`, `YLM_DNS_*` | – | DNS-Anbieter und Zugangsdaten für Let's Encrypt per DNS (Abschnitt 1.10) |
 | `YLM_BIND` | `127.0.0.1:8080` | Adresse, auf der der Server-Port lauscht |
 | `YLM_TRUSTED_PROXIES` | private Netze | Proxys/Connectoren, deren Forwarded-Header gelten (Komma-Liste) |
 | `YLM_AUTO_REFRESH` | `04:00` | Uhrzeit der täglichen Sicherheitsupdates der Container (`off` = aus) |
@@ -230,13 +234,29 @@ Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services
   - **Fehlersuche:** Jede Prüfung steht im Agent-Log (`Update: …`), das msiexec-Protokoll unter `C:\ProgramData\YubikeyLifecycleManager\Agent\updates\install-<Version>.log` (nur für Administratoren lesbar). Nach einem Fehler versucht der Agent es nach 30 Minuten erneut.
   - `"Agent": { "AutoUpdate": false }` in der `appsettings.json` des Agents setzt den Standard der lokalen Einstellung auf „aus“ (z. B. für Images).
 - **Sicherheitsupdates der Container:** Unabhängig von neuen Versionen lädt der Updater täglich um `YLM_AUTO_REFRESH` (Standard 04:00, nach der Sicherung) alle Images der installierten Version neu und erstellt geänderte Container neu, auch sich selbst (über einen kurzlebigen Hilfscontainer `<projekt>-refresh`). Die Plattform ist dabei kurz nicht erreichbar. „Jetzt einspielen“ unter **Version und Updates** startet es sofort; dort stehen Zeitpunkt und Ergebnis des letzten Laufs.
-  - **Woher die Patches kommen:** Der Workflow „Sicherheits-Neubau“ prüft täglich die veröffentlichten Images mit Trivy. Bei behebbaren HIGH/CRITICAL-Schwachstellen und ohnehin jeden Montag baut er Server- und Updater-Image der neuesten Version ohne Cache auf den aktuellen Basis-Images neu und veröffentlicht sie unter demselben Tag. PostgreSQL und Caddy kommen als offizielle Images (`postgres:16`, `caddy:2`), deren Patches der Updater ebenfalls lädt. Die CI scannt jeden Build und schlägt bei behebbaren CRITICAL-Funden fehl; Dependabot schlägt wöchentlich neue Basis-Images, Pakete und Actions vor.
+  - **Woher die Patches kommen:** Der Workflow „Sicherheits-Neubau“ prüft täglich die veröffentlichten Images mit Trivy. Bei behebbaren HIGH/CRITICAL-Schwachstellen und ohnehin jeden Montag baut er Server- und Updater-Image der neuesten Version ohne Cache auf den aktuellen Basis-Images neu und veröffentlicht sie unter demselben Tag. PostgreSQL kommt als offizielles Image (`postgres:16`), dessen Patches der Updater ebenfalls lädt; das Caddy-Image (mit DNS-Anbietern) baut der Workflow wie Server und Updater neu. Die CI scannt jeden Build und schlägt bei behebbaren CRITICAL-Funden fehl; Dependabot schlägt wöchentlich neue Basis-Images, Pakete und Actions vor.
   - **Schlankes Server-Image:** Der Server läuft auf `aspnet:10.0-noble-chiseled-extra` (nur .NET-Laufzeit, ICU, Zeitzonen; keine Shell, kein Paketmanager). `docker compose exec server sh` gibt es daher nicht mehr; Protokolle wie gewohnt mit `docker compose logs server`.
   - **Der Host:** Kernel (z. B. Schwachstellen im TCP-Stack), Docker Engine und Systembibliotheken des Servers teilen sich alle Container, sie aktualisiert kein Container-Update. Auf Debian/Ubuntu richtet das Installationsskript dafür `unattended-upgrades` ein (abschaltbar mit `--no-host-updates`). Nach Kernel-Updates braucht der Server einen Neustart: entweder von Hand in einem Wartungsfenster (`/var/run/reboot-required` zeigt es an) oder automatisch mit `Unattended-Upgrade::Automatic-Reboot "true";` und `Unattended-Upgrade::Automatic-Reboot-Time "04:30";` in `/etc/apt/apt.conf.d/50unattended-upgrades`. Docker startet die Plattform danach von selbst. Unter Windows hält Docker Desktop seinen Linux-Kernel selbst aktuell: Docker Desktop und Windows-Updates bitte aktuell halten (`wsl --update`).
 - Die Updateprüfung lässt sich mit `Ylm__UpdateCheckEnabled=false` abschalten (z. B. ohne Internetzugang).
 - Nicht `docker compose up --build` verwenden: Das ersetzt das Release-Image durch einen lokalen Build und blockiert so spätere Updates. Lokale Builds nur in der Entwicklung (Abschnitt 6).
 
-### 1.10 Alte Installation aus einem Git-Checkout
+### 1.10 Adresse und Zertifikat ändern
+
+**Globale Einstellungen → Adresse und Zertifikat** (Owner) ändert Betriebsart, DNS-Name, Ports und Zertifikat ohne Kommandozeile. Der Server schreibt `.env` nicht selbst: das übernimmt der Updater in einem Hilfscontainer `<projekt>-hosting`. Er sichert `.env` nach `.env.bak`, prüft die Compose- und die Caddy-Konfiguration (Zertifikat und Schlüssel passen, DNS-Anbieter bekannt) und erstellt die Container neu. Schlägt etwas fehl, stellt er den vorigen Stand wieder her; das Protokoll steht in der Oberfläche.
+
+- **Betriebsarten:** „HTTPS (mitgeliefert)“ (Caddy, empfohlen, auch auf dem eigenen PC mit `localhost`), „Eigener Reverse Proxy / ZTNA“ und „Nur auf diesem PC“ (ohne HTTPS). Neue Windows-Installationen laufen standardmäßig unter `https://localhost` mit der internen Zertifizierungsstelle; das Installationsskript trägt deren Stammzertifikat per UAC in Windows ein, damit Browser und Agent-Dienst ihm vertrauen.
+- **Zertifikate:**
+  - *Interne Zertifizierungsstelle:* Caddy stellt das Zertifikat selbst aus und erneuert es. Das Stammzertifikat gibt es unter „Stammzertifikat herunterladen“; per GPO/Intune als vertrauenswürdige Stammzertifizierungsstelle verteilen.
+  - *Eigenes Zertifikat:* PEM mit Zwischenzertifikaten plus privater Schlüssel ohne Passwort, auch Wildcard (`*.firma.de`). Die Plattform prüft, dass beide zusammenpassen, gültig sind und für alle Namen gelten. Aus einer `.pfx`: `openssl pkcs12 -in ylm.pfx -nokeys -out ylm.crt` und `openssl pkcs12 -in ylm.pfx -nocerts -nodes -out ylm.key`.
+  - *Let's Encrypt:* braucht einen öffentlichen DNS-Eintrag auf den Server und Port 80 aus dem Internet.
+  - *Let's Encrypt per DNS:* auch für interne Server und andere Ports. Caddy legt für die Prüfung kurz einen TXT-Eintrag `_acme-challenge` an. Unterstützt: Cloudflare, Hetzner, IONOS, netcup, Azure DNS, AWS Route 53, DigitalOcean (Caddy-Image `yubikey-lifecycle-manager-caddy`, siehe `caddy/Dockerfile`). Das API-Token braucht nur Rechte auf die betroffene Zone. Die Zugangsdaten liegen in `.env`; die Oberfläche zeigt nur, ob sie gesetzt sind.
+- **Neue Adresse:** Bevor sich DNS-Name oder Port ändern, muss die neue Adresse als Umleitungs-URI in der App-Registrierung der Plattform stehen. „Mit Microsoft anmelden und eintragen“ erledigt das mit einem Admin des Heim-Tenants (wie im Setup-Assistenten); die alten Adressen bleiben eingetragen. Die alte Adresse beantwortet Caddy auf Wunsch weiter (`YLM_DOMAIN_ALIASES`): Darüber erfahren verbundene Agents die neue Adresse und ziehen um, sobald sie dort ein gültiges Zertifikat vorfinden. Passkeys lokaler Konten gelten nur für den alten Namen; diese Konten melden sich dann mit Passwort + TOTP oder einem Notfallcode an und richten einen neuen Passkey ein.
+- **Zertifikat per API tauschen** (z. B. wegen kürzerer Laufzeiten automatisch aus der Firmen-PKI): API-Schlüssel für alle Tenants mit dem Recht „HTTPS-Zertifikat tauschen“ (`certificate.write`), dann
+  `curl -X PUT https://ylm.firma.de/api/v1/certificate -H "X-Api-Key: …" -H "Content-Type: application/json" -d '{"certificatePem":"…","keyPem":"…"}'`.
+  `GET /api/v1/certificate` zeigt Art, Aussteller und Ablaufdatum. Jeder Tausch steht im Audit-Log (`platform.hosting_changed`, auch als Webhook).
+- **Notfall:** Ist die Plattform nach einer Änderung nicht erreichbar, im Installationsordner `.env.bak` zurück nach `.env` kopieren und `docker compose up -d` ausführen.
+
+### 1.11 Alte Installation aus einem Git-Checkout
 
 Wer bisher im geklonten Repository installiert hat, kann dort bleiben: `git pull`, dann `docker compose up -d`. Damit kommen die Datensicherung und (bei Bedarf) Caddy dazu. Eigene Änderungen an `docker-compose.yml` vorher in `docker-compose.override.yml` bzw. `.env` verschieben (`git stash` hilft beim Aufräumen). Für einen Wechsel in einen eigenen Ordner wie oben: sichern, per Skript neu installieren, wiederherstellen (1.7, Schritte 1 bis 3; Adresse und Entra bleiben gleich).
 

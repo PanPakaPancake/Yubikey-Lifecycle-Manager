@@ -67,10 +67,15 @@ jobs:
           docker compose config -q
           COMPOSE_PROFILES=https YLM_DOMAIN=ylm.example.com docker compose config -q
           docker compose -f docker-compose.yml -f docker-compose.build.yml config -q
-      - name: Caddyfile
+      - name: Caddy-Image und Caddyfile
         run: |
-          for tls in "" "tls internal"; do
-            docker run --rm -e YLM_DOMAIN=ylm.example.com -e YLM_CADDY_TLS="$tls" -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+          docker build --pull -t ylm-ci/caddy ./caddy
+          for tls in "" "tls admin@example.com" "tls internal" "import dns-cloudflare" "import dns-hetzner" "import dns-ionos" \
+                     "import dns-netcup" "import dns-azure" "import dns-route53" "import dns-digitalocean"; do
+            echo "== YLM_CADDY_TLS=$tls"
+            docker run --rm -e YLM_DOMAIN=ylm.example.com -e YLM_DOMAIN_ALIASES=alt.example.com -e YLM_CADDY_TLS="$tls" \
+              -e YLM_ACME_EMAIL=admin@example.com -e YLM_DNS_TOKEN=abcdefghijklmnopqrstuvwxyz0123456789ABCD \
+              -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" ylm-ci/caddy caddy validate --config /etc/caddy/Caddyfile
           done
       - name: Installation lokal (Skript, Sicherung, Wiederherstellung)
         run: |
@@ -79,7 +84,7 @@ jobs:
           docker build --pull -t ylm-ci/server .
           docker build --pull -t ylm-ci/updater ./updater
           # Schwachstellen-Scan: behebbare CRITICAL-Funde lassen die CI scheitern, HIGH steht im Protokoll.
-          for img in ylm-ci/server ylm-ci/updater; do
+          for img in ylm-ci/server ylm-ci/updater ylm-ci/caddy; do
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL "$img"
             docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image --quiet --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$img"
           done

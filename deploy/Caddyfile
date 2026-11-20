@@ -1,15 +1,71 @@
-# Reverse Proxy mit HTTPS vor der Plattform. Domain und Zertifikatsart kommen aus .env:
-#   YLM_DOMAIN       Name, unter dem Browser und Agents die Plattform erreichen
-#   YLM_CADDY_TLS    leer                               = Let's Encrypt (nur wenn die Domain aus dem Internet erreichbar ist)
-#                    tls internal                       = eigene interne Zertifizierungsstelle von Caddy (internes Netz, ZTNA)
-#                    tls /certs/ylm.crt /certs/ylm.key  = eigenes Zertifikat, z. B. aus der Firmen-PKI (Ordner certs/)
+# Reverse Proxy mit HTTPS vor der Plattform. Domain und Zertifikatsart kommen aus .env
+# (in der Oberfläche unter Globale Einstellungen > Adresse und Zertifikat änderbar):
+#   YLM_DOMAIN          Name, unter dem Browser und Agents die Plattform erreichen
+#   YLM_DOMAIN_ALIASES  weitere Namen (z. B. die alte Adresse nach einem Umzug, damit Agents umziehen können)
+#   YLM_CADDY_TLS       leer                               = Let's Encrypt (Server aus dem Internet auf Port 80/443 erreichbar)
+#                       tls <E-Mail>                       = Let's Encrypt mit Kontakt-Adresse
+#                       import dns-<anbieter>              = Let's Encrypt per DNS-Prüfung (siehe Snippets unten)
+#                       tls internal                       = eigene interne Zertifizierungsstelle von Caddy (internes Netz, ZTNA)
+#                       tls /certs/ylm.crt /certs/ylm.key  = eigenes Zertifikat, z. B. aus der Firmen-PKI (Ordner certs/)
 # Diese Datei bitte nicht ändern; Sonderfälle per docker-compose.override.yml mit eigener Datei (docs/BETRIEB.md).
 {
 	# Die interne Zertifizierungsstelle nicht im Container-Speicher "installieren" (das Stammzertifikat verteilt die IT).
 	skip_install_trust
 }
 
-{$YLM_DOMAIN} {
+# Let's Encrypt per DNS-Prüfung. Zugangsdaten kommen zur Laufzeit aus der Umgebung (YLM_DNS_* in .env).
+(dns-cloudflare) {
+	tls {$YLM_ACME_EMAIL} {
+		dns cloudflare {env.YLM_DNS_TOKEN}
+	}
+}
+(dns-hetzner) {
+	tls {$YLM_ACME_EMAIL} {
+		dns hetzner {env.YLM_DNS_TOKEN}
+	}
+}
+(dns-ionos) {
+	tls {$YLM_ACME_EMAIL} {
+		dns ionos {env.YLM_DNS_TOKEN}
+	}
+}
+(dns-digitalocean) {
+	tls {$YLM_ACME_EMAIL} {
+		dns digitalocean {env.YLM_DNS_TOKEN}
+	}
+}
+(dns-netcup) {
+	tls {$YLM_ACME_EMAIL} {
+		dns netcup {
+			customer_number {env.YLM_DNS_NETCUP_CUSTOMER}
+			api_key {env.YLM_DNS_KEY_ID}
+			api_password {env.YLM_DNS_SECRET}
+		}
+		propagation_timeout 900s
+	}
+}
+(dns-azure) {
+	tls {$YLM_ACME_EMAIL} {
+		dns azure {
+			tenant_id {env.YLM_DNS_AZURE_TENANT}
+			client_id {env.YLM_DNS_KEY_ID}
+			client_secret {env.YLM_DNS_SECRET}
+			subscription_id {env.YLM_DNS_AZURE_SUBSCRIPTION}
+			resource_group_name {env.YLM_DNS_AZURE_RESOURCE_GROUP}
+		}
+	}
+}
+(dns-route53) {
+	tls {$YLM_ACME_EMAIL} {
+		dns route53 {
+			access_key_id {env.YLM_DNS_KEY_ID}
+			secret_access_key {env.YLM_DNS_SECRET}
+			region {env.YLM_DNS_REGION}
+		}
+	}
+}
+
+{$YLM_DOMAIN} {$YLM_DOMAIN_ALIASES} {
 	{$YLM_CADDY_TLS}
 	encode zstd gzip
 	header {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useLocation } from 'react-router';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { api, fieldTypes, fmtDate, keyFromLabel, type AgentUpdatePolicy, type CustomField, type GlobalField, type Tenant } from '../api';
 import { useAuth, useCan } from '../auth';
 import { Badge, Card, download, ErrorBox, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
@@ -7,37 +7,73 @@ import { FieldExplanation } from './TenantDetail';
 import { useConfirm } from '../feedback';
 import { BrandingCard } from './Branding';
 import { LetterEditorCard } from './LetterEditor';
+import { HostingCard } from './Hosting';
+
+type Tab = 'general' | 'hosting' | 'security' | 'updates' | 'api';
+/** Sprungziele (#updates, #certificate, …) aus anderen Seiten öffnen den passenden Bereich. */
+const anchorTab: Record<string, Tab> = {
+  general: 'general', fields: 'general', branding: 'general',
+  hosting: 'hosting',
+  security: 'security', certificate: 'security', login: 'security',
+  updates: 'updates',
+  api: 'api',
+};
 
 /** Platform level: settings that apply to the whole installation and are inherited by the tenants. */
 export default function PlatformPage() {
   const can = useCan();
   const { me } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const admin = !!can('ManageSettings');
+  const tabs: { id: Tab; label: string; show: boolean }[] = [
+    { id: 'general', label: 'Allgemein', show: true },
+    { id: 'hosting', label: 'Adresse und Zertifikat', show: admin },
+    { id: 'security', label: 'Anmeldung und Sicherheit', show: admin },
+    { id: 'updates', label: 'Updates', show: admin },
+    { id: 'api', label: 'API', show: !!can('ManageApiKeys') },
+  ];
+  const anchor = location.hash.slice(1);
+  const requested = anchorTab[anchor] ?? 'general';
+  const tab = tabs.find((t) => t.id === requested && t.show)?.id ?? 'general';
   useEffect(() => {
-    if (location.hash) document.getElementById(location.hash.slice(1))?.scrollIntoView({ behavior: 'smooth' });
-  }, [location.hash]);
+    if (anchor && anchorTab[anchor] !== anchor) document.getElementById(anchor)?.scrollIntoView({ behavior: 'smooth' });
+  }, [anchor]);
 
   return (
     <>
       <PageHeader title="Globale Einstellungen" subtitle="Partnerebene: Einstellungen für die ganze Installation. Tenants erben sie und können sie teilweise anpassen." />
-      <Card title="Aufbau">
-        <div className="hierarchy">
-          <span className="level current">Plattform</span><span aria-hidden>→</span><span className="level">Tenant</span><span aria-hidden>→</span><span className="level">Gruppe</span>
-        </div>
-        <dl className="explain">
-          <dt>Plattform</dt><dd>API-Schlüssel, globale Zusatzfelder, <Link to="/profiles">Profile für alle Tenants</Link>, <Link to="/users">Benutzer und Rollen</Link>.</dd>
-          <dt>Tenant</dt><dd>Zielgruppe, FIDO2-Prüfung, Synchronisation, eigene Profile und Zusatzfelder. Geerbte Zusatzfelder kann ein Tenant verändern oder deaktivieren.</dd>
-          <dt>Gruppe</dt><dd>Profil pro Entra-Gruppe: Der Registrierungs-Assistent schlägt es für Mitglieder vor. Einstellbar im jeweiligen Tenant.</dd>
-        </dl>
-      </Card>
-      {can('ManageSettings') && <UpdatesCard />}
-      {can('ManageSettings') && <AppCertificateCard />}
-      {can('ManageSettings') && <LoginSettingsCard />}
-      <BrandingCard editable={!!can('ManageSettings')} />
-      <LetterEditorCard editable={!!can('ManageSettings')} />
-      <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
-      {can('ManageApiKeys') && <ApiKeysCard />}
-      {can('ManageApiKeys') && <Info>Webhooks, Mail-Alarme und Mail-Berichte stehen unter <Link to="/partner/notifications">Benachrichtigungen</Link>.</Info>}
+      <div className="tabs" role="tablist" aria-label="Bereiche">
+        {tabs.filter((t) => t.show).map((t) => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'selected' : ''}
+            onClick={() => navigate({ hash: t.id === 'general' ? '' : t.id }, { replace: true })}>{t.label}</button>
+        ))}
+      </div>
+      {tab === 'general' && <>
+        <Card title="Aufbau">
+          <div className="hierarchy">
+            <span className="level current">Plattform</span><span aria-hidden>→</span><span className="level">Tenant</span><span aria-hidden>→</span><span className="level">Gruppe</span>
+          </div>
+          <dl className="explain">
+            <dt>Plattform</dt><dd>API-Schlüssel, globale Zusatzfelder, <Link to="/profiles">Profile für alle Tenants</Link>, <Link to="/users">Benutzer und Rollen</Link>.</dd>
+            <dt>Tenant</dt><dd>Zielgruppe, FIDO2-Prüfung, Synchronisation, eigene Profile und Zusatzfelder. Geerbte Zusatzfelder kann ein Tenant verändern oder deaktivieren.</dd>
+            <dt>Gruppe</dt><dd>Profil pro Entra-Gruppe: Der Registrierungs-Assistent schlägt es für Mitglieder vor. Einstellbar im jeweiligen Tenant.</dd>
+          </dl>
+        </Card>
+        <BrandingCard editable={admin} />
+        <LetterEditorCard editable={admin} />
+        <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
+      </>}
+      {tab === 'hosting' && <HostingCard />}
+      {tab === 'security' && <>
+        <LoginSettingsCard />
+        <AppCertificateCard />
+      </>}
+      {tab === 'updates' && <UpdatesCard />}
+      {tab === 'api' && <>
+        <ApiKeysCard />
+        <Info>Webhooks, Mail-Alarme und Mail-Berichte stehen unter <Link to="/partner/notifications">Benachrichtigungen</Link>.</Info>
+      </>}
     </>
   );
 }
@@ -107,7 +143,7 @@ interface ApiKeyRow {
 interface ApiScopeInfo { id: string; area: string; label: string; description: string; write: boolean }
 
 /** Rechte, die keine Vorlage mitbringt und die nur einzeln vergeben werden (greifen in Entra ein). */
-const SEPARATE = ['keys.lock'];
+const SEPARATE = ['keys.lock', 'certificate.write'];
 
 /** Vorlagen für häufige Fälle; danach lässt sich jedes Recht einzeln an- und abwählen. „Keys sperren“ gehört zu keiner Vorlage. */
 function presets(catalog: ApiScopeInfo[]) {

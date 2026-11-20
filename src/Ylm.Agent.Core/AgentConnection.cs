@@ -145,6 +145,11 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
             await RunAsync("PIN-Wechsel erzwingen", () => _device.ForcePinChangeAsync(req.ExpectedSerialNumber, req.Pin)));
         hub.On(nameof(IAgentClient.CheckForUpdate), async () =>
             UpdateRequested is { } check ? await check(CancellationToken.None) : "Auto-Update ist auf diesem Agent nicht verfügbar.");
+        hub.On<string>(nameof(IAgentClient.ServerAddress), url =>
+        {
+            _ = Task.Run(() => MoveToAsync(url));
+            return Task.CompletedTask;
+        });
         hub.On<AgentProgress>(nameof(IAgentClient.ShowProgress), p =>
         {
             _logger.LogInformation("Server: {Title}{Prompt}", p.Title, p.Prompt is null ? "" : " – " + p.Prompt);
@@ -261,6 +266,44 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
                 Update(s => s with { Connection = BackendConnectionState.Disconnected, LastError = ex.Message });
                 await Task.Delay(TimeSpan.FromSeconds(Math.Min(60, 2 << Math.Min(attempt, 5))), ct);
             }
+        }
+    }
+
+    private int _moving;
+
+    /// <summary>
+    /// Der Server hat eine neue Adresse (Adresse und Zertifikat in der Oberfläche geändert). Der Agent wechselt erst,
+    /// wenn die neue Adresse erreichbar ist (HTTPS mit gültigem Zertifikat); sonst bleibt er bei der alten.
+    /// </summary>
+    public async Task MoveToAsync(string publicUrl)
+    {
+        if (!Uri.TryCreate(publicUrl, UriKind.Absolute, out var target) || (target.Scheme != "https" && !target.IsLoopback)) return;
+        var next = target.GetLeftPart(UriPartial.Authority);
+        if (_settings.ServerUrl is null || string.Equals(next, _settings.ServerUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)) return;
+        if (Interlocked.Exchange(ref _moving, 1) == 1) return;
+        try
+        {
+            using var http = _handlerFactory is null ? new HttpClient() : new HttpClient(_handlerFactory());
+            http.Timeout = TimeSpan.FromSeconds(15);
+            using var res = await http.GetAsync(new Uri(new Uri(next), "/healthz"));
+            if (!res.IsSuccessStatusCode)
+            {
+                _logger.LogWarning("Neue Server-Adresse {Url} antwortet mit {Status}, bleibe bei {Old}", next, (int)res.StatusCode, _settings.ServerUrl);
+                return;
+            }
+            var old = _settings.ServerUrl;
+            _settings = _store.Change(s => s with { ServerUrl = next });
+            _logger.LogInformation("Server ist umgezogen: {Old} -> {New}", old, next);
+            Notification?.Invoke("Server-Adresse geändert", $"Der Agent verbindet sich jetzt mit {next}.", false);
+            await ConnectAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("Neue Server-Adresse {Url} nicht erreichbar, bleibe bei {Old}: {Error}", next, _settings.ServerUrl, ex.Message);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _moving, 0);
         }
     }
 

@@ -109,6 +109,7 @@ jobs:
     env:
       SERVER_IMAGE: ghcr.io/${{ github.repository_owner }}/yubikey-lifecycle-manager
       UPDATER_IMAGE: ghcr.io/${{ github.repository_owner }}/yubikey-lifecycle-manager-updater
+      CADDY_IMAGE: ghcr.io/${{ github.repository_owner }}/yubikey-lifecycle-manager-caddy
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -136,6 +137,7 @@ jobs:
         run: |
           echo "server=${SERVER_IMAGE,,}" >> "$GITHUB_OUTPUT"
           echo "updater=${UPDATER_IMAGE,,}" >> "$GITHUB_OUTPUT"
+          echo "caddy=${CADDY_IMAGE,,}" >> "$GITHUB_OUTPUT"
       - name: Server-Image bauen und veröffentlichen
         uses: docker/build-push-action@v6
         with:
@@ -156,6 +158,16 @@ jobs:
           tags: |
             ${{ steps.names.outputs.updater }}:${{ steps.v.outputs.version }}
             ${{ steps.names.outputs.updater }}:latest
+          push: true
+      - name: Caddy-Image bauen und veröffentlichen
+        uses: docker/build-push-action@v6
+        with:
+          context: ./caddy
+          platforms: linux/amd64,linux/arm64
+          pull: true
+          tags: |
+            ${{ steps.names.outputs.caddy }}:${{ steps.v.outputs.version }}
+            ${{ steps.names.outputs.caddy }}:latest
           push: true
       - name: GitHub-Release
         env:

@@ -125,7 +125,22 @@ public sealed class UpdateService(IHttpClientFactory httpFactory, IMemoryCache c
     /// <summary>Sicherheitsupdates: alle Images derselben Version neu laden und geänderte Container neu erstellen.</summary>
     public Task StartRefreshAsync(CancellationToken ct = default) => PostUpdaterAsync("/refresh", new { }, ct);
 
-    private async Task PostUpdaterAsync(string path, object body, CancellationToken ct)
+    /// <summary>GET am Updater. Null ohne Updater, (404) wenn der Updater die Funktion noch nicht kennt.</summary>
+    public async Task<(System.Net.HttpStatusCode Status, JsonElement? Body)> UpdaterGetAsync(string path, CancellationToken ct = default)
+    {
+        if (!UpdaterConfigured) return (System.Net.HttpStatusCode.ServiceUnavailable, null);
+        try
+        {
+            using var res = await httpFactory.CreateClient("updates").SendAsync(UpdaterRequest(HttpMethod.Get, path), ct);
+            return (res.StatusCode, res.IsSuccessStatusCode ? await res.Content.ReadFromJsonAsync<JsonElement>(ct) : null);
+        }
+        catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
+        {
+            return (System.Net.HttpStatusCode.BadGateway, null);
+        }
+    }
+
+    public async Task PostUpdaterAsync(string path, object body, CancellationToken ct)
     {
         if (!UpdaterConfigured) throw ApiException.Conflict("updater_missing", "Der Updater-Container ist nicht eingerichtet. Siehe docs/BETRIEB.md, Abschnitt Updates.");
         using var req = UpdaterRequest(HttpMethod.Post, path);
@@ -135,7 +150,11 @@ public sealed class UpdateService(IHttpClientFactory httpFactory, IMemoryCache c
             using var res = await httpFactory.CreateClient("updates").SendAsync(req, ct);
             if (res.StatusCode == System.Net.HttpStatusCode.Conflict) throw ApiException.Conflict("update_running", "Es läuft bereits ein Update.");
             if (res.StatusCode == System.Net.HttpStatusCode.NotFound) throw ApiException.Conflict("updater_outdated", "Der Updater kennt diese Funktion noch nicht. Bitte das Installationsskript einmal erneut ausführen (lädt den neuen Updater).");
-            if (!res.IsSuccessStatusCode) throw ApiException.Conflict("updater_failed", $"Der Updater hat den Auftrag abgelehnt ({(int)res.StatusCode}).");
+            if (!res.IsSuccessStatusCode)
+            {
+                var detail = await res.Content.ReadAsStringAsync(ct);
+                throw ApiException.Conflict("updater_failed", $"Der Updater hat den Auftrag abgelehnt ({(int)res.StatusCode}): {detail}");
+            }
         }
         catch (HttpRequestException e)
         {

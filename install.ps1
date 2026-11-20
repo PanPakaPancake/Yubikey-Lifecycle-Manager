@@ -15,7 +15,8 @@
 .PARAMETER Dir
   Installationsordner (Standard: %USERPROFILE%\YubikeyLifecycleManager).
 .PARAMETER Mode
-  local (Standard) = nur dieser PC unter http://localhost:8080
+  (Standard)       = nur dieser PC unter https://localhost (interne Zertifizierungsstelle, wird in Windows eingetragen)
+  local            = nur dieser PC unter http://localhost:8080, ohne HTTPS
   internal         = internes Netz/ZTNA, HTTPS mit interner Zertifizierungsstelle von Caddy
   cert             = internes Netz/ZTNA, HTTPS mit eigenem Zertifikat (-Cert, -Key, z. B. Firmen-PKI)
   proxy            = hinter einem vorhandenen Reverse Proxy oder ZTNA-Connector
@@ -110,6 +111,8 @@ function Write-Mode {
         Set-EnvValue $envFile 'YLM_DOMAIN' $script:Domain
         $tls = switch ($script:Mode) { 'internal' { 'tls internal' } 'cert' { 'tls /certs/ylm.crt /certs/ylm.key' } default { '' } }
         Set-EnvValue $envFile 'YLM_CADDY_TLS' $tls
+        # Nur auf diesem PC: Caddy nicht im Netz anbieten.
+        if ($script:Domain -eq 'localhost') { Set-EnvValue $envFile 'YLM_HTTPS_BIND' '127.0.0.1' }
     } else {
         Set-EnvValue $envFile 'COMPOSE_PROFILES' ''
     }
@@ -177,7 +180,8 @@ if (Test-Path $envFile) {
     $running = $false
     try { Invoke-WebRequest 'http://127.0.0.1:8080/healthz' -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop | Out-Null; $running = $true } catch { }
     if ($running) { Fail "Auf Port 8080 läuft schon eine Installation (anderer Ordner?). Bitte im Ordner der vorhandenen Installation arbeiten oder sie vorher stoppen (docker compose down)." }
-    if (-not $Mode) { $Mode = if ($Domain) { 'https' } elseif ($Url) { 'proxy' } else { 'local' } }
+    # Standard: HTTPS auch auf dem eigenen PC (https://localhost, interne Zertifizierungsstelle von Caddy).
+    if (-not $Mode) { if ($Domain) { $Mode = 'https' } elseif ($Url) { $Mode = 'proxy' } else { $Mode = 'internal'; $Domain = 'localhost' } }
     Resolve-Mode
     $passphrase = New-Secret 24
     $lines = @(
@@ -194,6 +198,10 @@ if (Test-Path $envFile) {
     Info ".env mit neuen Zufallsgeheimnissen angelegt ($envFile)."
 }
 $Url = Get-EnvValue $envFile 'YLM_PUBLIC_URL'
+# Bei erneutem Lauf (z. B. nach Änderungen unter Adresse und Zertifikat) den Stand aus .env nehmen.
+if (-not $Mode) { $Mode = Get-EnvValue $envFile 'YLM_MODE' }
+if (-not $Domain) { $Domain = Get-EnvValue $envFile 'YLM_DOMAIN' }
+$openSetup = $false
 
 # --- 4. Starten ---
 Write-Host ''
@@ -219,7 +227,7 @@ if ($token) {
     Write-Host ''
     Write-Host ("      " + $token.Matches[0].Groups[1].Value) -ForegroundColor White
     Write-Host ''
-    if ($Url -like 'http://localhost*') { Start-Process "$Url/setup" }
+    if ($Url -like 'http://localhost*' -or $Url -eq 'https://localhost') { $openSetup = $true }
 }
 if ($passphrase) {
     Write-Host ''
@@ -234,6 +242,17 @@ if ($Mode -eq 'internal') {
         $pem = & docker compose exec -T caddy cat /data/caddy/pki/authorities/local/root.crt 2>$null
         if ($LASTEXITCODE -eq 0 -and $pem) { [IO.File]::WriteAllText($ca, (($pem -join "`n") + "`n"), $Utf8) } else { Start-Sleep -Seconds 2 }
     }
+    if ((Test-Path $ca) -and $Domain -eq 'localhost') {
+        # Auf dem eigenen PC: Stammzertifikat im Computer-Speicher eintragen (eine UAC-Abfrage), damit Browser und
+        # der Agent-Dienst (läuft als SYSTEM) https://localhost ohne Warnung vertrauen.
+        $thumb = (New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 $ca).Thumbprint
+        if (-not (Get-ChildItem Cert:\LocalMachine\Root | Where-Object Thumbprint -eq $thumb)) {
+            Info 'Trage das Stammzertifikat in Windows ein (Bestätigung per UAC) ...'
+            try { Start-Process certutil -ArgumentList '-addstore', 'Root', "`"$ca`"" -Verb RunAs -Wait -WindowStyle Hidden } catch { Warn "Nicht eingetragen: $($_.Exception.Message)" }
+        }
+        if (Get-ChildItem Cert:\LocalMachine\Root | Where-Object Thumbprint -eq $thumb) { Info 'Stammzertifikat eingetragen: https://localhost ist vertrauenswürdig.' }
+        else { Warn "Bitte als Administrator ausführen: certutil -addstore Root `"$ca`"" }
+    }
     if (Test-Path $ca) {
         Info "Stammzertifikat der internen CA: $ca"
         Info 'Auf den Admin-PCs als vertrauenswürdige Stammzertifizierungsstelle verteilen (GPO oder Intune), einzeln: certutil -addstore Root ylm-root-ca.crt'
@@ -242,3 +261,4 @@ if ($Mode -eq 'internal') {
 Info "Installationsordner: $Dir (Einstellungen in .env, Sicherungen in backups\)"
 Info 'Status: docker compose ps   Protokoll: docker compose logs -f server'
 Info 'Updates: in der Oberfläche unter Globale Einstellungen -> Version und Updates, oder dieses Skript erneut ausführen.'
+if ($openSetup) { Start-Process "$Url/setup" }

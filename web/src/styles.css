@@ -593,3 +593,7 @@ button.kpi-row { cursor: pointer; }
 .choose-tenant p { margin: 0 0 10px; }
 .choose-tenant-list { display: flex; flex-wrap: wrap; gap: 8px; }
 .choose-tenant-list button:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Zwei Spalten für Formularfelder, auf schmalen Bildschirmen untereinander. */
+.grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 16px; }
+.tabs { flex-wrap: wrap; }

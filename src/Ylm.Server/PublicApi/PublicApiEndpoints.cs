@@ -187,6 +187,37 @@ public static class PublicApiEndpoints
           .RequireScope(ApiScopes.KeysLock);
 
         app.MapGroup("/api/v1").RequireAuthorization("ApiKey").WithGroupName(GroupName).WithTags("ToDo-Liste").MapTodoApi(ScopeAsync);
+
+        // ----- HTTPS-Zertifikat der Plattform (eigenes Zertifikat, z. B. aus der Firmen-PKI) -----
+        var c = app.MapGroup("/api/v1/certificate").RequireAuthorization("ApiKey").WithGroupName(GroupName).WithTags("Zertifikat");
+        c.MapGet("", async (ClaimsPrincipal p, Updates.HostingService hosting, CancellationToken ct) =>
+        {
+            RequireAllTenants(p);
+            var state = await hosting.GetAsync(ct);
+            return TypedResults.Ok(new ApiCertificate(state.View.Tls.ToString(), state.View.Domain, state.View.Aliases, state.Certificate));
+        }).WithSummary("HTTPS-Zertifikat der Plattform")
+          .WithDescription("Zertifikatsart (Internal, Own, LetsEncrypt, LetsEncryptDns), DNS-Name und beim eigenen Zertifikat Aussteller, Gültigkeit und Namen.")
+          .RequireScope(ApiScopes.CertificateWrite);
+
+        c.MapPut("", async Task<Microsoft.AspNetCore.Http.HttpResults.Accepted<ApiCertificate>> (ApiReplaceCertificate body, ClaimsPrincipal p, Updates.HostingService hosting, CancellationToken ct) =>
+        {
+            RequireAllTenants(p);
+            await hosting.ReplaceCertificateAsync(body.CertificatePem, body.KeyPem, ApiScopes.Actor(p), ct);
+            var info = Updates.HostingService.Describe(body.CertificatePem);
+            var state = await hosting.GetAsync(ct);
+            return TypedResults.Accepted((string?)null, new ApiCertificate("Own", state.View.Domain, state.View.Aliases, info));
+        }).WithSummary("Eigenes HTTPS-Zertifikat ersetzen")
+          .WithDescription("Zertifikat (PEM, mit Zwischenzertifikaten) und privater Schlüssel (PEM, ohne Passwort). Die Plattform prüft, dass beide zusammenpassen, gültig sind und für den DNS-Namen gelten; danach lädt Caddy das neue Zertifikat (ein paar Sekunden). Schaltet bei Bedarf von einer anderen Zertifikatsart auf das eigene Zertifikat um.")
+          .RequireScope(ApiScopes.CertificateWrite);
+    }
+
+    public sealed record ApiCertificate(string Type, string? Domain, string? Aliases, Updates.CertificateInfo? Certificate);
+    public sealed record ApiReplaceCertificate(string CertificatePem, string KeyPem);
+
+    private static void RequireAllTenants(ClaimsPrincipal p)
+    {
+        if (!p.HasClaim(YlmClaims.ApiKeyAllTenants, "true"))
+            throw ApiException.Forbidden("Das Zertifikat betrifft die ganze Installation: nur Schlüssel mit Zugriff auf alle Tenants.");
     }
 
     /// <param name="Scopes">Rechte des Schlüssels (siehe GET /api/api-keys/scopes). Ohne Angabe: alles Lesende, mit AllowTodoWrite zusätzlich ToDo schreiben (wie bisher).</param>

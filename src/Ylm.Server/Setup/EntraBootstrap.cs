@@ -44,6 +44,8 @@ public interface IEntraBootstrap
     Task<DeviceCodePoll> PollDeviceCodeAsync(string deviceCode, CancellationToken ct = default);
     Task<SignedInAdmin> GetSignedInAdminAsync(string accessToken, CancellationToken ct = default);
     Task<AppProvisioningResult> ProvisionAppAsync(string accessToken, AppProvisioningRequest request, CancellationToken ct = default);
+    /// <summary>Ergänzt Redirect-URIs der eigenen App-Registrierung (vorhandene bleiben). Gibt alle URIs danach zurück.</summary>
+    Task<IReadOnlyList<string>> AddRedirectUrisAsync(string accessToken, Guid clientId, IReadOnlyList<string> redirectUris, CancellationToken ct = default);
 }
 
 /// <summary>Holds the pending device code and the admin token of the setup sign-in (memory only, never persisted).</summary>
@@ -344,6 +346,26 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
                 await Task.Delay(TimeSpan.FromSeconds(5), ct);
             }
         }
+    }
+
+    public async Task<IReadOnlyList<string>> AddRedirectUrisAsync(string token, Guid clientId, IReadOnlyList<string> redirectUris, CancellationToken ct = default)
+    {
+        using var found = await GraphAsync(token, HttpMethod.Get, $"{GraphV1}/applications(appId='{clientId}')?$select=id,web", ct, allowNotFound: true)
+                          ?? throw ApiException.Conflict("app_not_found", "Die App-Registrierung der Plattform wurde in diesem Tenant nicht gefunden. Bitte mit einem Admin des Tenants anmelden, in dem die Plattform registriert ist.");
+        var objectId = found.RootElement.GetProperty("id").GetString()!;
+        // web komplett zurückschreiben, damit Abmelde-URL und andere Einstellungen erhalten bleiben.
+        var web = found.RootElement.TryGetProperty("web", out var w) && w.ValueKind == JsonValueKind.Object
+            ? JsonNode.Parse(w.GetRawText())!.AsObject() : new JsonObject();
+        var existing = web["redirectUris"] is JsonArray arr ? arr.Select(n => n!.GetValue<string>()).ToList() : [];
+        var all = existing.Concat(redirectUris).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (all.Count != existing.Count)
+        {
+            web["redirectUris"] = new JsonArray(all.Select(u => (JsonNode)u).ToArray());
+            web.Remove("redirectUriSettings");
+            await GraphAsync(token, HttpMethod.Patch, $"{GraphV1}/applications/{objectId}", ct, new JsonObject { ["web"] = web });
+            logger.LogInformation("Redirect-URIs der App {ClientId} ergänzt: {Uris}", clientId, string.Join(", ", redirectUris));
+        }
+        return all;
     }
 
     private async Task<JsonDocument?> GraphAsync(string token, HttpMethod method, string url, CancellationToken ct, JsonNode? body = null, bool allowNotFound = false)
