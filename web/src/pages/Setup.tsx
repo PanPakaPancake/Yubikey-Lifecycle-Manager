@@ -102,7 +102,7 @@ export default function SetupPage() {
           return;
         }
         if (i === verifyAttempts) {
-          fail(r.ok ? 'Es fehlen noch Berechtigungen: ' + r.missing.join(', ') : r.message);
+          fail(r.ok ? 'Es fehlen noch Berechtigungen: ' + r.missing.join(', ') + '. Entra braucht nach dem Admin-Consent manchmal einige Minuten. Bitte kurz warten und „Nur erneut prüfen“ wählen.' : r.message);
           return;
         }
       } catch (e) {

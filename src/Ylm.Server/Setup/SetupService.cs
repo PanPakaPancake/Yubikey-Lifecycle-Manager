@@ -197,6 +197,9 @@ public sealed class SetupService(
         if (s.ClientId is null || s.HomeTenantId is null) return (false, "Client-ID und Tenant-ID fehlen.", []);
         try
         {
+            // Always a fresh token: the roles claim is fixed when the token is issued. A token fetched right after
+            // provisioning (before Entra replicated the consent) would otherwise be reused for up to an hour.
+            graphFactory.Invalidate(s.HomeTenantId.Value);
             var graph = await graphFactory.ForTenantAsync(s.HomeTenantId.Value);
             var granted = await graph.GetGrantedApplicationPermissionsAsync();
             return (true, "Anmeldung mit dem App-Zertifikat erfolgreich.", granted);
