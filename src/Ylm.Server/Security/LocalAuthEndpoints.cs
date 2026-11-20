@@ -23,7 +23,7 @@ public static class LocalAuthEndpoints
     public static void MapLocalAuth(this IEndpointRouteBuilder app)
     {
         // ----- Anmeldeseite -----
-        app.MapGet("/auth/methods", async (YlmDbContext db) =>
+        app.MapGet("/auth/methods", async (YlmDbContext db, IWebHostEnvironment env, Microsoft.Extensions.Options.IOptions<Infrastructure.YlmOptions> options) =>
         {
             var s = await db.Installation.AsNoTracking().FirstOrDefaultAsync();
             return Results.Ok(new
@@ -31,6 +31,7 @@ public static class LocalAuthEndpoints
                 entraSso = s is { EntraSsoEnabled: true, ClientId: not null },
                 passkey = await db.UserPasskeys.AnyAsync(),
                 emergency = await db.PlatformUsers.AnyAsync(u => u.LoginKind == UserLoginKind.Emergency && u.PasswordHash != null),
+                development = AuthEndpoints.IsDevAuth(env, options.Value),
             });
         }).AllowAnonymous();
 

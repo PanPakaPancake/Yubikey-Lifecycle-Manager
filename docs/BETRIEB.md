@@ -205,6 +205,7 @@ In `.env`:
 | `BACKUP_PASSPHRASE` | vom Skript erzeugt | verschlüsselt die Sicherungen; leer = unverschlüsselt |
 | `YLM_CERT_AUTO_RENEW` | `true` | App-Zertifikat selbst erneuern (sonst nur warnen) |
 | `YLM_REQUIRE_PHISHING_RESISTANT` | `true` | Anmeldung der Admins nur mit Passkey/YubiKey (nur für Tests abschalten) |
+| `YLM_ACCEPTED_AMR` | `fido` | akzeptierte Anmeldemethoden laut Microsoft-Token (Komma-Liste); abgelehnte Methode steht auf der Anmeldeseite |
 | `TZ` | `Europe/Berlin` | Zeitzone |
 
 Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services.server.environment`):

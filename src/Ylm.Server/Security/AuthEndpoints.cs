@@ -14,7 +14,7 @@ public static class AuthEndpoints
 
     public static void MapAuth(this IEndpointRouteBuilder app, IWebHostEnvironment env, YlmOptions options)
     {
-        app.MapGet("/auth/login", async (string? returnUrl, int? retry, YlmDbContext db, IOptionsMonitor<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions> oidc,
+        app.MapGet("/auth/login", async (string? returnUrl, int? retry, bool? reauth, YlmDbContext db, IOptionsMonitor<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions> oidc,
             IOptionsMonitorCache<Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions> oidcCache) =>
         {
             var target = IsLocalPath(returnUrl) ? returnUrl! : "/";
@@ -27,9 +27,13 @@ public static class AuthEndpoints
             if (retry is null && oidc.Get(AuthSchemes.Entra).ClientId != clientId.ToString())
             {
                 oidcCache.TryRemove(AuthSchemes.Entra);
-                return Results.Redirect("/auth/login?retry=1&returnUrl=" + Uri.EscapeDataString(target));
+                return Results.Redirect("/auth/login?retry=1" + (reauth == true ? "&reauth=true" : "") + "&returnUrl=" + Uri.EscapeDataString(target));
             }
-            return Results.Challenge(new AuthenticationProperties { RedirectUri = target }, [AuthSchemes.Entra]);
+            // reauth: Microsoft soll neu fragen (prompt=login) statt eine bestehende Sitzung ohne Sicherheitsschlüssel zu nutzen.
+            AuthenticationProperties properties = reauth == true
+                ? new Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectChallengeProperties { RedirectUri = target, Prompt = "login" }
+                : new AuthenticationProperties { RedirectUri = target };
+            return Results.Challenge(properties, [AuthSchemes.Entra]);
         }).AllowAnonymous();
 
         app.MapPost("/auth/logout", async (HttpContext ctx) =>

@@ -72,7 +72,8 @@ public sealed class EntraOidcOptionsSetup(IServiceScopeFactory scopes, IOptions<
                 if (principal is null)
                 {
                     ctx.HandleResponse();
-                    ctx.Response.Redirect("/login?error=" + Uri.EscapeDataString(signIn.LastError ?? "denied"));
+                    ctx.Response.Redirect("/login?error=" + Uri.EscapeDataString(signIn.LastError ?? "denied")
+                        + (signIn.LastAmr is { Length: > 0 } amr ? "&amr=" + Uri.EscapeDataString(amr) : ""));
                     return;
                 }
                 ctx.Principal = principal;
@@ -110,6 +111,8 @@ public static class ClientAssertion
 public sealed class PlatformSignIn(YlmDbContext db, AuditService audit, IOptions<YlmOptions> options, ILogger<PlatformSignIn> logger)
 {
     public string? LastError { get; private set; }
+    /// <summary>Anmeldemethoden laut Token (amr) bei abgelehnter Anmeldung, für einen verständlichen Hinweis.</summary>
+    public string? LastAmr { get; private set; }
 
     public async Task<ClaimsPrincipal?> MapEntraPrincipalAsync(ClaimsPrincipal entra)
     {
@@ -129,8 +132,13 @@ public sealed class PlatformSignIn(YlmDbContext db, AuditService audit, IOptions
         if (options.Value.RequirePhishingResistantSignIn)
         {
             var amr = entra.FindAll("amr").Select(c => c.Value).ToList();
-            if (!amr.Intersect(options.Value.PhishingResistantAmrValues, StringComparer.OrdinalIgnoreCase).Any())
+            // Einträge dürfen Komma-Listen sein (eine Umgebungsvariable, YLM_ACCEPTED_AMR); leer = Standard "fido".
+            var accepted = options.Value.PhishingResistantAmrValues
+                .SelectMany(v => (v ?? "").Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .DefaultIfEmpty("fido");
+            if (!amr.Intersect(accepted, StringComparer.OrdinalIgnoreCase).Any())
             {
+                LastAmr = string.Join(",", amr.Where(a => a.Length <= 20 && a.All(char.IsAsciiLetterOrDigit)).Take(8));
                 return await DenyAsync("not_phishing_resistant", upn,
                     $"Anmeldung muss passwortlos mit Sicherheitsschlüssel erfolgen (amr: {string.Join(",", amr)}).");
             }

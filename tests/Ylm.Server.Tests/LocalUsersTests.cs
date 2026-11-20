@@ -177,6 +177,7 @@ public sealed class LocalUsersTests : IAsyncLifetime
         Assert.False(ok.GetProperty("entraSsoEnabled").GetBoolean());
         var methods = await Json(await _app.Client().GetAsync("/auth/methods"));
         Assert.False(methods.GetProperty("entraSso").GetBoolean());
+        Assert.True(methods.GetProperty("development").GetBoolean()); // Testumgebung mit AuthMode=Development
         Assert.True(methods.GetProperty("passkey").GetBoolean());
         var redirect = await _app.Client().GetAsync("/auth/login");
         Assert.Equal("/login?error=sso_disabled", redirect.Headers.Location?.ToString());
@@ -206,6 +207,11 @@ public sealed class LocalUsersTests : IAsyncLifetime
         Assert.StartsWith("/auth/login?retry=1", first.Headers.Location?.ToString());
         var challenge = await client.GetAsync(first.Headers.Location);
         Assert.Contains("client_id=" + clientId, challenge.Headers.Location?.ToString());
+        Assert.DoesNotContain("prompt=login", challenge.Headers.Location?.ToString());
+
+        // "Erneut mit YubiKey anmelden": Microsoft fragt neu, statt die bestehende Sitzung zu nutzen.
+        var reauth = await client.GetAsync("/auth/login?reauth=true");
+        Assert.Contains("prompt=login", reauth.Headers.Location?.ToString());
     }
 
     [Fact]
