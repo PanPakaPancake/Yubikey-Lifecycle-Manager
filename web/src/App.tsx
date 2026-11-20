@@ -115,7 +115,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
       <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />
       <aside className="sidebar">
         <div className="brand">
-          <LogoMark />
+          <LogoMark size={54} />
           <Wordmark sub={me.organizationName || undefined} />
           <button type="button" className="icon-btn sidebar-close" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}><Icon name="x" size={20} /></button>
         </div>

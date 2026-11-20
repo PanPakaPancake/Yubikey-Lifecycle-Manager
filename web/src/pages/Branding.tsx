@@ -3,6 +3,7 @@ import { api, ApiError } from '../api';
 import { Badge, Card, download, ErrorBox, Field, Spinner, useAction, useApi } from '../ui';
 import { useToast } from '../feedback';
 import { Icon } from '../icons';
+import { logoColors } from '../logoColors';
 
 interface BrandingValues { companyName?: string | null; accentColor?: string | null; contact?: string | null; footer?: string | null; hasLogo: boolean; updatedAt?: string | null }
 interface BrandingResponse {
@@ -28,6 +29,7 @@ export function BrandingCard({ tenantId, editable }: { tenantId?: string; editab
   const fileRef = useRef<HTMLInputElement>(null);
   const { busy, error: actError, run, setError } = useAction();
   const toast = useToast();
+  const [suggestions, setSuggestions] = useState<string[] | null>(null);
   useEffect(() => { if (data) setForm(toForm(own)); }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!data) return <Card title="Erscheinungsbild der Dokumente" className="mt"><ErrorBox error={error} />{!error && <Spinner />}</Card>;
@@ -60,11 +62,19 @@ export function BrandingCard({ tenantId, editable }: { tenantId?: string; editab
     setLogoVersion(Date.now());
     toast.ok('Logo hochgeladen');
     reload();
+    setSuggestions(null);
   });
   const removeLogo = () => run(async () => {
     await api.del('/api/branding/logo' + qs);
     setLogoVersion(Date.now());
     reload();
+  });
+  const logoUrl = `/api/branding/logo${qs}${qs ? '&' : '?'}effective=true&v=${logoVersion}`;
+  const suggestFromLogo = () => run(async () => {
+    const colors = await logoColors(logoUrl);
+    if (colors.length === 0) throw new Error('Im Logo ist keine deutliche Farbe zu finden (nur Weiß, Schwarz oder transparent).');
+    setSuggestions(colors);
+    if (colors.length === 1) setForm((f) => ({ ...f, accentColor: colors[0] }));
   });
   const inheritedHint = (p?: string | null) => tenantId ? (p ? <>Leer lassen übernimmt den Partner-Wert „{p}“.</> : 'Leer lassen übernimmt die Vorgabe des Partners.') : undefined;
 
@@ -89,7 +99,19 @@ export function BrandingCard({ tenantId, editable }: { tenantId?: string; editab
               <input type="color" value={preview.accent} onChange={set('accentColor')} disabled={!editable} aria-label="Farbe wählen" />
               <input value={form.accentColor} onChange={set('accentColor')} disabled={!editable} placeholder={tenantId ? partner.accentColor ?? DEFAULT_ACCENT : DEFAULT_ACCENT} maxLength={7} className="mono" />
               {form.accentColor && editable && <button type="button" className="link" onClick={() => setForm({ ...form, accentColor: '' })}>{tenantId ? 'Partner-Farbe' : 'Standard'}</button>}
+              {editable && preview.hasLogo && <button type="button" className="ghost small" disabled={busy} onClick={suggestFromLogo}><Icon name="sparkle" size={14} />Farbe aus Logo</button>}
             </div>
+            {suggestions && suggestions.length > 1 && (
+              <div className="color-suggestions" role="group" aria-label="Farben aus dem Logo">
+                <span className="muted small">Aus dem Logo:</span>
+                {suggestions.map((c) => (
+                  <button key={c} type="button" className={'swatch' + (form.accentColor.toLowerCase() === c ? ' selected' : '')} style={{ ['--sw' as string]: c }}
+                    title={c} aria-label={'Farbe ' + c + ' übernehmen'} onClick={() => setForm({ ...form, accentColor: c })}>
+                    <span className="swatch-dot" /><span className="mono small">{c}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </Field>
           <Field label="Kontakt für Rückfragen" hint={inheritedHint(partner.contact) ?? 'Steht im PIN-Brief beim Hinweis auf gesperrte Keys und in der Fußzeile.'}>
             <input value={form.contact} onChange={set('contact')} disabled={!editable} maxLength={200} placeholder="z. B. IT-Service · 0800 123 456 · it@firma.de" />
@@ -101,7 +123,7 @@ export function BrandingCard({ tenantId, editable }: { tenantId?: string; editab
             <div className="logo-field">
               <div className="logo-box">
                 {preview.hasLogo
-                  ? <img src={`/api/branding/logo${qs}${qs ? '&' : '?'}effective=true&v=${logoVersion}`} alt="Logo" />
+                  ? <img src={logoUrl} alt="Logo" />
                   : <span className="muted small">Kein Logo</span>}
               </div>
               {editable && <>
@@ -120,7 +142,7 @@ export function BrandingCard({ tenantId, editable }: { tenantId?: string; editab
             </div>
           )}
         </div>
-        <LetterPreview {...preview} logoUrl={preview.hasLogo ? `/api/branding/logo${qs}${qs ? '&' : '?'}effective=true&v=${logoVersion}` : undefined} />
+        <LetterPreview {...preview} logoUrl={preview.hasLogo ? logoUrl : undefined} />
       </div>
     </Card>
   );
