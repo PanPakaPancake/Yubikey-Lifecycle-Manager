@@ -439,3 +439,18 @@ public sealed class AuthMethodCatalogTests
         Assert.True(AuthMethodCatalog.IsRemovable("phone"));
     }
 }
+
+public sealed class Fido2ClassificationTests
+{
+    [Theory]
+    [InlineData("90a3ccdf-635c-4729-a248-9b709135078f", "Microsoft Authenticator - iOS", "passKeyDeviceBoundAuthenticator")]
+    [InlineData(null, "Microsoft Authenticator - Android", "passKeyDeviceBoundAuthenticator")]
+    [InlineData("08987058-cadc-4b81-b6e1-30de50dcbe96", null, "passKeyDeviceBoundWindowsHello")]
+    [InlineData("00000000-0000-0000-0000-000000000000", null, "passKeySynced")]
+    [InlineData("cb69481e-8ff7-4039-93ec-0a2729a154a8", "YubiKey 5 Series", "passKeyDeviceBound")]
+    public void Fido2_is_classified_by_aaguid_and_model(string? aaguid, string? model, string expected)
+    {
+        Assert.Equal(expected, AuthMethodCatalog.Fido2ReportName(aaguid is null ? null : Guid.Parse(aaguid), model));
+        Assert.Equal(expected == "passKeyDeviceBound", AuthMethodCatalog.Get(expected).IsSecurityKey);
+    }
+}

@@ -107,3 +107,39 @@ public sealed class GraphClientRolloutTests
         await Assert.ThrowsAsync<ArgumentException>(() => graph.DeleteAuthenticationMethodAsync("u1", "password", "pw"));
     }
 }
+
+public sealed class GraphClientDeviceTests
+{
+    private sealed class StubHandler(Func<HttpRequestMessage, HttpResponseMessage> respond) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct) => Task.FromResult(respond(request));
+    }
+
+    private static HttpResponseMessage Json(HttpStatusCode code, string body) =>
+        new(code) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Windows_hello_shows_its_device_and_authenticator_passkeys_are_no_security_keys(bool deviceReadable)
+    {
+        var handler = new StubHandler(req =>
+        {
+            var path = req.RequestUri!.AbsolutePath;
+            if (path.EndsWith("/windowsHelloForBusinessMethods"))
+                return deviceReadable
+                    ? Json(HttpStatusCode.OK, """{"value":[{"id":"w1","device":{"id":"d1","displayName":"LAPTOP-TIMO","operatingSystem":"Windows"}}]}""")
+                    : Json(HttpStatusCode.Forbidden, """{"error":{"code":"Authorization_RequestDenied","message":"Insufficient privileges"}}""");
+            return Json(HttpStatusCode.OK, """{"value":[ {"@odata.type":"#microsoft.graph.windowsHelloForBusinessAuthenticationMethod","id":"w1","displayName":"LAPTOP-TIMO","keyStrength":"normal"}, {"@odata.type":"#microsoft.graph.fido2AuthenticationMethod","id":"f1","displayName":"Authenticator - iOS","model":"Microsoft Authenticator - iOS","aaGuid":"90a3ccdf-635c-4729-a248-9b709135078f"}, {"@odata.type":"#microsoft.graph.fido2AuthenticationMethod","id":"f2","displayName":"YubiKey","model":"YubiKey 5 NFC","aaGuid":"cb69481e-8ff7-4039-93ec-0a2729a154a8"}]}""");
+        });
+        var graph = new GraphClient(new HttpClient(handler), _ => Task.FromResult("x.e30.x"), "https://graph.test");
+
+        var methods = await graph.ListAuthenticationMethodsAsync("u1");
+
+        Assert.Equal(deviceReadable ? "LAPTOP-TIMO (Windows)" : null, methods.Single(m => m.Id == "w1").Device);
+        Assert.Equal("passKeyDeviceBoundAuthenticator", methods.Single(m => m.Id == "f1").ReportName);
+        Assert.Equal("passKeyDeviceBound", methods.Single(m => m.Id == "f2").ReportName);
+        Assert.Equal(Ylm.Core.RolloutStage.SecurityKey, Ylm.Core.AuthMethodCatalog.StageOf(methods.Select(m => m.ReportName)));
+        Assert.Equal(Ylm.Core.RolloutStage.OtherPasskey, Ylm.Core.AuthMethodCatalog.StageOf(methods.Where(m => m.Id != "f2").Select(m => m.ReportName)));
+    }
+}
