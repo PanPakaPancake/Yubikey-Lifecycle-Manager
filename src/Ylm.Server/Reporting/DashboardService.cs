@@ -23,7 +23,8 @@ public sealed record Dashboard(
     int ForcePinChangeUnsupported,
     IReadOnlyList<object> Tenants,
     int OpenTodos = 0,
-    int PendingApprovals = 0);
+    int PendingApprovals = 0,
+    bool TargetAllUsers = false);
 
 /// <summary>Dashboard per tenant and for the whole organization (planning 7).</summary>
 public sealed class DashboardService(YlmDbContext db)
@@ -86,6 +87,8 @@ public sealed class DashboardService(YlmDbContext db)
                 ChecksFailed = Tenants.TenantCheckService.ReadChecks(t).Count(c => c.Status == CheckStatus.Failed),
             }).ToList(),
             openTodos,
-            pendingApprovals);
+            pendingApprovals,
+            // No include groups anywhere: the target audience is every enabled member account.
+            tenants.Count > 0 && tenants.All(t => t.TargetIncludeGroups.Count == 0));
     }
 }
