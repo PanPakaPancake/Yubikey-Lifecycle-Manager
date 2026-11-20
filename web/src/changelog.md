@@ -10,11 +10,11 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 ## 0.9.1 · 2026-11-20
 - Neu: Versionsverlauf in der App. Unter „Hilfe“ steht jetzt, was sich mit jeder Version geändert hat.
 - Neu: Die Übersicht zeigt, welche Version läuft und ob ein Update bereitsteht, mit direktem Weg zum Update.
-- Neu: Die Tray-App des Agents im selben Design wie die Weboberfläche, dunkel oder hell wählbar.
+- Neu: Die Tray-App des Agents im selben Design wie die Weboberfläche. Darstellung Dunkel, Hell oder wie Windows.
 - Neu: Passkey-Rollout zeigt bei Windows Hello das Gerät, z. B. „LAPTOP-TIMO (Windows)“.
 - Behoben: Passkeys im Microsoft Authenticator oder in Windows Hello wurden als Sicherheitsschlüssel gezählt.
-- Sicherheit: Die Container bekommen täglich Sicherheitsupdates, die Images werden automatisch auf Schwachstellen geprüft und bei Bedarf neu gebaut.
-- Sicherheit: Der Agent kann signiert ausgeliefert werden und nimmt dann nur noch signierte Updates an.
+- Sicherheit: Die Container bekommen täglich um 4 Uhr Sicherheitsupdates. Das Server-Image ist schlanker, die Images werden auf Schwachstellen geprüft und bei Bedarf automatisch neu gebaut.
+- Sicherheit: Das Agent-MSI kann signiert werden. Ein signierter Agent nimmt dann nur noch Updates vom selben Unterzeichner an.
 
 ## 0.9.0 · 2026-11-20
 - Neu: Notfallcodes für Owner. Einmal-Anmeldecodes zum Ausdrucken, falls kein YubiKey zur Hand ist.
