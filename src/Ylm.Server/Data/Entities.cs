@@ -87,6 +87,17 @@ public sealed class PlatformUser
     public DateTimeOffset? SetupTokenExpiresAt { get; set; }
 }
 
+/// <summary>Einmal-Notfallcode eines Owners (Anmeldung, wenn Entra oder Passkeys ausfallen). Nur der SHA-256-Hash wird gespeichert.</summary>
+public sealed class RecoveryCode
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid PlatformUserId { get; set; }
+    public PlatformUser? PlatformUser { get; set; }
+    public string CodeHash { get; set; } = "";
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? UsedAt { get; set; }
+}
+
 /// <summary>Selbst definierte Rolle aus einzelnen Berechtigungen.</summary>
 public sealed class CustomRole
 {

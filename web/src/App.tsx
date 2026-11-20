@@ -170,6 +170,14 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
             : <span className="context-badge customer">Kundenebene{tenant ? ': ' + tenant.displayName : ', alle Tenants'}</span>}
         </div>
         <div className="page" key={location.pathname}>
+        {me.recoveryCodes != null && me.recoveryCodes <= 2 && location.pathname !== '/account' && (
+          <div className="alert warn">
+            {me.recoveryCodes === 0
+              ? 'Für Ihr Owner-Konto gibt es noch keine Notfallcodes. Damit kommen Sie auch dann in die Plattform, wenn die Anmeldung mit Microsoft oder Passkey nicht klappt.'
+              : `Nur noch ${me.recoveryCodes} Notfallcode${me.recoveryCodes === 1 ? '' : 's'} übrig.`}{' '}
+            <Link to="/account#notfallcodes">{me.recoveryCodes === 0 ? 'Jetzt erzeugen und ausdrucken' : 'Neue Codes erzeugen'}</Link>
+          </div>
+        )}
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/keys" element={<KeysPage />} />

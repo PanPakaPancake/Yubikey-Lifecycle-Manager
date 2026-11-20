@@ -16,6 +16,8 @@ public static class AuditActions
     public const string UserSetupLinkCreated = "user.setup_link_created";
     public const string UserPasskeyAdded = "user.passkey_added";
     public const string UserPasskeyRemoved = "user.passkey_removed";
+    public const string RecoveryCodesCreated = "auth.recovery_codes_created";
+    public const string RecoveryCodeUsed = "auth.recovery_code_used";
     public const string UpdateStarted = "platform.update_started";
     public const string LoginSettingsChanged = "settings.login_changed";
     public const string AgentUpdatePolicyChanged = "settings.agent_update_policy_changed";

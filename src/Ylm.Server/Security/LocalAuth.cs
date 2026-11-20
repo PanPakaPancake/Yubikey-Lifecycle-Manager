@@ -284,7 +284,7 @@ public sealed class LocalAuthService(
         user.LastLoginAt = DateTimeOffset.UtcNow;
         audit.Add(AuditService.User(user), AuditActions.Login, details: new { method });
         await db.SaveChangesAsync();
-        await http.HttpContext!.SignInAsync(AuthSchemes.Cookie, PlatformSignIn.BuildPrincipal(user, method == "emergency" ? "Emergency" : "Passkey"));
+        await http.HttpContext!.SignInAsync(AuthSchemes.Cookie, PlatformSignIn.BuildPrincipal(user, method switch { "emergency" => "Emergency", "recovery" => "Recovery", _ => "Passkey" }));
     }
 
     private async Task<PlatformUser> DenyAsync(string code, string? upn, string message)

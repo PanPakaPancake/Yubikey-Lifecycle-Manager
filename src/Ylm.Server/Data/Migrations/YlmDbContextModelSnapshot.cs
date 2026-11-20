@@ -606,6 +606,35 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("platform_user_tenants", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.RecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CodeHash")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("PlatformUserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset?>("UsedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CodeHash")
+                        .IsUnique();
+
+                    b.HasIndex("PlatformUserId");
+
+                    b.ToTable("recovery_codes", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.RegistrationApproval", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1439,6 +1468,17 @@ namespace Ylm.Server.Data.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.RecoveryCode", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.PlatformUser", "PlatformUser")
+                        .WithMany()
+                        .HasForeignKey("PlatformUserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("PlatformUser");
                 });
 
             modelBuilder.Entity("Ylm.Server.Data.RegistrationApproval", b =>
