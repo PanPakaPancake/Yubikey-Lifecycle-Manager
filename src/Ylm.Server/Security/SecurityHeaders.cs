@@ -37,10 +37,11 @@ public static class ProxyTrust
 
     public static IEnumerable<System.Net.IPNetwork> Networks(IReadOnlyCollection<string> configured)
     {
-        foreach (var entry in configured.Count == 0 ? Default : configured)
+        // Einträge dürfen Komma-Listen sein (aus einer einzigen Umgebungsvariable); leere Einträge zählen nicht.
+        var entries = configured.SelectMany(c => (c ?? "").Split([',', ';', ' '], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)).ToList();
+        foreach (var entry in entries.Count == 0 ? Default : entries.ToArray())
         {
-            var value = entry.Trim();
-            if (value.Length == 0) continue;
+            var value = entry;
             if (!value.Contains('/') && IPAddress.TryParse(value, out var single))
                 value += single.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? "/128" : "/32";
             if (!System.Net.IPNetwork.TryParse(value, out var network))

@@ -356,14 +356,26 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<int>("AgentUpdatePolicy")
                         .HasColumnType("integer");
 
+                    b.Property<string>("ApplicationObjectId")
+                        .HasColumnType("text");
+
                     b.Property<string>("BootstrapOwnerUpn")
                         .HasColumnType("text");
 
                     b.Property<DateTimeOffset?>("CertificateExpiresAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("CertificateRenewalAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CertificateRenewalError")
+                        .HasColumnType("text");
+
                     b.Property<string>("CertificateThumbprint")
                         .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("CertificateWarnedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<Guid?>("ClientId")
                         .HasColumnType("uuid");
@@ -1055,6 +1067,15 @@ namespace Ylm.Server.Data.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PolicySnapshotJson")
+                        .HasColumnType("jsonb");
+
+                    b.Property<bool>("ProtectAdmins")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("ProtectedGroups")
+                        .IsRequired()
                         .HasColumnType("jsonb");
 
                     b.Property<bool>("RequireBreakglassApproval")

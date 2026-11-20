@@ -100,7 +100,7 @@ docker compose exec backup sh /backup.sh now
 docker compose exec backup sh /backup.sh list
 ```
 
-**Erwartet:** Eine Datei `ylm-JJJJMMTT-HHMMSS.tar.gz` im Ordner `backups`. Wiederherstellen und Umzug beschreibt [BETRIEB.md 1.6 und 1.7](BETRIEB.md#16-datensicherung-und-wiederherstellung).
+**Erwartet:** Eine Datei `ylm-JJJJMMTT-HHMMSS.tar.gz.enc` im Ordner `backups` (verschlüsselt mit `BACKUP_PASSPHRASE` aus `.env`; ohne Passphrase `.tar.gz`). Wiederherstellen und Umzug beschreibt [BETRIEB.md 1.6 und 1.7](BETRIEB.md#16-datensicherung-und-wiederherstellung).
 
 ---
 

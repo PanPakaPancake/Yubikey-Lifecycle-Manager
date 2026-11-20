@@ -36,6 +36,8 @@ public enum Permission : long
     IssueTemporaryAccessPass = 1 << 16,
     /// <summary>Passkey-Rollout: andere Anmeldemethoden (SMS, Authenticator, OTP …) von Benutzern entfernen.</summary>
     RemoveAuthMethods = 1 << 17,
+    /// <summary>Geschützte Konten (Entra-Admins, geschützte Gruppen): TAP, Methoden entfernen und Registrierung erlaubt.</summary>
+    ManageProtectedAccounts = 1 << 18,
 }
 
 /// <summary>Beschreibung einer Berechtigung für die Rollenverwaltung.</summary>
@@ -90,6 +92,7 @@ public static class RolePermissions
         new(Permission.ApproveRegistrations, "Keys", "Breakglass freigeben", "Vier-Augen-Freigabe: Breakglass-Registrierungen anderer Admins freigeben oder ablehnen.", false),
         new(Permission.IssueTemporaryAccessPass, "Anmeldemethoden", "TAP erzeugen", "Passkey-Rollout: befristeten Zugriffspass (TAP) für Benutzer erzeugen. Der Code wird nur einmal angezeigt.", false),
         new(Permission.RemoveAuthMethods, "Anmeldemethoden", "Methoden entfernen", "Passkey-Rollout: andere Anmeldemethoden wie SMS, Authenticator oder OTP von Benutzern entfernen.", false),
+        new(Permission.ManageProtectedAccounts, "Anmeldemethoden", "Geschützte Konten bearbeiten", "TAP, Methoden entfernen und Key-Registrierung auch für geschützte Konten (Entra-Admins und geschützte Gruppen des Tenants).", false),
         new(Permission.ManagePartnerStock, "Lager", "Partnerlager verwalten", "Keys im Partnerlager sehen, ins Partnerlager geben und Tenants zuweisen.", false),
         new(Permission.SyncTenants, "Tenants", "Synchronisieren", "Entra-Sync und Tenant-Prüfung anstoßen.", false),
         new(Permission.ManageTenants, "Tenants", "Tenants verwalten", "Tenants anbinden, Einstellungen, „Jetzt beheben“, Offboarding.", false),

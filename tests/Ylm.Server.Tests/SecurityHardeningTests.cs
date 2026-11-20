@@ -38,11 +38,20 @@ public sealed class SecurityHardeningTests
     [Fact]
     public void Configured_proxies_replace_the_default()
     {
-        var nets = ProxyTrust.Networks(["203.0.113.10", "2001:db8::/32"]).ToList();
+        var nets = ProxyTrust.Networks(["203.0.113.10, 2001:db8::/32", ""]).ToList();
         Assert.Contains(nets, n => n.Contains(IPAddress.Parse("203.0.113.10")));
         Assert.Contains(nets, n => n.Contains(IPAddress.Parse("2001:db8::5")));
         Assert.DoesNotContain(nets, n => n.Contains(IPAddress.Parse("10.0.0.1")));
         Assert.Throws<InvalidOperationException>(() => ProxyTrust.Networks(["kein-netz"]).ToList());
+    }
+
+    [Fact]
+    public void Empty_setting_from_compose_keeps_the_default()
+    {
+        // docker-compose setzt Ylm__TrustedProxies__0 immer, ohne Wert ist es "".
+        var nets = ProxyTrust.Networks([""]).ToList();
+        Assert.Contains(nets, n => n.Contains(IPAddress.Parse("10.0.0.1")));
+        Assert.Contains(nets, n => n.Contains(IPAddress.Parse("172.18.0.3")));
     }
 }
 

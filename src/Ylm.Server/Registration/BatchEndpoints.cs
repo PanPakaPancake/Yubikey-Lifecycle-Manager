@@ -101,9 +101,12 @@ public static class BatchEndpoints
             return Results.Ok(await batches.NextAsync(batch, user, body));
         });
 
-        g.MapPost("/items/{itemId:guid}/register", async (Guid id, Guid itemId, BatchRegisterRequest body, CurrentUser cu, BatchService batches, IServiceScopeFactory scopes) =>
+        g.MapPost("/items/{itemId:guid}/register", async (Guid id, Guid itemId, BatchRegisterRequest body, CurrentUser cu, BatchService batches, IServiceScopeFactory scopes,
+            Protection.ProtectedAccountService protection, Data.YlmDbContext db, Graph.IGraphClientFactory graphs) =>
         {
             var (batch, user) = await Load(id, cu, batches);
+            if (batch.Items.FirstOrDefault(i => i.Id == itemId) is { } target)
+                await protection.EnsureAllowedAsync(db, graphs, batch.TenantId, user, [target.EntraUserId]);
             var job = await batches.RegisterAsync(batch, itemId, user, body, scopes);
             return Results.Accepted($"/api/jobs/{job.Id}", job.ToDto());
         });

@@ -16,10 +16,16 @@
   Installationsordner (Standard: %USERPROFILE%\YubikeyLifecycleManager).
 .PARAMETER Mode
   local (Standard) = nur dieser PC unter http://localhost:8080
-  https            = eigene Domain mit automatischem HTTPS (Caddy + Let's Encrypt), Ports 80/443 nötig
-  proxy            = hinter einem vorhandenen Reverse Proxy
+  internal         = internes Netz/ZTNA, HTTPS mit interner Zertifizierungsstelle von Caddy
+  cert             = internes Netz/ZTNA, HTTPS mit eigenem Zertifikat (-Cert, -Key, z. B. Firmen-PKI)
+  proxy            = hinter einem vorhandenen Reverse Proxy oder ZTNA-Connector
+  https            = öffentliche Domain mit Let's Encrypt (nur wenn aus dem Internet erreichbar), Ports 80/443 nötig
 .PARAMETER Domain
-  Domain für -Mode https.
+  DNS-Name für -Mode internal, cert und https.
+.PARAMETER Cert
+  Zertifikat (PEM, mit Zwischenzertifikaten) für -Mode cert.
+.PARAMETER Key
+  Privater Schlüssel (PEM, unverschlüsselt) für -Mode cert.
 .PARAMETER Url
   Öffentliche HTTPS-Adresse für -Mode proxy.
 .PARAMETER Version
@@ -28,8 +34,10 @@
 [CmdletBinding()]
 param(
     [string]$Dir = (Join-Path $env:USERPROFILE 'YubikeyLifecycleManager'),
-    [ValidateSet('', 'local', 'https', 'proxy')][string]$Mode = '',
+    [ValidateSet('', 'local', 'internal', 'cert', 'https', 'proxy')][string]$Mode = '',
     [string]$Domain = '',
+    [string]$Cert = '',
+    [string]$Key = '',
     [string]$Url = '',
     [string]$Version = ''
 )
@@ -71,6 +79,43 @@ function Invoke-Docker {
     if ($LASTEXITCODE -ne 0) { throw "docker $($args -join ' ') fehlgeschlagen (Exitcode $LASTEXITCODE)" }
 }
 
+# Fragt fehlende Angaben zum Modus ab und setzt $Url (und $Domain).
+function Resolve-Mode {
+    switch ($script:Mode) {
+        { $_ -in 'internal', 'cert', 'https' } {
+            if (-not $script:Domain) { $script:Domain = Read-Host 'DNS-Name der Plattform (z. B. ylm.firma.local)' }
+            if (-not $script:Domain) { Fail 'Ohne DNS-Namen kein HTTPS.' }
+            $script:Domain = ($script:Domain -replace '^https://', '') -replace '/.*$', ''
+            $script:Url = "https://$($script:Domain)"
+            if ($script:Mode -eq 'cert') {
+                if (-not $script:Cert -or -not (Test-Path $script:Cert)) { Fail '-Mode cert braucht -Cert (PEM mit Zwischenzertifikaten).' }
+                if (-not $script:Key -or -not (Test-Path $script:Key)) { Fail '-Mode cert braucht -Key (PEM, unverschlüsselt).' }
+                Copy-Item $script:Cert (Join-Path $Dir 'certs\ylm.crt') -Force
+                Copy-Item $script:Key (Join-Path $Dir 'certs\ylm.key') -Force
+            }
+        }
+        'proxy' {
+            if (-not $script:Url) { $script:Url = Read-Host 'Adresse, unter der Browser und Agents die Plattform erreichen (https://...)' }
+            if ($script:Url -notmatch '^https://') { Fail 'Die Adresse muss mit https:// beginnen.' }
+            $script:Url = $script:Url.TrimEnd('/')
+        }
+        default { $script:Url = 'http://localhost:8080' }
+    }
+}
+# Schreibt den Modus in .env (dieselben Werte wie install.sh).
+function Write-Mode {
+    Set-EnvValue $envFile 'YLM_PUBLIC_URL' $script:Url
+    if ($script:Mode -in 'internal', 'cert', 'https') {
+        Set-EnvValue $envFile 'COMPOSE_PROFILES' 'https'
+        Set-EnvValue $envFile 'YLM_DOMAIN' $script:Domain
+        $tls = switch ($script:Mode) { 'internal' { 'tls internal' } 'cert' { 'tls /certs/ylm.crt /certs/ylm.key' } default { '' } }
+        Set-EnvValue $envFile 'YLM_CADDY_TLS' $tls
+    } else {
+        Set-EnvValue $envFile 'COMPOSE_PROFILES' ''
+    }
+    Set-EnvValue $envFile 'YLM_MODE' $script:Mode
+}
+
 Write-Host 'Yubikey Lifecycle Manager - Installation' -ForegroundColor Cyan
 
 # --- 1. Voraussetzungen ---
@@ -90,7 +135,7 @@ if (-not $Version) {
 }
 Info "Version: $Version"
 
-New-Item -ItemType Directory -Force -Path (Join-Path $Dir 'deploy'), (Join-Path $Dir 'backups') -ErrorAction Stop | Out-Null
+New-Item -ItemType Directory -Force -Path (Join-Path $Dir 'deploy'), (Join-Path $Dir 'backups'), (Join-Path $Dir 'certs') -ErrorAction Stop | Out-Null
 Set-Location $Dir -ErrorAction Stop
 if (Test-Path (Join-Path $Dir '.git')) {
     Info "$Dir ist ein Git-Checkout: Dateien kommen aus Git (git pull), es wird nichts heruntergeladen."
@@ -114,42 +159,38 @@ if (Test-Path (Join-Path $Dir '.git')) {
 
 # --- 3. .env ---
 $envFile = Join-Path $Dir '.env'
+$passphrase = ''
 if (Test-Path $envFile) {
     Info 'Vorhandene .env wird beibehalten.'
     if (-not (Get-EnvValue $envFile 'UPDATER_TOKEN')) { Set-EnvValue $envFile 'UPDATER_TOKEN' (New-Secret 32); Info 'UPDATER_TOKEN ergänzt (Update per Klick).' }
-    if ($Domain) {
-        Set-EnvValue $envFile 'COMPOSE_PROFILES' 'https'; Set-EnvValue $envFile 'YLM_DOMAIN' $Domain; Set-EnvValue $envFile 'YLM_PUBLIC_URL' "https://$Domain"
-        Info "HTTPS für $Domain eingestellt."
+    if (-not (Get-EnvValue $envFile 'BACKUP_PASSPHRASE')) {
+        $passphrase = New-Secret 24; Set-EnvValue $envFile 'BACKUP_PASSPHRASE' $passphrase
+        Info 'BACKUP_PASSPHRASE ergänzt: neue Sicherungen werden verschlüsselt (ältere bleiben lesbar).'
+    }
+    if ($Mode -or $Domain) {
+        if (-not $Mode) { $Mode = 'https' }
+        Resolve-Mode
+        Write-Mode
+        Info "Erreichbarkeit umgestellt auf: $Mode ($Url)."
     }
 } else {
     $running = $false
     try { Invoke-WebRequest 'http://127.0.0.1:8080/healthz' -UseBasicParsing -TimeoutSec 3 -ErrorAction Stop | Out-Null; $running = $true } catch { }
     if ($running) { Fail "Auf Port 8080 läuft schon eine Installation (anderer Ordner?). Bitte im Ordner der vorhandenen Installation arbeiten oder sie vorher stoppen (docker compose down)." }
     if (-not $Mode) { $Mode = if ($Domain) { 'https' } elseif ($Url) { 'proxy' } else { 'local' } }
-    switch ($Mode) {
-        'https' {
-            if (-not $Domain) { $Domain = Read-Host 'Domain (DNS-Eintrag muss auf diesen Rechner zeigen)' }
-            if (-not $Domain) { Fail 'Ohne Domain kein HTTPS.' }
-            $Domain = ($Domain -replace '^https://', '') -replace '/.*$', ''
-            $Url = "https://$Domain"
-        }
-        'proxy' {
-            if (-not $Url) { $Url = Read-Host 'Öffentliche HTTPS-Adresse (z. B. https://ylm.example.com)' }
-            if ($Url -notmatch '^https://') { Fail 'Die öffentliche Adresse muss mit https:// beginnen.' }
-            $Url = $Url.TrimEnd('/')
-        }
-        default { $Url = 'http://localhost:8080' }
-    }
+    Resolve-Mode
+    $passphrase = New-Secret 24
     $lines = @(
         "# Angelegt von install.ps1 am $(Get-Date -Format 'yyyy-MM-dd HH:mm'). Erklärung aller Werte: .env.example",
         'COMPOSE_PROJECT_NAME=ylm',
         "POSTGRES_PASSWORD=$(New-Secret 24)",
         "YLM_PUBLIC_URL=$Url",
         "UPDATER_TOKEN=$(New-Secret 32)",
+        "BACKUP_PASSPHRASE=$passphrase",
         'TZ=Europe/Berlin'
     )
-    if ($Mode -eq 'https') { $lines += 'COMPOSE_PROFILES=https'; $lines += "YLM_DOMAIN=$Domain" }
     [IO.File]::WriteAllText($envFile, (($lines -join "`n") + "`n"), $Utf8)
+    Write-Mode
     Info ".env mit neuen Zufallsgeheimnissen angelegt ($envFile)."
 }
 $Url = Get-EnvValue $envFile 'YLM_PUBLIC_URL'
@@ -179,6 +220,24 @@ if ($token) {
     Write-Host ("      " + $token.Matches[0].Groups[1].Value) -ForegroundColor White
     Write-Host ''
     if ($Url -like 'http://localhost*') { Start-Process "$Url/setup" }
+}
+if ($passphrase) {
+    Write-Host ''
+    Warn 'Passphrase der Datensicherung (BACKUP_PASSPHRASE in .env). Bitte jetzt in den Passwortmanager übernehmen:'
+    Write-Host ("      " + $passphrase) -ForegroundColor White
+    Info 'Ohne sie lässt sich keine Sicherung einspielen, auch nicht, wenn dieser Rechner verloren ist.'
+    Write-Host ''
+}
+if ($Mode -eq 'internal') {
+    $ca = Join-Path $Dir 'ylm-root-ca.crt'
+    for ($i = 0; $i -lt 10 -and -not (Test-Path $ca); $i++) {
+        $pem = & docker compose exec -T caddy cat /data/caddy/pki/authorities/local/root.crt 2>$null
+        if ($LASTEXITCODE -eq 0 -and $pem) { [IO.File]::WriteAllText($ca, (($pem -join "`n") + "`n"), $Utf8) } else { Start-Sleep -Seconds 2 }
+    }
+    if (Test-Path $ca) {
+        Info "Stammzertifikat der internen CA: $ca"
+        Info 'Auf den Admin-PCs als vertrauenswürdige Stammzertifizierungsstelle verteilen (GPO oder Intune), einzeln: certutil -addstore Root ylm-root-ca.crt'
+    } else { Warn 'Stammzertifikat noch nicht verfügbar. Später: docker compose exec -T caddy cat /data/caddy/pki/authorities/local/root.crt' }
 }
 Info "Installationsordner: $Dir (Einstellungen in .env, Sicherungen in backups\)"
 Info 'Status: docker compose ps   Protokoll: docker compose logs -f server'

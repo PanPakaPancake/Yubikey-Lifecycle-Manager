@@ -1,7 +1,16 @@
-# Reverse Proxy mit automatischem HTTPS (Let's Encrypt) vor der Plattform.
-# Die Domain kommt aus .env (YLM_DOMAIN). Diese Datei bitte nicht ändern;
-# für eigene Zertifikate o. ä. eine eigene Datei per docker-compose.override.yml einbinden (docs/BETRIEB.md).
+# Reverse Proxy mit HTTPS vor der Plattform. Domain und Zertifikatsart kommen aus .env:
+#   YLM_DOMAIN       Name, unter dem Browser und Agents die Plattform erreichen
+#   YLM_CADDY_TLS    leer                               = Let's Encrypt (nur wenn die Domain aus dem Internet erreichbar ist)
+#                    tls internal                       = eigene interne Zertifizierungsstelle von Caddy (internes Netz, ZTNA)
+#                    tls /certs/ylm.crt /certs/ylm.key  = eigenes Zertifikat, z. B. aus der Firmen-PKI (Ordner certs/)
+# Diese Datei bitte nicht ändern; Sonderfälle per docker-compose.override.yml mit eigener Datei (docs/BETRIEB.md).
+{
+	# Die interne Zertifizierungsstelle nicht im Container-Speicher "installieren" (das Stammzertifikat verteilt die IT).
+	skip_install_trust
+}
+
 {$YLM_DOMAIN} {
+	{$YLM_CADDY_TLS}
 	encode zstd gzip
 	header {
 		Strict-Transport-Security "max-age=31536000"

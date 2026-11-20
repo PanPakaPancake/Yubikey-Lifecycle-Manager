@@ -117,15 +117,19 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const [include, setInclude] = useState<GroupRef[]>(tenant.targetIncludeGroups ?? []);
   const [exclude, setExclude] = useState<GroupRef[]>(tenant.targetExcludeGroups ?? []);
   const [fourEyes, setFourEyes] = useState(!!tenant.requireBreakglassApproval);
+  const [protectAdmins, setProtectAdmins] = useState(tenant.protectAdmins ?? true);
+  const [protectedGroups, setProtectedGroups] = useState<GroupRef[]>(tenant.protectedGroups ?? []);
   const { busy, error, run } = useAction();
   const [saved, setSaved] = useState(false);
   const toast = useToast();
   const editable = can('ManageTenants');
+  const protectionEditable = editable && can('ManageProtectedAccounts');
   const changed = () => setSaved(false);
   const used = [...include, ...exclude].map((g) => g.id);
 
   const save = () => run(async () => {
-    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude, requireBreakglassApproval: fourEyes }));
+    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude, requireBreakglassApproval: fourEyes,
+      ...(protectionEditable ? { protectAdmins, protectedGroups } : {}) }));
     setSaved(true);
     toast.ok('Einstellungen gespeichert.');
   });
@@ -151,6 +155,18 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
         <input type="checkbox" checked={fourEyes} disabled={!editable} onChange={(e) => { setFourEyes(e.target.checked); changed(); }} />
         <span>Vier-Augen-Freigabe für Breakglass-Keys<br /><span className="small muted">Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss jede Breakglass-Registrierung vorab freigeben (gilt 24 Stunden für einen Durchlauf).</span></span>
       </label>
+      <div className="field-group">
+        <span className="field-label">Geschützte Konten</span>
+        <p className="field-hint" style={{ margin: '0 0 6px' }}>Für diese Konten dürfen nur Admins mit dem Recht „Geschützte Konten bearbeiten“ (standardmäßig Owner) einen TAP erzeugen, Anmeldemethoden entfernen oder Keys registrieren. So kann niemand mit Operator-Rechten das Konto eines Administrators übernehmen.</p>
+        <label className="check" style={{ marginBottom: 8 }}>
+          <input type="checkbox" checked={protectAdmins} disabled={!protectionEditable} onChange={(e) => { setProtectAdmins(e.target.checked); changed(); }} />
+          <span>Konten mit Entra-Admin-Rolle schützen<br /><span className="small muted">Erkennung über den Registrierungsbericht, dafür braucht der Tenant Entra ID P1. Ohne P1 bitte die Admins zusätzlich über eine Gruppe schützen.</span></span>
+        </label>
+        <div className="small"><strong>Geschützte Gruppen</strong></div>
+        <GroupChips groups={protectedGroups} empty="Keine Gruppe gewählt." onRemove={protectionEditable ? (id) => { setProtectedGroups(protectedGroups.filter((g) => g.id !== id)); changed(); } : undefined} />
+        {protectionEditable && <GroupSearch tenantId={tenant.id} exclude={protectedGroups.map((g) => g.id)} placeholder="z. B. Breakglass, Admins, Geschäftsführung" onPick={(g) => { setProtectedGroups([...protectedGroups, g]); changed(); }} />}
+        {editable && !protectionEditable && <p className="field-hint" style={{ margin: '6px 0 0' }}>Ändern darf das nur, wer „Geschützte Konten bearbeiten“ hat.</p>}
+      </div>
       <ErrorBox error={error} />
       {editable && <button className="primary" disabled={busy} onClick={save}>{saved ? 'Gespeichert' : 'Speichern'}</button>}
     </Card>

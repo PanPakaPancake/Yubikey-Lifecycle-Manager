@@ -74,6 +74,7 @@ builder.Services.AddSingleton<IEntraBootstrap, EntraBootstrap>();
 builder.Services.AddSingleton<SetupSignInStore>();
 builder.Services.AddScoped<TenantCheckService>();
 builder.Services.AddScoped<SyncService>();
+builder.Services.AddScoped<Ylm.Server.Secrets.CertificateRenewalService>();
 builder.Services.AddScoped<KeyService>();
 builder.Services.AddScoped<RegistrationService>();
 builder.Services.AddScoped<BatchService>();
@@ -88,6 +89,7 @@ builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<AssignmentService>();
 builder.Services.AddScoped<Ylm.Server.Rollout.RolloutService>();
+builder.Services.AddSingleton<Ylm.Server.Protection.ProtectedAccountService>();
 builder.Services.AddScoped<Ylm.Server.Setup.BrandingService>();
 builder.Services.AddHostedService<BackgroundJobs>();
 
@@ -168,7 +170,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.KnownIPNetworks.Clear();
     o.KnownProxies.Clear();
     // Ohne Einschränkung könnte jeder, der Port 8080 direkt erreicht, Absender-IP (Rate-Limit), Schema und Host vortäuschen.
-    if (!ylm.TrustedProxies.Contains("*"))
+    if (!ylm.TrustedProxies.Any(p => p?.Trim() == "*"))
         foreach (var network in ProxyTrust.Networks(ylm.TrustedProxies)) o.KnownIPNetworks.Add(network);
 });
 
@@ -207,6 +209,7 @@ Ylm.Server.Integrations.IntegrationEndpoints.MapIntegrations(app);
 app.MapReporting();
 Ylm.Server.Rollout.RolloutEndpoints.MapRollout(app);
 Ylm.Server.Setup.BrandingEndpoints.MapBranding(app);
+Ylm.Server.Secrets.CertificateEndpoints.MapAppCertificate(app);
 app.MapAudit();
 app.MapPublicApi();
 app.MapApiKeyManagement();

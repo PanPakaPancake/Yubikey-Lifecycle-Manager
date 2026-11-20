@@ -13,6 +13,12 @@ public sealed class YlmOptions
     /// <summary>Require a phishing-resistant sign-in (amr claim) for platform admins.</summary>
     public bool RequirePhishingResistantSignIn { get; set; } = true;
 
+    /// <summary>App-Zertifikat vor dem Ablauf selbst erneuern (Graph addKey). Aus: nur warnen.</summary>
+    public bool AutoRenewAppCertificate { get; set; } = true;
+
+    /// <summary>So viele Tage vor dem Ablauf warnt die Plattform und erneuert das App-Zertifikat.</summary>
+    public int AppCertificateRenewalDays { get; set; } = 30;
+
     /// <summary>amr values accepted as phishing resistant. Entra sends "fido" for FIDO2/passkeys.</summary>
     public string[] PhishingResistantAmrValues { get; set; } = ["fido"];
 

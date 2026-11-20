@@ -17,7 +17,8 @@ public static class TenantEndpoints
 {
     public sealed record ConsentRequest(string? TenantHint);
     public sealed record FixRequest(List<string> CheckIds);
-    public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes, bool? RequireBreakglassApproval = null);
+    public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes, bool? RequireBreakglassApproval = null,
+        bool? ProtectAdmins = null, List<GroupRef>? ProtectedGroups = null);
     public sealed record OffboardRequest(bool Confirm);
 
     private sealed record ConsentState(Guid UserId, DateTimeOffset ExpiresAt, string Nonce);
@@ -44,6 +45,8 @@ public static class TenantEndpoints
         t.OffboardedAt,
         t.DataDeletionDueAt,
         t.RequireBreakglassApproval,
+        t.ProtectAdmins,
+        t.ProtectedGroups,
     };
 
     private static List<GroupRef> NormalizeGroups(IEnumerable<GroupRef> groups)
@@ -159,6 +162,17 @@ public static class TenantEndpoints
                 t.SyncIntervalMinutes = interval;
             }
             if (body.RequireBreakglassApproval is { } four) t.RequireBreakglassApproval = four;
+            var protectedGroups = body.ProtectedGroups is null ? null : NormalizeGroups(body.ProtectedGroups);
+            var protectionChanged = (body.ProtectAdmins is { } pa && pa != t.ProtectAdmins)
+                || (protectedGroups is not null && !protectedGroups.Select(x => x.Id).Order().SequenceEqual(t.ProtectedGroups.Select(x => x.Id).Order()));
+            if (protectionChanged)
+            {
+                // Sonst könnte sich jemand ohne dieses Recht den Schutz selbst abschalten.
+                if (!CurrentUser.Has(user, Permission.ManageProtectedAccounts))
+                    throw ApiException.Forbidden("Den Schutz von Konten ändern darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat.");
+                if (body.ProtectAdmins is { } protectAdmins) t.ProtectAdmins = protectAdmins;
+                if (protectedGroups is not null) t.ProtectedGroups = protectedGroups;
+            }
             audit.Add(AuditService.User(user), AuditActions.TenantUpdated, t.Id, details: body);
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(t));
