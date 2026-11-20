@@ -18,7 +18,10 @@ public sealed class EntraSignInAmrTests : IDisposable
 
     public void Dispose() => _app.Dispose();
 
-    private async Task<(ClaimsPrincipal? Result, string? Error, string? Amr)> SignInAsync(string[] accepted, params string[] amr)
+    private Task<(ClaimsPrincipal? Result, string? Error, string? Amr)> SignInAsync(string[] accepted, params string[] amr) =>
+        SignInAsync(true, accepted, amr);
+
+    private async Task<(ClaimsPrincipal? Result, string? Error, string? Amr)> SignInAsync(bool? require, string[] accepted, params string[] amr)
     {
         await _app.WithDbAsync(async db =>
         {
@@ -30,13 +33,20 @@ public sealed class EntraSignInAmrTests : IDisposable
         });
         using var scope = _app.Services.CreateScope();
         var options = scope.ServiceProvider.GetRequiredService<IOptions<YlmOptions>>().Value;
-        options.RequirePhishingResistantSignIn = true;
+        if (require is { } r) options.RequirePhishingResistantSignIn = r;
         options.PhishingResistantAmrValues = accepted;
         var signIn = scope.ServiceProvider.GetRequiredService<PlatformSignIn>();
         var claims = new List<Claim> { new("tid", _home.ToString()), new("oid", _oid.ToString()), new("preferred_username", "timo@home.example") };
         claims.AddRange(amr.Select(a => new Claim("amr", a)));
         var result = await signIn.MapEntraPrincipalAsync(new ClaimsPrincipal(new ClaimsIdentity(claims, "test")));
         return (result, signIn.LastError, signIn.LastAmr);
+    }
+
+    [Fact]
+    public async Task Method_is_not_checked_by_default()
+    {
+        // Standard: welche Methoden gelten, regelt Entra (Bedingter Zugriff), nicht die Plattform.
+        Assert.NotNull((await SignInAsync(null, ["fido"], "pwd", "mfa")).Result);
     }
 
     [Fact]

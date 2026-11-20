@@ -8,7 +8,7 @@ import { getPasskey, passkeyError, passkeysSupported } from '../webauthn';
 
 const errorTexts: Record<string, string> = {
   not_registered: 'Ihr Konto ist für diese Plattform nicht freigeschaltet oder deaktiviert. Bitte wenden Sie sich an einen Owner.',
-  not_phishing_resistant: 'Bitte melden Sie sich mit Ihrem YubiKey (Passkey) an. Andere Anmeldemethoden sind nicht zulässig.',
+  not_phishing_resistant: 'Diese Installation verlangt die Anmeldung mit YubiKey oder Passkey. Die verwendete Methode ist nicht zugelassen.',
   wrong_tenant: 'Die Anmeldung ist nur mit Konten aus dem Heim-Tenant der Installation möglich.',
   invalid_token: 'Die Anmeldung konnte nicht geprüft werden.',
   remote_failure: 'Die Anmeldung bei Microsoft ist fehlgeschlagen.',
@@ -90,7 +90,7 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
           <h2>Jeder Key an der richtigen Stelle.</h2>
           <p>Ausgeben, registrieren, sperren und nachverfolgen, für alle Ihre Entra-Tenants an einem Ort.</p>
           <ul>
-            <li><Icon name="shield" />Anmeldung nur phishing-resistent per YubiKey</li>
+            <li><Icon name="shield" />Anmeldung über Microsoft Entra, passwortlos per YubiKey</li>
             <li><Icon name="users" />Auf einen Blick: wer hat welchen Key</li>
             <li><Icon name="scroll" />Lückenloses Audit-Log</li>
           </ul>
@@ -103,7 +103,7 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
         <h1>Anmelden</h1>
         {!setupComplete && <div className="alert warn">Die Einrichtung ist noch nicht abgeschlossen. <a href="/setup">Zur Einrichtung</a></div>}
         {err && <ErrorBox error={(errorTexts[err] ?? decodeURIComponent(err)) + (err === 'not_phishing_resistant' ? amrHint(params.get('amr')) : '')} />}
-        <p className="muted">Melden Sie sich mit Ihrem YubiKey an. <a href="/passkey">Was ist ein Passkey?</a></p>
+        <p className="muted">Melden Sie sich mit Ihrem Microsoft-Konto an, am besten mit YubiKey oder Passkey. <a href="/passkey">Was ist ein Passkey?</a></p>
         <div className="login-buttons">
           {methods.entraSso && (
             err === 'not_phishing_resistant'
