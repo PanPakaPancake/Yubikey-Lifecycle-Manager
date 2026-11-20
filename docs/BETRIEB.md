@@ -325,7 +325,7 @@ Bewusst nicht über die API: Keys zurücksetzen, ausmustern oder löschen, Anmel
 
 ToDo anlegen: `POST /api/v1/todos` mit `tenant`, `userPrincipalName`, optional `ticketId`, `ticketUrl`, `note`, `profile`, `dueDate`; gibt es schon ein offenes ToDo für die Person, kommt es mit `200` zurück statt `201`.
 
-Schlüssel aus Versionen vor 0.10 behalten beim Update genau ihre bisherigen Rechte: alles Lesende außer dem Audit-Log, dazu `todos.write`, wenn „ToDo-Liste schreiben“ angehakt war.
+Schlüssel aus Versionen vor 0.9.2 behalten beim Update genau ihre bisherigen Rechte: alles Lesende außer dem Audit-Log, dazu `todos.write`, wenn „ToDo-Liste schreiben“ angehakt war.
 
 ## 5a. Benachrichtigungen
 
