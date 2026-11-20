@@ -304,11 +304,28 @@ Signatur: Release-MSIs werden signiert, sobald Azure Artifact Signing eingericht
 
 Für Tests ohne Key: `YlmAgent.exe --simulate` startet den Agent mit einem simulierten YubiKey.
 
-## 5. Lese-API
+## 5. API
 
-API-Schlüssel legen Owner unter „Plattform“ an. Ein Schlüssel gilt für alle Tenants (auch künftig angebundene) oder nur für ausgewählte; die Auswahl lässt sich später ändern. Aufruf mit Header `X-Api-Key: ylm_…`. `GET /api/v1/tenants` listet die Tenants des Schlüssels; die anderen Endpunkte liefern ohne Parameter alle diese Tenants, mit `?tenant=` (Plattform-ID, Entra-Tenant-ID oder Standard-Domain) nur einen. Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`, die interaktive Dokumentation unter `/api/docs`.
+API-Schlüssel legen Owner unter „Globale Einstellungen → API-Schlüssel“ an. Ein Schlüssel gilt für alle Tenants (auch künftig angebundene) oder nur für ausgewählte und hat eigene Rechte. Beides lässt sich später unter „Rechte ändern“ anpassen (Audit-Log `apikey.scope_changed` mit vorher/nachher). Aufruf mit Header `X-Api-Key: ylm_…`. Die Endpunkte liefern ohne Parameter alle Tenants des Schlüssels, mit `?tenant=` (Plattform-ID, Entra-Tenant-ID oder Standard-Domain) nur einen. Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`, die interaktive Dokumentation unter `/api/docs`; dort steht bei jedem Endpunkt das benötigte Recht.
 
-Einzige Schreibfunktion ist die ToDo-Liste (`GET/POST/DELETE /api/v1/todos`). Dafür braucht der Schlüssel das Häkchen „ToDo-Liste schreiben“. `POST` legt für eine Person (`tenant`, `userPrincipalName`, optional `ticketId`, `ticketUrl`, `note`, `profile`, `dueDate`) ein offenes ToDo an; gibt es schon eines, kommt es mit `200` zurück statt `201`.
+| Recht | Art | Endpunkte |
+|---|---|---|
+| `inventory.read` | lesen | `GET /tenants`, `/keys`, `/keys/{id}`, `/users/{upn}/keys` |
+| `assignments.read` | lesen | `GET /assignments` (wer hat welchen Key) |
+| `reports.read` | lesen | `GET /summary` |
+| `todos.read` | lesen | `GET /todos`, `/todos/{id}` |
+| `audit.read` | lesen | `GET /audit` (fortlaufend mit `after=<sequence>`; Einträge ohne Tenant nur bei Schlüsseln für alle Tenants) |
+| `inventory.write` | schreiben | `PATCH /keys/{id}`: Tags, Zusatzfelder, Notiz |
+| `todos.write` | schreiben | `POST /todos`, `DELETE /todos/{id}` |
+| `keys.lock` | schreiben | `POST /keys/{id}/lock`: sperren, entfernt die Passkeys in Entra |
+
+`GET /api/v1/me` braucht kein Recht und zeigt Name, Tenants und Rechte des Schlüssels. Fehlt ein Recht, antwortet die API mit `403` und nennt es. Vorlagen in der Oberfläche: „Nur lesen“, „Lesen + ToDo“, „Lesen + Schreiben“; jedes Recht lässt sich einzeln an- und abwählen. Wer z. B. für alle Tenants lesen, aber nur in einem schreiben will, legt zwei Schlüssel an.
+
+Bewusst nicht über die API: Keys zurücksetzen, ausmustern oder löschen, Anmeldemethoden entfernen, TAP erzeugen. Alle Änderungen über die API stehen im Audit-Log mit dem Schlüssel als Akteur (`api:<Name>`).
+
+ToDo anlegen: `POST /api/v1/todos` mit `tenant`, `userPrincipalName`, optional `ticketId`, `ticketUrl`, `note`, `profile`, `dueDate`; gibt es schon ein offenes ToDo für die Person, kommt es mit `200` zurück statt `201`.
+
+Schlüssel aus Versionen vor 0.10 behalten beim Update genau ihre bisherigen Rechte: alles Lesende außer dem Audit-Log, dazu `todos.write`, wenn „ToDo-Liste schreiben“ angehakt war.
 
 ## 5a. Benachrichtigungen
 

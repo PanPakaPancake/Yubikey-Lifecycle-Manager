@@ -12,9 +12,11 @@ public static class YlmClaims
     public const string ApiKeyId = "ylm_api_key";
     /// <summary>One claim per tenant the API key may read.</summary>
     public const string ApiKeyTenant = "ylm_api_tenant";
+    /// <summary>API key is valid for all tenants (also sees installation-wide audit entries).</summary>
+    public const string ApiKeyAllTenants = "ylm_api_all";
     public const string AgentId = "ylm_agent";
-    /// <summary>API key may push ToDos (the only write function of the API).</summary>
-    public const string ApiKeyTodoWrite = "ylm_api_todo";
+    /// <summary>One claim per right of the API key (see ApiScopes), e.g. inventory.read.</summary>
+    public const string ApiKeyScope = "ylm_api_scope";
 }
 
 /// <summary>The signed-in platform user, loaded fresh from the database on each request.</summary>

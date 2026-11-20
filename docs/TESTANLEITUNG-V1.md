@@ -607,6 +607,25 @@ Voraussetzung: Mailserver ist im Reiter **Mail-Berichte** eingetragen (siehe 6.3
 
 **Erwartet:** Anmeldung klappt, im Audit-Log steht `auth.recovery_code_used`, die Alarm-Mail kommt an. Derselbe Code ein zweites Mal wird abgelehnt. Unter **Mein Konto** steht „Noch 7 von 8 Codes gültig“.
 
+## 6.5 Rechte pro API-Schlüssel
+
+1. **Globale Einstellungen** → **API-Schlüssel**: Schlüssel „Nur lesen Mandant 1“ mit **Nur ausgewählte Tenants** (ein Tenant) und Vorlage **Nur lesen** anlegen. Einen zweiten „Ticketsystem“ mit **Alle Tenants** und Vorlage **Lesen + Schreiben**. Erwartung: Spalte **Rechte** zeigt „Nur lesen“ bzw. „Lesen + Schreiben“, beim Haken **Keys sperren** erscheint ein Warnhinweis.
+2. Mit dem ersten Schlüssel:
+
+```bash
+curl https://<plattform>/api/v1/me -H "X-Api-Key: ylm_…"
+curl https://<plattform>/api/v1/keys -H "X-Api-Key: ylm_…"
+curl -X PATCH https://<plattform>/api/v1/keys/<key-id> -H "X-Api-Key: ylm_…" -H "Content-Type: application/json" -d '{"tags":["Test"]}'
+```
+
+**Erwartet:** `me` zeigt einen Tenant und nur Leserechte, `keys` nur Keys dieses Tenants, `PATCH` antwortet `403` und nennt das fehlende Recht `inventory.write`.
+
+3. Mit dem Schlüssel „Ticketsystem“ dasselbe `PATCH`: `200`, im Inventar hat der Key das Tag „Test“, Audit-Log `key.updated` mit Akteur `api:Ticketsystem`.
+4. (Optional, nur mit einem Test-Key) `curl -X POST …/api/v1/keys/<key-id>/lock -d '{"reason":"Lost","note":"Test"}'`: Key gesperrt, Passkey in Entra weg, Audit-Log `key.locked`.
+5. `curl …/api/v1/audit?action=key.` mit einem Schlüssel mit Recht **Audit-Log lesen**: die Einträge aus 3 und 4.
+6. Beim ersten Schlüssel **Rechte ändern** → Häkchen **Kennzahlen lesen** abwählen → Speichern. `GET /api/v1/summary` antwortet jetzt `403`; Audit-Log `apikey.scope_changed` mit vorher/nachher.
+7. Ein Schlüssel, der vor dem Update angelegt wurde, hat dieselben Rechte wie vorher (ohne Audit-Log lesen; ToDo schreiben nur, wenn es angehakt war).
+
 ## 7. Optionale Prüfung der Anmeldemethode (Abschlusstest)
 
 1. Für das **Owner-Konto** selbst einen YubiKey/Passkey registrieren (z. B. über `https://mysignins.microsoft.com/security-info`).
@@ -706,6 +725,7 @@ YubiKey 2:         Modell ________  FW ______  SN ________
 [ ] 6.1  Webhooks mit Signatur
 [ ] 6.2  Mail-Alarm nur für ausgewählte Ereignisse
 [ ] 6.3  Mail-Bericht mit PDF
+[ ] 6.5  Rechte pro API-Schlüssel (Lesen/Schreiben, Tenant-Auswahl)
 [ ] 7    Anmeldung nur mit YubiKey erzwungen
 
 Abweichungen:

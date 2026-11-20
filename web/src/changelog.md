@@ -7,6 +7,12 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.10.0 · 2026-11-20
+- Neu: Rechte pro API-Schlüssel, ähnlich wie Rollen. Jeder Schlüssel bekommt eigene Lese- und Schreibrechte (Inventar, Zuweisungen, Kennzahlen, ToDo-Liste, Audit-Log), kombiniert mit allen oder ausgewählten Tenants. Vorlagen: „Nur lesen“, „Lesen + ToDo“, „Lesen + Schreiben“.
+- Neu: Über die API lassen sich jetzt Tags, Zusatzfelder und Notiz eines Keys pflegen und Keys sperren, z. B. aus dem Ticketsystem bei Verlust. Jede Änderung steht im Audit-Log.
+- Neu: Das Audit-Log ist über die API abrufbar, z. B. für ein SIEM.
+- Verbessert: Bestehende Schlüssel behalten beim Update genau ihre bisherigen Rechte.
+
 ## 0.9.1 · 2026-11-20
 - Neu: Versionsverlauf in der App. Unter „Hilfe“ steht jetzt, was sich mit jeder Version geändert hat.
 - Neu: Die Übersicht zeigt, welche Version läuft und ob ein Update bereitsteht, mit direktem Weg zum Update.

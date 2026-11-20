@@ -47,7 +47,7 @@ export default function TodosPage() {
       </div>
       <ErrorBox error={error} />
       {loading && !data && <Spinner />}
-      {data && data.length === 0 && <Empty>{status === 'open' ? 'Keine offenen ToDos.' : 'Noch keine ToDos.'} Ein Ticketsystem trägt Personen per <code>POST /api/v1/todos</code> ein (API-Schlüssel mit ToDo-Schreibrecht, <Link to="/platform">Globale Einstellungen</Link>).</Empty>}
+      {data && data.length === 0 && <Empty>{status === 'open' ? 'Keine offenen ToDos.' : 'Noch keine ToDos.'} Ein Ticketsystem trägt Personen per <code>POST /api/v1/todos</code> ein (API-Schlüssel mit dem Recht „ToDo-Liste schreiben“, <Link to="/platform">Globale Einstellungen</Link>).</Empty>}
       {data && data.length > 0 && (
         <div className="card table-wrap" style={{ padding: 0 }}>
           <table>
