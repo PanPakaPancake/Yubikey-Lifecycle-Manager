@@ -106,7 +106,9 @@ builder.Services.AddAuthentication(AuthSchemes.Cookie)
         o.SlidingExpiration = true;
         o.Events.OnRedirectToLogin = ctx =>
         {
-            if (ctx.Request.Path.StartsWithSegments("/api")) ctx.Response.StatusCode = 401;
+            // API und Agent-Hub bekommen 401 statt der Login-Seite: Der Agent erkennt daran ein abgelaufenes Token
+            // („Bitte neu koppeln“). Mit der Weiterleitung sah er nur „Invalid negotiation response“.
+            if (ctx.Request.Path.StartsWithSegments("/api") || ctx.Request.Path.StartsWithSegments("/hubs")) ctx.Response.StatusCode = 401;
             else ctx.Response.Redirect("/login?returnUrl=" + Uri.EscapeDataString(ctx.Request.Path + ctx.Request.QueryString));
             return Task.CompletedTask;
         };

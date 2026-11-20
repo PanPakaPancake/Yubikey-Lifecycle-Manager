@@ -269,6 +269,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
     {
         if (!Uri.TryCreate(serverUrl.Trim(), UriKind.Absolute, out var uri) || (uri.Scheme != "https" && !uri.IsLoopback))
             return (false, "Bitte die Server-Adresse mit https:// angeben.");
+        PairingResponse pairing;
         try
         {
             using var http = _handlerFactory is null ? new HttpClient() : new HttpClient(_handlerFactory());
@@ -276,24 +277,51 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
             var res = await http.PostAsJsonAsync(new Uri(uri, "/api/agent/pair"), new PairingRequest(code, Environment.MachineName, _version), ct);
             if (!res.IsSuccessStatusCode)
             {
-                var err = await res.Content.ReadFromJsonAsync<ErrorBody>(ct);
-                return (false, err?.Message ?? $"Kopplung fehlgeschlagen ({(int)res.StatusCode}).");
+                var err = await ReadErrorAsync(res, ct);
+                return (false, err ?? $"Kopplung fehlgeschlagen ({(int)res.StatusCode}).");
             }
-            var pairing = (await res.Content.ReadFromJsonAsync<PairingResponse>(ct))!;
+            pairing = (await res.Content.ReadFromJsonAsync<PairingResponse>(ct))!;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Kopplung fehlgeschlagen (Anfrage an {Url})", serverUrl);
+            return (false, "Server nicht erreichbar: " + Describe(ex));
+        }
+
+        // Ab hier hat der Server den Code verbraucht. Scheitert das Speichern auf diesem PC, soll das auch so dastehen
+        // (vorher hieß es „Server nicht erreichbar“, obwohl der Server die Kopplung angenommen hatte).
+        try
+        {
             _settings = _store.Change(old => _store.WithToken(old with
             {
                 ServerUrl = uri.GetLeftPart(UriPartial.Authority), AgentId = pairing.AgentId, PairedUser = pairing.UserDisplayName, InstanceName = pairing.InstanceName,
             }, pairing.AgentToken));
-            Update(s => s with { ServerUrl = _settings.ServerUrl, PairedUser = pairing.UserDisplayName, InstanceName = pairing.InstanceName });
-            _logger.LogInformation("Gekoppelt mit {Url} ({Instance}) als {User}", serverUrl, pairing.InstanceName, pairing.UserDisplayName);
-            _ = ConnectAsync(CancellationToken.None);
-            return (true, $"Gekoppelt mit {pairing.InstanceName} als {pairing.UserDisplayName}.");
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Kopplung fehlgeschlagen");
-            return (false, "Server nicht erreichbar: " + ex.Message);
+            _logger.LogError(ex, "Kopplung vom Server angenommen, Speichern auf diesem PC fehlgeschlagen ({File})", _store.FilePath);
+            return (false, "Der Server hat die Kopplung angenommen, sie ließ sich auf diesem PC aber nicht speichern: " + Describe(ex)
+                           + ". Bitte in der Weboberfläche den neuen Eintrag entkoppeln und mit einem neuen Code erneut koppeln.");
         }
+        Update(s => s with { ServerUrl = _settings.ServerUrl, PairedUser = pairing.UserDisplayName, InstanceName = pairing.InstanceName });
+        _logger.LogInformation("Gekoppelt mit {Url} ({Instance}) als {User}", serverUrl, pairing.InstanceName, pairing.UserDisplayName);
+        _ = ConnectAsync(CancellationToken.None);
+        return (true, $"Gekoppelt mit {pairing.InstanceName} als {pairing.UserDisplayName}.");
+    }
+
+    /// <summary>Fehlermeldung des Servers; null, wenn die Antwort kein JSON ist (z. B. Proxy-Seite).</summary>
+    private static async Task<string?> ReadErrorAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        try { return (await res.Content.ReadFromJsonAsync<ErrorBody>(ct))?.Message; }
+        catch (Exception) { return null; }
+    }
+
+    /// <summary>Meldung mit Ausnahmetyp und Code, damit auch „Unknown error (0x…)“ zuzuordnen ist.</summary>
+    internal static string Describe(Exception ex)
+    {
+        var inner = ex;
+        while (inner.InnerException is not null && inner is HttpRequestException or AggregateException) inner = inner.InnerException;
+        return $"{inner.Message} [{inner.GetType().Name}, 0x{inner.HResult:X8}]";
     }
 
     public async Task UnpairAsync()
