@@ -56,7 +56,7 @@ internal class BentoForm : Form
 }
 
 /// <summary>Karte mit runden Ecken und Leuchtkante in der Bereichsfarbe.</summary>
-internal sealed class Card : Panel
+internal sealed class Card : FlowLayoutPanel
 {
     public Color Accent { get; set; }
 
@@ -66,8 +66,10 @@ internal sealed class Card : Panel
         Accent = accent ?? Theme.P.Accent;
         BackColor = Color.Transparent;
         ForeColor = Theme.P.Ink;
-        Padding = new Padding(18, 14, 18, 16);
+        Padding = new Padding(18, 16, 18, 14);
         Margin = new Padding(0, 0, 0, 12);
+        FlowDirection = FlowDirection.TopDown;
+        WrapContents = false;
         AutoSize = true;
         AutoSizeMode = AutoSizeMode.GrowAndShrink;
     }
@@ -115,7 +117,7 @@ internal sealed class Eyebrow : Label
 {
     public Eyebrow(string text, Color? color = null, bool dot = false)
     {
-        Text = (dot ? "● " : "") + Wordmark.Spaced(text.ToUpperInvariant());
+        Text = (dot ? "● " : "") + text.ToUpperInvariant();
         Font = Theme.P.IsDark ? Theme.Mono(7.5f, FontStyle.Bold) : Theme.Ui(7.5f, FontStyle.Bold);
         ForeColor = color ?? Theme.P.Muted;
         AutoSize = true;
@@ -472,7 +474,7 @@ internal sealed class Pill : Control
 
     public void Set(string text, Color color, bool live = false)
     {
-        Text = Theme.P.IsDark ? Wordmark.Spaced(text.ToUpperInvariant()) : text;
+        Text = Theme.P.IsDark ? text.ToUpperInvariant() : text;
         _color = color;
         Live = live;
         var size = TextRenderer.MeasureText(Text, Font);

@@ -72,6 +72,12 @@ internal sealed class BentoMenuRenderer : ToolStripProfessionalRenderer
         e.TextColor = e.Item.Tag as string == "muted" ? p.Muted : e.Item.Enabled ? p.Ink : (e.Item.Tag as string == "info" ? p.Ink : p.Muted);
         if (e.Item.Tag as string == "muted") e.TextFont = Theme.Mono(8f);
         if (e.Item.Tag as string == "info") e.TextFont = Theme.Ui(9.5f, FontStyle.Bold);
+        if (!e.Item.Enabled)
+        {
+            // Der Basis-Renderer würde deaktivierte Zeilen (Status, Key) grau zeichnen.
+            TextRenderer.DrawText(e.Graphics, e.Text, e.TextFont, e.TextRectangle, e.TextColor, e.TextFormat);
+            return;
+        }
         base.OnRenderItemText(e);
     }
 
@@ -81,6 +87,13 @@ internal sealed class BentoMenuRenderer : ToolStripProfessionalRenderer
         var y = e.Item.Height / 2;
         using var pen = new Pen(p.IsDark ? Theme.Mix(p.Line, p.Accent2, .1f) : p.Line);
         e.Graphics.DrawLine(pen, 10, y, e.Item.Width - 10, y);
+    }
+
+    protected override void OnRenderItemImage(ToolStripItemImageRenderEventArgs e)
+    {
+        // Symbole auch in deaktivierten Infozeilen farbig lassen
+        if (e.Image is not null && !e.Item.Enabled) { e.Graphics.DrawImage(e.Image, e.ImageRectangle); return; }
+        base.OnRenderItemImage(e);
     }
 
     protected override void OnRenderArrow(ToolStripArrowRenderEventArgs e)

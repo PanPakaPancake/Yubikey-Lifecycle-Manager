@@ -130,7 +130,7 @@ internal sealed class Wordmark : Control
         SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint | ControlStyles.SupportsTransparentBackColor, true);
         BackColor = Color.Transparent;
         Margin = new Padding(10, 0, 0, 0);
-        Size = new Size(170, 44);
+        Size = new Size(180, 52);
     }
 
     protected override void OnPaint(PaintEventArgs e)

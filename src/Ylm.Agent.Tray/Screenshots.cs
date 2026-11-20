@@ -88,6 +88,8 @@ internal static class Screenshots
     {
         form.Show();
         Pump(700);
+        form.Refresh();
+        Pump(300);
         Save(form.Handle, form, file);
         form.Hide();
     }

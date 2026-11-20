@@ -101,8 +101,10 @@ internal sealed class StatusForm : BentoForm
         {
             _operationCard.Visible = true;
             _operation.Text = op.Title + (op.Step is { } n && op.Total is { } t ? $"  ·  Schritt {n} von {t}" : "");
-            _progress.Visible = op.Step is not null && op.Total is > 0;
-            if (_progress.Visible) _progress.Set(op.Step!.Value, op.Total!.Value);
+            // Visible liefert false, solange das Fenster noch nicht angezeigt wird, daher die Bedingung selbst prüfen.
+            var hasSteps = op.Step is not null && op.Total is > 0;
+            _progress.Visible = hasSteps;
+            if (hasSteps) _progress.Set(op.Step!.Value, op.Total!.Value);
             _lastError.Visible = false;
         }
         else

@@ -8,18 +8,19 @@ namespace Ylm.Agent.Tray;
 /// </summary>
 internal sealed class SettingsForm : BentoForm
 {
-    private const int W = 440;
-    private readonly Toggle _autoStart = new("Mit Windows starten", "Tray-Symbol bei der Anmeldung starten.", W - 36);
-    private readonly Toggle _notifications = new("Hinweise anzeigen", "Sprechblasen, solange der Agent nicht mit dem Server verbunden ist.", W - 36);
-    private readonly Segmented _theme = new(["Dunkel", "Hell", "Wie Windows"], W - 36);
-    private readonly Toggle _autoUpdate = new("Updates automatisch installieren", "Gilt für diesen PC.", W - 36);
-    private readonly Label _updateHint = Txt.Muted("", W - 36);
-    private readonly Label _versions = Txt.Value("", W - 36);
-    private readonly Label _lastResult = Txt.Body("", W - 36);
+    // Zwei Spalten, damit das Fenster auch auf kleinen Bildschirmen (768 px hoch) ganz sichtbar ist.
+    private const int Col = 350, Gap = 12, W = Col * 2 + Gap, CW = Col - 36;
+    private readonly Toggle _autoStart = new("Mit Windows starten", "Tray-Symbol bei der Anmeldung starten.", CW);
+    private readonly Toggle _notifications = new("Hinweise anzeigen", "Sprechblasen, solange der Agent nicht mit dem Server verbunden ist.", CW);
+    private readonly Segmented _theme = new(["Dunkel", "Hell", "Wie Windows"], CW);
+    private readonly Toggle _autoUpdate = new("Updates automatisch installieren", "Gilt für diesen PC.", CW);
+    private readonly Label _updateHint = Txt.Muted("", CW);
+    private readonly Label _versions = Txt.Value("", CW);
+    private readonly Label _lastResult = Txt.Body("", CW);
     private readonly BentoButton _check = new("Jetzt nach Updates suchen", ButtonKind.Primary);
     private readonly Pill _connectionPill = new("Verbinde", Theme.P.Warn);
-    private readonly Label _connection = Txt.Value("", W - 36);
-    private readonly Label _instance = Txt.Muted("", W - 36);
+    private readonly Label _connection = Txt.Value("", CW);
+    private readonly Label _instance = Txt.Muted("", CW);
     private readonly bool _isAdmin = TraySettings.IsAdministrator();
     private bool _rendering;
     private bool _checking;
@@ -37,20 +38,25 @@ internal sealed class SettingsForm : BentoForm
 
         var stack = new Stack(W);
         stack.Controls.Add(new Header("Agent · Einstellungen", width: W));
+        var columns = new Row();
+        var left = new Stack(Col) { Margin = new Padding(0, 0, Gap, 0) };
+        var right = new Stack(Col);
+        columns.Controls.Add(left);
+        columns.Controls.Add(right);
 
         var general = new Card(p.Violet);
-        var g = new Stack(W - 36);
+        var g = new Stack(CW);
         g.Controls.Add(new Eyebrow("Allgemein", p.Violet, dot: true));
         g.Controls.Add(_autoStart);
         g.Controls.Add(_notifications);
         g.Controls.Add(new Eyebrow("Darstellung") { Margin = new Padding(0, 6, 0, 6) });
         g.Controls.Add(_theme);
-        g.Controls.Add(Txt.Muted("Der Agent-Dienst selbst läuft immer im Hintergrund, damit die Weboberfläche den YubiKey ansprechen kann.", W - 36));
+        g.Controls.Add(Txt.Muted("Der Agent-Dienst selbst läuft immer im Hintergrund, damit die Weboberfläche den YubiKey ansprechen kann.", CW));
         general.Controls.Add(g);
-        stack.Controls.Add(general);
+        left.Controls.Add(general);
 
         var updates = new Card(p.Cyan);
-        var u = new Stack(W - 36);
+        var u = new Stack(CW);
         u.Controls.Add(new Eyebrow("Updates", p.Cyan, dot: true));
         u.Controls.Add(_autoUpdate);
         u.Controls.Add(_updateHint);
@@ -58,10 +64,9 @@ internal sealed class SettingsForm : BentoForm
         u.Controls.Add(_lastResult);
         u.Controls.Add(_check);
         updates.Controls.Add(u);
-        stack.Controls.Add(updates);
-
+        right.Controls.Add(updates);
         var connection = new Card(p.Green);
-        var c = new Stack(W - 36);
+        var c = new Stack(CW);
         c.Controls.Add(new Eyebrow("Verbindung", p.Green, dot: true));
         c.Controls.Add(_connectionPill);
         c.Controls.Add(_connection);
@@ -73,7 +78,9 @@ internal sealed class SettingsForm : BentoForm
         buttons.Controls.Add(logs);
         c.Controls.Add(buttons);
         connection.Controls.Add(c);
-        stack.Controls.Add(connection);
+        right.Controls.Add(connection);
+
+        stack.Controls.Add(columns);
 
         var bottom = new Row(rightToLeft: true, width: W);
         var close = new BentoButton("Schließen") { Margin = new Padding(0, 2, 0, 0) };
