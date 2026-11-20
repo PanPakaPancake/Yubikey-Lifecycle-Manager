@@ -16,3 +16,4 @@ agent-package/*.msi
 agent-package/version.txt
 backups/
 docker-compose.override.yml
+__pycache__/

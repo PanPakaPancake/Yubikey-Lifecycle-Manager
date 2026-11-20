@@ -1,23 +1,41 @@
 # Wöchentliche Vorschläge (Pull Requests) für neue Versionen der Basis-Images, Actions und Pakete.
 # Sicherheitsupdates der Basis-Images kommen zusätzlich ohne PR über den Sicherheits-Neubau (rebuild.yml).
+# Nur Minor- und Patch-Versionen; neue Hauptversionen (z. B. .NET 11, Node 26) stellen wir gezielt um.
 version: 2
 updates:
   - package-ecosystem: docker
     directories: ["/", "/updater"]
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: docker-compose
     directory: "/"
     schedule: { interval: weekly }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule: { interval: weekly }
+    groups:
+      actions: { patterns: ["*"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: nuget
     directory: "/"
     schedule: { interval: weekly }
     groups:
       dotnet: { patterns: ["*"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: "/web"
     schedule: { interval: weekly }
     groups:
       web: { patterns: ["*"] }
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
