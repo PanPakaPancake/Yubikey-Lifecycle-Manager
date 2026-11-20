@@ -24,56 +24,101 @@ internal sealed class TrayContext : ApplicationContext
     private TaskCompletionSource<(bool, string)>? _pairResult;
     private Icon? _currentIcon;
 
-    public TrayContext(bool justUpdated = false)
+    private readonly ContextMenuStrip _menu = new();
+    private readonly ToolStripMenuItem _versionItem = new() { Enabled = false, Tag = "muted" };
+    private readonly ToolStripMenuItem _showStatus = new("Status anzeigen");
+    private readonly ToolStripMenuItem _settings = new("Einstellungen …");
+    private readonly ToolStripMenuItem _logs = new("Logs öffnen");
+    private readonly ToolStripMenuItem _exit = new("Tray beenden");
+    private readonly bool _preview;
+
+    public TrayContext(bool justUpdated = false, bool preview = false)
     {
         _announceUpdate = justUpdated;
+        _preview = preview;
         _ui = SynchronizationContext.Current ?? new WindowsFormsSynchronizationContext();
-        var version = typeof(TrayContext).Assembly.GetName().Version?.ToString(3);
-        var menu = new ContextMenuStrip();
-        menu.Items.Add(_statusItem);
-        menu.Items.Add(_keyItem);
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add("Status anzeigen", null, (_, _) => ShowStatus());
-        menu.Items.Add(_openWeb);
-        menu.Items.Add(_pair);
-        menu.Items.Add(_unpair);
-        menu.Items.Add("Einstellungen …", null, (_, _) => ShowSettings());
-        menu.Items.Add("Logs öffnen", null, (_, _) => OpenLogs());
-        menu.Items.Add(new ToolStripSeparator());
-        menu.Items.Add(new ToolStripMenuItem($"Version {version}") { Enabled = false });
-        menu.Items.Add("Tray beenden", null, (_, _) => ExitThread());
-
+        _versionItem.Text = $"Version {typeof(TrayContext).Assembly.GetName().Version?.ToString(3)}";
+        _statusItem.Tag = "info";
+        _keyItem.Tag = "info";
+        _menu.Items.AddRange([_statusItem, _keyItem, new ToolStripSeparator(), _showStatus, _openWeb, _pair, _unpair, _settings, _logs,
+            new ToolStripSeparator(), _versionItem, _exit]);
+        _showStatus.Click += (_, _) => ShowStatus();
+        _settings.Click += (_, _) => ShowSettings();
+        _logs.Click += (_, _) => OpenLogs();
+        _exit.Click += (_, _) => ExitThread();
         _openWeb.Click += (_, _) => { if (_status.ServerUrl is { } url) Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); };
         _pair.Click += (_, _) => ShowPairing();
         _unpair.Click += async (_, _) =>
         {
-            if (MessageBox.Show("Die Kopplung dieses PCs mit dem Server lösen?", "Yubikey Lifecycle Manager", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            if (MessageBox.Show("Die Kopplung dieses PCs mit dem Server lösen?", "YubiKey LC Manager", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
                 await _pipe.SendAsync(new TrayMessage { Type = TrayMessageType.Unpair });
         };
+        StyleMenu();
+        Theme.Changed += OnThemeChanged;
 
-        _icon = new NotifyIcon { ContextMenuStrip = menu, Visible = true, Text = "Yubikey Lifecycle Manager" };
+        _icon = new NotifyIcon { ContextMenuStrip = _menu, Visible = !preview, Text = "YubiKey LC Manager" };
         _icon.DoubleClick += (_, _) => ShowStatus();
         _pipe.Message += m => _ui.Post(_ => OnMessage(m), null);
         _pipe.ConnectedChanged += c => _ui.Post(_ => { _pipeConnected = c; Render(); }, null);
         Render();
-        _pipe.Start();
+        if (!preview) _pipe.Start();
     }
 
-    internal static string Describe(BackendConnectionState s) => s switch
+    private void StyleMenu()
     {
-        BackendConnectionState.Connected => "Verbunden",
-        BackendConnectionState.Connecting => "Verbinde …",
-        BackendConnectionState.Disconnected => "Getrennt",
-        BackendConnectionState.Unauthorized => "Nicht angemeldet",
-        _ => "Nicht gekoppelt",
-    };
+        BentoMenuRenderer.Style(_menu);
+        void Glyph(ToolStripItem item, Bitmap image) { var old = item.Image; item.Image = image; old?.Dispose(); }
+        Glyph(_showStatus, MenuGlyphs.Status);
+        Glyph(_openWeb, MenuGlyphs.Web);
+        Glyph(_pair, MenuGlyphs.Pair);
+        Glyph(_unpair, MenuGlyphs.Unpair);
+        Glyph(_settings, MenuGlyphs.Settings);
+        Glyph(_logs, MenuGlyphs.Logs);
+        Glyph(_exit, MenuGlyphs.Exit);
+    }
 
-    internal static Color ColorFor(BackendConnectionState s, bool pipe) => !pipe ? Color.Firebrick : s switch
+    /// <summary>Darstellung gewechselt: Menü neu einfärben, offene Fenster an derselben Stelle neu aufbauen.</summary>
+    private void OnThemeChanged()
     {
-        BackendConnectionState.Connected => Color.SeaGreen,
-        BackendConnectionState.Connecting => Color.Goldenrod,
-        BackendConnectionState.NotPaired => Color.Gray,
-        _ => Color.Firebrick,
+        StyleMenu();
+        if (_settingsForm is { IsDisposed: false } settings)
+        {
+            var location = settings.Location;
+            settings.Close();
+            ShowSettings();
+            _settingsForm!.StartPosition = FormStartPosition.Manual;
+            _settingsForm.Location = location;
+        }
+        var statusVisible = _statusForm.Visible;
+        _statusForm.Dispose();
+        _statusForm = new StatusForm();
+        if (statusVisible) ShowStatus();
+        if (_pairForm is { IsDisposed: false } pair) { pair.Close(); ShowPairing(); }
+        Render();
+    }
+
+    /// <summary>Text, Farbe und „lebt“ für den Verbindungsstatus (Kapsel, Menü, Tray-Punkt).</summary>
+    internal static (string Text, Color Color, bool Live) Describe(BackendConnectionState s, bool pipe)
+    {
+        var p = Theme.P;
+        if (!pipe) return ("Dienst nicht erreichbar", p.Error, false);
+        return s switch
+        {
+            BackendConnectionState.Connected => ("Verbunden", p.Ok, true),
+            BackendConnectionState.Connecting => ("Verbinde …", p.Warn, true),
+            BackendConnectionState.Disconnected => ("Getrennt", p.Error, false),
+            BackendConnectionState.Unauthorized => ("Nicht angemeldet", p.Error, false),
+            _ => ("Nicht gekoppelt", p.Muted, false),
+        };
+    }
+
+    /// <summary>Statuspunkt im Tray-Symbol: immer in den kräftigen Farben, die auf heller und dunkler Taskleiste wirken.</summary>
+    private static Color IconColor(BackendConnectionState s, bool pipe) => !pipe ? Palette.Dark.Error : s switch
+    {
+        BackendConnectionState.Connected => Palette.Dark.Ok,
+        BackendConnectionState.Connecting => Palette.Dark.Warn,
+        BackendConnectionState.NotPaired => Palette.Hex("#94a3b8"),
+        _ => Palette.Dark.Error,
     };
 
     private void OnMessage(TrayMessage m)
@@ -101,14 +146,14 @@ internal sealed class TrayContext : ApplicationContext
                 break;
             case TrayMessageType.Notification:
                 if (Quiet) break;
-                _icon.ShowBalloonTip(6000, m.Title ?? "Yubikey Lifecycle Manager", string.IsNullOrEmpty(m.Text) ? " " : m.Text, m.IsError ? ToolTipIcon.Error : ToolTipIcon.Info);
+                _icon.ShowBalloonTip(6000, m.Title ?? "YubiKey LC Manager", string.IsNullOrEmpty(m.Text) ? " " : m.Text, m.IsError ? ToolTipIcon.Error : ToolTipIcon.Info);
                 break;
             case TrayMessageType.PairResult:
                 _pairResult?.TrySetResult((!m.IsError, m.Text ?? ""));
                 break;
             case TrayMessageType.CommandResult:
                 if (_settingsForm is { IsDisposed: false, Visible: true }) _settingsForm.ShowResult(m.Text ?? "", m.IsError);
-                else _icon.ShowBalloonTip(5000, "Yubikey Lifecycle Manager", string.IsNullOrEmpty(m.Text) ? " " : m.Text, m.IsError ? ToolTipIcon.Error : ToolTipIcon.Info);
+                else _icon.ShowBalloonTip(5000, "YubiKey LC Manager", string.IsNullOrEmpty(m.Text) ? " " : m.Text, m.IsError ? ToolTipIcon.Error : ToolTipIcon.Info);
                 break;
             case TrayMessageType.UpdateInstalling:
                 // Der Dienst installiert ein Update und startet die Tray-App danach neu. Sofort beenden, damit YlmTray.exe ersetzt werden kann.
@@ -128,16 +173,22 @@ internal sealed class TrayContext : ApplicationContext
 
     private void Render()
     {
-        var connection = _pipeConnected ? Describe(_status.Connection) : "Agent-Dienst nicht erreichbar";
-        _statusItem.Text = connection + (_status.InstanceName is { } i ? $" – {i}" : "");
-        _keyItem.Text = _status.Key is { } k ? $"Key: {k.Model} · {k.SerialNumber} · FW {k.FirmwareVersion}" : "Kein Key eingesteckt";
+        var (connection, color, _) = Describe(_status.Connection, _pipeConnected);
+        _statusItem.Text = connection + (_status.InstanceName is { } i ? $" · {i}" : "");
+        var oldDot = _statusItem.Image;
+        _statusItem.Image = MenuGlyphs.Dot(color);
+        oldDot?.Dispose();
+        _keyItem.Text = _status.Key is { } k ? $"{k.Model} · SN {k.SerialNumber} · FW {k.FirmwareVersion}" : "Kein Key eingesteckt";
+        var oldKey = _keyItem.Image;
+        _keyItem.Image = MenuGlyphs.Key(_status.Key is null ? Theme.P.Muted : Theme.P.Green);
+        oldKey?.Dispose();
         _openWeb.Enabled = _status.ServerUrl is not null;
         _pair.Enabled = _pipeConnected;
         _unpair.Enabled = _pipeConnected && _status.Connection != BackendConnectionState.NotPaired;
-        var tip = $"YLM Agent: {connection}" + (_status.Operation is { } op ? $"\n{op.Title}" : "");
+        var tip = $"YubiKey LC Manager: {connection}" + (_status.Operation is { } op ? $"\n{op.Title}" : "");
         _icon.Text = tip.Length > 127 ? tip[..127] : tip;
         var old = _currentIcon;
-        _currentIcon = TrayIcons.Create(ColorFor(_status.Connection, _pipeConnected));
+        _currentIcon = TrayIcons.Create(IconColor(_status.Connection, _pipeConnected));
         _icon.Icon = _currentIcon;
         old?.Dispose();
         if (_statusForm.Visible) _statusForm.Show(_status, _pipeConnected);
@@ -191,11 +242,23 @@ internal sealed class TrayContext : ApplicationContext
     {
         var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "YubikeyLifecycleManager", "Agent", "logs");
         if (Directory.Exists(dir)) Process.Start(new ProcessStartInfo(dir) { UseShellExecute = true });
-        else MessageBox.Show("Es gibt noch keine Logdateien.", "Yubikey Lifecycle Manager");
+        else MessageBox.Show("Es gibt noch keine Logdateien.", "YubiKey LC Manager");
+    }
+
+    // ---------- Vorschaubilder (YlmTray.exe --screenshots) ----------
+
+    internal ContextMenuStrip Menu => _menu;
+
+    internal void Preview(TrayStatus status, bool pipeConnected)
+    {
+        _status = status;
+        _pipeConnected = pipeConnected;
+        Render();
     }
 
     protected override void ExitThreadCore()
     {
+        Theme.Changed -= OnThemeChanged;
         _icon.Visible = false;
         _icon.Dispose();
         _pipe.Dispose();

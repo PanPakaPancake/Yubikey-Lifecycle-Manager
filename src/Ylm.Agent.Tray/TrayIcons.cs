@@ -1,40 +1,36 @@
-using System.Drawing.Drawing2D;
-
 namespace Ylm.Agent.Tray;
 
-/// <summary>Draws the tray icon (a small key) with a status dot, so no binary assets are needed.</summary>
+/// <summary>Tray-Symbol: das Logo der Weboberfläche mit einem Statuspunkt unten rechts.</summary>
 internal static class TrayIcons
 {
-    public static Icon Create(Color status)
+    public static Icon Create(Color status, int size = 32)
     {
-        using var bmp = new Bitmap(32, 32);
-        using (var g = Graphics.FromImage(bmp))
+        using var bmp = Render(status, size);
+        var handle = bmp.GetHicon();
+        try
         {
-            g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.Clear(Color.Transparent);
-            using var body = new SolidBrush(Color.FromArgb(43, 47, 54));
-            using var metal = new SolidBrush(Color.FromArgb(184, 190, 199));
-            using var gold = new SolidBrush(Color.FromArgb(212, 165, 42));
-            g.FillRectangle(metal, 21, 12, 9, 8);
-            using (var path = RoundedRect(new Rectangle(2, 8, 22, 16), 6)) g.FillPath(body, path);
-            g.FillEllipse(gold, 6, 11, 10, 10);
-            using var dot = new SolidBrush(status);
-            using var ring = new Pen(Color.White, 2);
-            g.FillEllipse(dot, 18, 18, 13, 13);
-            g.DrawEllipse(ring, 18, 18, 13, 13);
+            using var temp = Icon.FromHandle(handle);
+            return (Icon)temp.Clone();
         }
-        return Icon.FromHandle(bmp.GetHicon());
+        finally { DestroyIcon(handle); }
     }
 
-    private static GraphicsPath RoundedRect(Rectangle r, int radius)
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern bool DestroyIcon(IntPtr handle);
+
+    public static Bitmap Render(Color status, int size)
     {
-        var p = new GraphicsPath();
-        var d = radius * 2;
-        p.AddArc(r.X, r.Y, d, d, 180, 90);
-        p.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-        p.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-        p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-        p.CloseFigure();
-        return p;
+        var bmp = new Bitmap(size, size);
+        using var g = Graphics.FromImage(bmp);
+        g.Clear(Color.Transparent);
+        LogoPainter.Draw(g, new RectangleF(0, 0, size - 1, size - 1), orbit: -40);
+        g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        var d = size * .42f;
+        var x = size - d - .5f;
+        using var ring = new SolidBrush(Palette.Hex("#050912"));
+        g.FillEllipse(ring, x - 1.5f, x - 1.5f, d + 3, d + 3);
+        using var dot = new SolidBrush(status);
+        g.FillEllipse(dot, x, x, d, d);
+        return bmp;
     }
 }

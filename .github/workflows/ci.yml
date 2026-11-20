@@ -107,3 +107,14 @@ jobs:
         with:
           name: agent-msi
           path: installer/out/*.msi
+      # Vorschaubilder der Tray-App (Einstellungen, Status, Koppeln, Menü; dunkel und hell) für Reviews.
+      - name: Tray-Screenshots
+        shell: pwsh
+        run: |
+          $p = Start-Process installer/publish/tray/YlmTray.exe -ArgumentList '--screenshots', "$PWD\tray-screenshots" -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw 'Screenshots: Zeitüberschreitung' }
+          Get-ChildItem tray-screenshots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tray-screenshots
+          path: tray-screenshots/*.png

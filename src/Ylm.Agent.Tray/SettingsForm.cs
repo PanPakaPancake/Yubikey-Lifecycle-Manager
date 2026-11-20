@@ -3,19 +3,23 @@ using Ylm.Contracts;
 namespace Ylm.Agent.Tray;
 
 /// <summary>
-/// Einstellungen des Agents: Autostart und Hinweise pro Benutzer, automatische Updates für den ganzen PC
+/// Einstellungen des Agents: Autostart, Hinweise und Darstellung pro Benutzer, automatische Updates für den ganzen PC
 /// (nur Administratoren, ggf. vom Server vorgegeben), Updateprüfung und Verbindung.
 /// </summary>
-internal sealed class SettingsForm : Form
+internal sealed class SettingsForm : BentoForm
 {
-    private readonly CheckBox _autoStart = new() { Text = "Mit Windows starten (Tray-Symbol bei der Anmeldung)", AutoSize = true };
-    private readonly CheckBox _notifications = new() { Text = "Hinweise anzeigen, solange der Agent nicht mit dem Server verbunden ist", AutoSize = true };
-    private readonly CheckBox _autoUpdate = new() { Text = "Updates automatisch installieren (gilt für diesen PC)", AutoSize = true };
-    private readonly Label _updateHint = new() { AutoSize = false, Width = 420, Height = 34, ForeColor = Color.DimGray };
-    private readonly Label _versions = new() { AutoSize = false, Width = 420, Height = 36 };
-    private readonly Label _lastResult = new() { AutoSize = false, Width = 420, Height = 48 };
-    private readonly Button _check = new() { Text = "Jetzt nach Updates suchen", AutoSize = true };
-    private readonly Label _connection = new() { AutoSize = false, Width = 420, Height = 36 };
+    private const int W = 440;
+    private readonly Toggle _autoStart = new("Mit Windows starten", "Tray-Symbol bei der Anmeldung starten.", W - 36);
+    private readonly Toggle _notifications = new("Hinweise anzeigen", "Sprechblasen, solange der Agent nicht mit dem Server verbunden ist.", W - 36);
+    private readonly Segmented _theme = new(["Dunkel", "Hell", "Wie Windows"], W - 36);
+    private readonly Toggle _autoUpdate = new("Updates automatisch installieren", "Gilt für diesen PC.", W - 36);
+    private readonly Label _updateHint = Txt.Muted("", W - 36);
+    private readonly Label _versions = Txt.Value("", W - 36);
+    private readonly Label _lastResult = Txt.Body("", W - 36);
+    private readonly BentoButton _check = new("Jetzt nach Updates suchen", ButtonKind.Primary);
+    private readonly Pill _connectionPill = new("Verbinde", Theme.P.Warn);
+    private readonly Label _connection = Txt.Value("", W - 36);
+    private readonly Label _instance = Txt.Muted("", W - 36);
     private readonly bool _isAdmin = TraySettings.IsAdministrator();
     private bool _rendering;
     private bool _checking;
@@ -27,53 +31,65 @@ internal sealed class SettingsForm : Form
 
     public SettingsForm()
     {
-        Text = "Einstellungen – Yubikey Lifecycle Manager Agent";
-        FormBorderStyle = FormBorderStyle.FixedDialog;
-        MaximizeBox = false;
-        MinimizeBox = false;
+        Text = "Einstellungen – YubiKey LC Manager Agent";
         StartPosition = FormStartPosition.CenterScreen;
-        AutoSize = true;
-        AutoSizeMode = AutoSizeMode.GrowAndShrink;
-        Padding = new Padding(14);
+        var p = Theme.P;
 
-        var layout = new TableLayoutPanel { ColumnCount = 1, AutoSize = true, Dock = DockStyle.Fill };
+        var stack = new Stack(W);
+        stack.Controls.Add(new Header("Agent · Einstellungen", width: W));
 
-        layout.Controls.Add(Heading("Allgemein"));
-        layout.Controls.Add(_autoStart);
-        layout.Controls.Add(_notifications);
-        layout.Controls.Add(new Label
-        {
-            Text = "Der Agent-Dienst selbst läuft immer im Hintergrund, damit die Weboberfläche den YubiKey ansprechen kann.",
-            AutoSize = false, Width = 420, Height = 34, ForeColor = Color.DimGray,
-        });
+        var general = new Card(p.Violet);
+        var g = new Stack(W - 36);
+        g.Controls.Add(new Eyebrow("Allgemein", p.Violet, dot: true));
+        g.Controls.Add(_autoStart);
+        g.Controls.Add(_notifications);
+        g.Controls.Add(new Eyebrow("Darstellung") { Margin = new Padding(0, 6, 0, 6) });
+        g.Controls.Add(_theme);
+        g.Controls.Add(Txt.Muted("Der Agent-Dienst selbst läuft immer im Hintergrund, damit die Weboberfläche den YubiKey ansprechen kann.", W - 36));
+        general.Controls.Add(g);
+        stack.Controls.Add(general);
 
-        layout.Controls.Add(Heading("Updates"));
-        layout.Controls.Add(_autoUpdate);
-        layout.Controls.Add(_updateHint);
-        layout.Controls.Add(_versions);
-        layout.Controls.Add(_lastResult);
-        layout.Controls.Add(_check);
+        var updates = new Card(p.Cyan);
+        var u = new Stack(W - 36);
+        u.Controls.Add(new Eyebrow("Updates", p.Cyan, dot: true));
+        u.Controls.Add(_autoUpdate);
+        u.Controls.Add(_updateHint);
+        u.Controls.Add(_versions);
+        u.Controls.Add(_lastResult);
+        u.Controls.Add(_check);
+        updates.Controls.Add(u);
+        stack.Controls.Add(updates);
 
-        layout.Controls.Add(Heading("Verbindung"));
-        layout.Controls.Add(_connection);
-        var connectionButtons = new FlowLayoutPanel { AutoSize = true, Dock = DockStyle.Fill, Margin = new Padding(0) };
-        var pair = new Button { Text = "Koppeln …", AutoSize = true };
-        var logs = new Button { Text = "Logs öffnen", AutoSize = true };
-        connectionButtons.Controls.Add(pair);
-        connectionButtons.Controls.Add(logs);
-        layout.Controls.Add(connectionButtons);
+        var connection = new Card(p.Green);
+        var c = new Stack(W - 36);
+        c.Controls.Add(new Eyebrow("Verbindung", p.Green, dot: true));
+        c.Controls.Add(_connectionPill);
+        c.Controls.Add(_connection);
+        c.Controls.Add(_instance);
+        var buttons = new Row();
+        var pair = new BentoButton("Koppeln …");
+        var logs = new BentoButton("Logs öffnen");
+        buttons.Controls.Add(pair);
+        buttons.Controls.Add(logs);
+        c.Controls.Add(buttons);
+        connection.Controls.Add(c);
+        stack.Controls.Add(connection);
 
+        var bottom = new Row(rightToLeft: true, width: W);
+        var close = new BentoButton("Schließen") { Margin = new Padding(0, 2, 0, 0) };
         // Das Fenster ist nicht modal (Show statt ShowDialog), DialogResult allein schließt es daher nicht.
-        var close = new Button { Text = "Schließen", AutoSize = true, Anchor = AnchorStyles.Right, Margin = new Padding(0, 14, 0, 0) };
         close.Click += (_, _) => Close();
-        layout.Controls.Add(close);
-        Controls.Add(layout);
+        bottom.Controls.Add(close);
+        stack.Controls.Add(bottom);
+        Controls.Add(stack);
         CancelButton = close;
 
-        _autoStart.Checked = TraySettings.AutoStart;
-        _notifications.Checked = TraySettings.Notifications;
+        _autoStart.SetSilently(TraySettings.AutoStart);
+        _notifications.SetSilently(TraySettings.Notifications);
+        _theme.Selected = (int)Theme.Mode;
         _autoStart.CheckedChanged += (_, _) => Save(() => TraySettings.AutoStart = _autoStart.Checked);
         _notifications.CheckedChanged += (_, _) => Save(() => TraySettings.Notifications = _notifications.Checked);
+        _theme.SelectedChanged += (_, _) => Save(() => Theme.Set((ThemeMode)_theme.Selected));
         _autoUpdate.CheckedChanged += async (_, _) =>
         {
             if (_rendering || AutoUpdateChanged is null) return;
@@ -85,7 +101,7 @@ internal sealed class SettingsForm : Form
             if (CheckRequested is null) return;
             _checking = true;
             _check.Enabled = false;
-            _lastResult.ForeColor = Color.DimGray;
+            _lastResult.ForeColor = Theme.P.Muted;
             _lastResult.Text = "Suche nach Updates …";
             await CheckRequested();
         };
@@ -93,22 +109,16 @@ internal sealed class SettingsForm : Form
         logs.Click += (_, _) => LogsRequested?.Invoke();
     }
 
-    private static Label Heading(string text) => new()
-    {
-        Text = text, AutoSize = true, Margin = new Padding(0, 12, 0, 4),
-        Font = new Font(SystemFonts.MessageBoxFont!.FontFamily, 10, FontStyle.Bold),
-    };
-
     private static void Save(Action write)
     {
         try { write(); }
-        catch (Exception ex) { MessageBox.Show("Einstellung nicht gespeichert: " + ex.Message, "Yubikey Lifecycle Manager", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch (Exception ex) { MessageBox.Show("Einstellung nicht gespeichert: " + ex.Message, "YubiKey LC Manager", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 
     /// <summary>Antwort des Dienstes auf eine Änderung oder "Jetzt nach Updates suchen".</summary>
     public void ShowResult(string text, bool error)
     {
-        _lastResult.ForeColor = error ? Color.Firebrick : Color.SeaGreen;
+        _lastResult.ForeColor = error ? Theme.P.Error : Theme.P.Ok;
         _lastResult.Text = text;
         _checking = false;
         _check.Enabled = true;
@@ -119,8 +129,9 @@ internal sealed class SettingsForm : Form
         _rendering = true;
         try
         {
+            var p = Theme.P;
             var u = s.Update;
-            _autoUpdate.Checked = u?.AutoUpdate ?? false;
+            _autoUpdate.SetSilently(u?.AutoUpdate ?? false);
             _autoUpdate.Enabled = pipeConnected && u is not null && _isAdmin && u.Policy == AgentUpdatePolicy.AgentDecides;
             _updateHint.Text = !pipeConnected ? "Der Agent-Dienst ist nicht erreichbar."
                 : u is null ? "Dieser Agent-Dienst unterstützt die Einstellung noch nicht."
@@ -128,19 +139,20 @@ internal sealed class SettingsForm : Form
                 : u.Policy == AgentUpdatePolicy.Never ? "Vom Server vorgegeben: keine automatischen Updates. „Jetzt nach Updates suchen“ installiert trotzdem."
                 : !_isAdmin ? "Nur Administratoren dieses PCs können das ändern."
                 : "Der Agent fragt alle 4 Stunden beim Server nach einer neuen Version.";
-            var available = u?.AvailableVersion is { } v ? $" · auf dem Server: {v}" : "";
-            var checkedAt = u?.LastCheckAt is { } at ? $"\nZuletzt geprüft: {at.LocalDateTime:dd.MM.yyyy HH:mm}" : "";
-            _versions.Text = $"Installiert: {(string.IsNullOrEmpty(s.AgentVersion) ? "?" : s.AgentVersion)}{available}{checkedAt}";
+            var available = u?.AvailableVersion is { } v ? $"  ·  Server {v}" : "";
+            var checkedAt = u?.LastCheckAt is { } at ? $"\nGeprüft {at.LocalDateTime:dd.MM.yyyy, HH:mm}" : "";
+            _versions.Text = $"Installiert {(string.IsNullOrEmpty(s.AgentVersion) ? "?" : s.AgentVersion)}{available}{checkedAt}";
             if (u?.LastResult is { } result && (!_checking || u.Installing))
             {
-                _lastResult.ForeColor = u.LastResultIsError ? Color.Firebrick : Color.DimGray;
+                _lastResult.ForeColor = u.LastResultIsError ? p.Error : p.Muted;
                 _lastResult.Text = result;
             }
             _check.Enabled = pipeConnected && u is not null && s.Connection != BackendConnectionState.NotPaired && !u.Installing && !_checking;
 
-            _connection.Text = s.ServerUrl is null
-                ? "Nicht gekoppelt."
-                : $"{TrayContext.Describe(s.Connection)} mit {s.ServerUrl}" + (s.InstanceName is null ? "" : $"\n{s.InstanceName}{(s.PairedUser is null ? "" : " · " + s.PairedUser)}");
+            var (text, color, live) = TrayContext.Describe(s.Connection, pipeConnected);
+            _connectionPill.Set(text, color, live);
+            _connection.Text = s.ServerUrl ?? "Nicht gekoppelt";
+            _instance.Text = s.InstanceName is null ? "" : s.InstanceName + (s.PairedUser is null ? "" : " · " + s.PairedUser);
         }
         finally { _rendering = false; }
     }
