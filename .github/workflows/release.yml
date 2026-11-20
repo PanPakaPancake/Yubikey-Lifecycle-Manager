@@ -68,6 +68,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           build-args: VERSION=${{ steps.v.outputs.version }}
+          pull: true
           tags: |
             ${{ steps.names.outputs.server }}:${{ steps.v.outputs.version }}
             ${{ steps.names.outputs.server }}:latest
@@ -77,6 +78,7 @@ jobs:
         with:
           context: ./updater
           platforms: linux/amd64,linux/arm64
+          pull: true
           tags: |
             ${{ steps.names.outputs.updater }}:${{ steps.v.outputs.version }}
             ${{ steps.names.outputs.updater }}:latest

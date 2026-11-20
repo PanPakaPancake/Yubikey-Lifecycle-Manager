@@ -51,12 +51,16 @@ services:
       - "${YLM_BIND:-127.0.0.1:8080}:8080"
 
   # Update per Klick: holt auf Anforderung der Plattform das neue Server-Image und startet den Server neu.
+  # Außerdem täglich um YLM_AUTO_REFRESH Sicherheitsupdates: alle Images (gleiche Version) neu laden und
+  # geänderte Container neu erstellen (Basis-Images werden wöchentlich bzw. bei Schwachstellen neu gebaut).
   # Nur dieser Container sieht den Docker-Socket. Ohne UPDATER_TOKEN in .env nimmt er keine Aufträge an.
   updater:
     image: ghcr.io/panpakapancake/yubikey-lifecycle-manager-updater:latest
     restart: unless-stopped
     environment:
       UPDATER_TOKEN: ${UPDATER_TOKEN:-}
+      AUTO_REFRESH: ${YLM_AUTO_REFRESH:-04:00}
+      TZ: ${TZ:-Europe/Berlin}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - .:/project:ro

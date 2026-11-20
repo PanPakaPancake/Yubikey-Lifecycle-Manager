@@ -19,6 +19,7 @@
 #   --bind ADRESSE     Netzwerkadresse, auf der die Plattform lauscht (Standard je Modus, z. B. 10.0.0.5)
 #   --version vX.Y.Z   bestimmte Version statt der neuesten
 #   --yes              keine Rückfragen (Standardwerte bzw. Optionen verwenden)
+#   --no-host-updates  automatische Sicherheitsupdates des Hosts (unattended-upgrades) nicht einrichten
 #
 # Erneut ausführen ist gefahrlos: Eine vorhandene .env bleibt erhalten, die Compose-Dateien werden
 # auf den Stand der Version gebracht und die Images aktualisiert.
@@ -36,6 +37,7 @@ KEY=""
 BIND=""
 VERSION=""
 YES=0
+HOST_UPDATES=1
 
 while [ $# -gt 0 ]; do
 	case "$1" in
@@ -48,6 +50,7 @@ while [ $# -gt 0 ]; do
 		--bind) BIND="$2"; shift 2 ;;
 		--version) VERSION="$2"; shift 2 ;;
 		--yes|-y) YES=1; shift ;;
+		--no-host-updates) HOST_UPDATES=0; shift ;;
 		-h|--help) sed -n '2,26p' "$0" 2>/dev/null || true; exit 0 ;;
 		*) echo "Unbekannte Option: $1" >&2; exit 2 ;;
 	esac
@@ -102,6 +105,18 @@ fi
 docker compose version >/dev/null 2>&1 || fail "Das Compose-Plugin fehlt (docker compose). Siehe https://docs.docker.com/compose/install/linux/"
 docker info >/dev/null 2>&1 || fail "Kein Zugriff auf Docker. Skript mit sudo ausführen oder den Benutzer zur Gruppe docker hinzufügen."
 info "Docker $(docker version --format '{{.Server.Version}}' 2>/dev/null), $(docker compose version --short 2>/dev/null | sed 's/^/Compose /')"
+
+# Kernel (z. B. TCP-Stack), Docker und Systembibliotheken teilen sich alle Container mit dem Host. Die Container
+# hält der Updater aktuell, den Host nur dessen eigene Updates: auf Debian/Ubuntu per unattended-upgrades.
+if [ "$HOST_UPDATES" = 1 ] && [ "$(id -u)" = 0 ] && command -v apt-get >/dev/null 2>&1; then
+	if dpkg -s unattended-upgrades >/dev/null 2>&1 && grep -qs 'Unattended-Upgrade "1"' /etc/apt/apt.conf.d/20auto-upgrades; then
+		info "Automatische Sicherheitsupdates des Hosts: aktiv (unattended-upgrades)."
+	elif confirm "Automatische Sicherheitsupdates für diesen Server einrichten (unattended-upgrades, empfohlen)?"; then
+		DEBIAN_FRONTEND=noninteractive apt-get install -y -qq unattended-upgrades >/dev/null
+		printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' > /etc/apt/apt.conf.d/20auto-upgrades
+		info "Automatische Sicherheitsupdates des Hosts eingerichtet. Neustarts nach Kernel-Updates: siehe docs/BETRIEB.md."
+	fi
+fi
 
 # --- 2. Version und Dateien -----------------------------------------------------------------------
 if [ -z "$VERSION" ]; then

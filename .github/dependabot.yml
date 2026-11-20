@@ -1,0 +1,23 @@
+# Wöchentliche Vorschläge (Pull Requests) für neue Versionen der Basis-Images, Actions und Pakete.
+# Sicherheitsupdates der Basis-Images kommen zusätzlich ohne PR über den Sicherheits-Neubau (rebuild.yml).
+version: 2
+updates:
+  - package-ecosystem: docker
+    directories: ["/", "/updater"]
+    schedule: { interval: weekly }
+  - package-ecosystem: docker-compose
+    directory: "/"
+    schedule: { interval: weekly }
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule: { interval: weekly }
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule: { interval: weekly }
+    groups:
+      dotnet: { patterns: ["*"] }
+  - package-ecosystem: npm
+    directory: "/web"
+    schedule: { interval: weekly }
+    groups:
+      web: { patterns: ["*"] }

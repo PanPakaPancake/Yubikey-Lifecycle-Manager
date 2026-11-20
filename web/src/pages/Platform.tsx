@@ -288,7 +288,11 @@ function LoginSettingsCard() {
   );
 }
 
-type UpdaterStatus = { state: 'idle' | 'running' | 'done' | 'failed' | 'unreachable' | 'error'; message?: string; version?: string; log?: string[]; finishedAt?: string | null };
+type UpdaterStatus = {
+  state: 'idle' | 'running' | 'done' | 'failed' | 'unreachable' | 'error'; message?: string; version?: string; log?: string[]; finishedAt?: string | null;
+  /** Neuere Updater: tägliche Sicherheitsupdates der Container. */
+  refresh?: { schedule?: string | null; lastAt?: string | null; result?: 'running' | 'done' | 'failed' | null; trigger?: string | null };
+};
 export type UpdateInfo = {
   currentVersion: string; latestVersion?: string | null; updateAvailable: boolean; releaseUrl?: string | null; publishedAt?: string | null; notes?: string | null;
   error?: string | null; checkedAt: string;
@@ -356,6 +360,7 @@ function UpdatesCard() {
   const { busy, error: actionError, run } = useAction();
   const confirm = useConfirm();
   const [phase, setPhase] = useState<'idle' | 'running' | 'restarting'>('idle');
+  const [kind, setKind] = useState<'update' | 'refresh'>('update');
   const [log, setLog] = useState<string[]>([]);
   const [from, setFrom] = useState<string>();
   const doneChecks = useRef(0);
@@ -367,7 +372,7 @@ function UpdatesCard() {
       try {
         const s = await api.get<{ currentVersion: string; status?: UpdaterStatus }>('/api/platform/updates/status');
         if (s.status?.log) setLog(s.status.log);
-        if (s.currentVersion !== from) { window.location.reload(); return; }
+        if (s.currentVersion !== from || (kind === 'refresh' && phase === 'restarting')) { window.location.reload(); return; }
         if (s.status?.state === 'failed') { setPhase('idle'); reload(); }
         // Fertig, aber derselbe Server läuft noch: Image war schon aktuell oder der Neustart steht noch aus.
         if (s.status?.state === 'done') { doneChecks.current += 1; if (doneChecks.current > 24) { setPhase('idle'); reload(); } }
@@ -376,13 +381,26 @@ function UpdatesCard() {
       }
     }, 2500);
     return () => clearInterval(t);
-  }, [phase, from, reload]);
+  }, [phase, from, kind, reload]);
 
   const apply = async () => {
     if (!(await confirm({ title: `Auf Version ${data!.latestVersion} aktualisieren?`, message: 'Die Plattform ist dabei etwa eine Minute nicht erreichbar. Laufende Registrierungen vorher abschließen.', confirmLabel: 'Jetzt aktualisieren' }))) return;
     await run(async () => {
       setFrom(data!.currentVersion);
       await api.post('/api/platform/updates/apply', { version: data!.latestVersion });
+      setKind('update');
+      setLog([]);
+      doneChecks.current = 0;
+      setPhase('running');
+    });
+  };
+
+  const securityRefresh = async () => {
+    if (!(await confirm({ title: 'Sicherheitsupdates jetzt einspielen?', message: 'Lädt alle Images der installierten Version neu und startet geänderte Container neu. Die Plattform ist dabei kurz nicht erreichbar.', confirmLabel: 'Jetzt einspielen' }))) return;
+    await run(async () => {
+      setFrom(data!.currentVersion);
+      await api.post('/api/platform/updates/refresh');
+      setKind('refresh');
       setLog([]);
       doneChecks.current = 0;
       setPhase('running');
@@ -390,6 +408,7 @@ function UpdatesCard() {
   };
 
   const status = data?.updater.status;
+  const sec = status?.refresh;
   return (
     <Card title="Version und Updates" actions={<button disabled={busy || phase !== 'idle'} onClick={() => setRefresh((r) => r + 1)}>Jetzt prüfen</button>}>
       <ErrorBox error={error ?? actionError} />
@@ -409,10 +428,20 @@ function UpdatesCard() {
               : status && (status.state === 'unreachable' || status.state === 'error')
                 ? <Badge tone="warn">Updater nicht erreichbar</Badge>
                 : <><Badge tone="ok">bereit</Badge>{!data.updateAvailable && <span className="small muted"> · der Knopf erscheint, sobald eine neue Version verfügbar ist</span>}</>}</td></tr>
+            {data.updater.configured && status && status.state !== 'unreachable' && status.state !== 'error' && (
+              <tr><th>Sicherheitsupdates der Container</th><td>
+                {sec === undefined
+                  ? <span className="small muted">Älterer Updater: Installationsskript einmal erneut ausführen, dann spielt er täglich die Sicherheitsupdates der Basis-Images ein.</span>
+                  : <>{sec.schedule ? <>täglich um {sec.schedule} Uhr</> : <span className="muted">automatisch aus (<code>YLM_AUTO_REFRESH</code>)</span>}
+                    {sec.lastAt && <span className="small muted"> · zuletzt {fmtDate(sec.lastAt)} {sec.result === 'failed' ? <Badge tone="error">fehlgeschlagen</Badge> : sec.result === 'running' ? <Badge>läuft</Badge> : <Badge tone="ok">ok</Badge>}</span>}
+                    {' '}<button className="small" disabled={busy || phase !== 'idle' || status.state === 'running'} onClick={securityRefresh}>Jetzt einspielen</button>
+                    <div className="small muted">Lädt die Images der installierten Version mit den neuesten Patches (Basis-Images werden wöchentlich und bei Schwachstellen neu gebaut). Den Host selbst (Kernel, Docker) bitte separat aktuell halten.</div></>}
+              </td></tr>
+            )}
             <tr><th>Geprüft</th><td className="small muted">{fmtDate(data.checkedAt)}</td></tr>
           </tbody>
         </table>
-        {phase !== 'idle' && <Info>{phase === 'restarting' ? 'Der Server startet neu … Die Seite lädt automatisch, sobald die neue Version läuft.' : 'Update läuft: neues Image wird geladen …'}</Info>}
+        {phase !== 'idle' && <Info>{phase === 'restarting' ? 'Der Server startet neu … Die Seite lädt automatisch, sobald er wieder läuft.' : kind === 'refresh' ? 'Sicherheitsupdates laufen: Images werden geladen …' : 'Update läuft: neues Image wird geladen …'}</Info>}
         {data.updateAvailable && phase === 'idle' && (data.updater.configured
           ? <button className="primary" disabled={busy || status?.state === 'running'} onClick={apply}>Jetzt auf {data.latestVersion} aktualisieren</button>
           : <Info>Für das Update per Klick fehlt der Updater-Container: in <code>.env</code> <code>UPDATER_TOKEN</code> setzen (z. B. <code>openssl rand -hex 32</code>) und <code>docker compose up -d</code> ausführen. Alternativ von Hand: <code>docker compose pull &amp;&amp; docker compose up -d</code>.</Info>)}
