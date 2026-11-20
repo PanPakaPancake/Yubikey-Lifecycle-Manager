@@ -25,7 +25,7 @@ public sealed record RemovalResult(string UserId, string Upn, int Removed, IRead
 /// Passkey-Rollout: wer hat schon einen Passkey, wer nur klassische MFA, wer gar nichts. Daten kommen live aus Entra
 /// und werden pro Tenant kurz zwischengespeichert (der Microsoft-Bericht selbst hängt ohnehin etwas hinterher).
 /// </summary>
-public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFactory, IMemoryCache cache, AuditService audit)
+public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFactory, IMemoryCache cache, AuditService audit, Protection.ProtectedAccountService protection)
 {
     public static readonly TimeSpan CacheDuration = TimeSpan.FromMinutes(15);
     public const int MaxUsersPerAction = 100;
@@ -138,13 +138,15 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
         _ => m.DisplayName ?? m.Detail,
     };
 
-    public async Task<IReadOnlyList<GraphAuthMethod>> RemoveMethodAsync(Tenant tenant, string userId, string kind, string methodId, AuditActor actor, CancellationToken ct = default)
+    public async Task<IReadOnlyList<GraphAuthMethod>> RemoveMethodAsync(Tenant tenant, string userId, string kind, string methodId, PlatformUser actorUser, CancellationToken ct = default)
     {
         if (!AuthMethodCatalog.IsRemovable(kind))
             throw ApiException.BadRequest("not_removable", kind == "fido2"
                 ? "Passkeys auf Sicherheitsschlüsseln bitte über das Inventar sperren, damit der Key-Status stimmt."
                 : "Diese Methode kann hier nicht entfernt werden.");
+        var actor = AuditService.User(actorUser);
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
+        await protection.EnsureAllowedAsync(tenant, graph, actorUser, [userId], ct);
         var before = await graph.ListAuthenticationMethodsAsync(userId, ct);
         var method = before.FirstOrDefault(m => m.Id == methodId && m.Kind == kind) ?? throw ApiException.NotFound("Methode");
         var (upn, _) = await UserLabelAsync(tenant, graph, userId, ct);
@@ -162,8 +164,9 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
     /// Benutzern, die danach noch eine phishing-resistente Methode haben, damit niemand ohne MFA dasteht.
     /// </summary>
     public async Task<IReadOnlyList<RemovalResult>> RemoveBulkAsync(Tenant tenant, IReadOnlyCollection<string> userIds, IReadOnlyCollection<string> kinds,
-        bool keepPhishingResistantOnly, AuditActor actor, CancellationToken ct = default)
+        bool keepPhishingResistantOnly, PlatformUser actorUser, CancellationToken ct = default)
     {
+        var actor = AuditService.User(actorUser);
         Validate(userIds);
         var bad = kinds.Where(k => !AuthMethodCatalog.IsRemovable(k)).ToList();
         if (kinds.Count == 0 || bad.Count > 0) throw ApiException.BadRequest("invalid", "Bitte nur entfernbare Methodentypen wählen.");
@@ -175,6 +178,11 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
             try
             {
                 (upn, _) = await UserLabelAsync(tenant, graph, userId, ct);
+                if (await protection.DenyReasonAsync(tenant, graph, actorUser, userId, ct) is { } denied)
+                {
+                    results.Add(new(userId, upn, 0, [], denied, null));
+                    continue;
+                }
                 var live = await graph.ListAuthenticationMethodsAsync(userId, ct);
                 var remove = live.Where(m => kinds.Contains(m.Kind)).ToList();
                 var remaining = live.Except(remove).ToList();
@@ -229,8 +237,9 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
 
     /// <summary>Erzeugt TAPs. Die Codes werden nicht gespeichert und nicht protokolliert, nur einmal zurückgegeben.</summary>
     public async Task<IReadOnlyList<TapResult>> CreateTapsAsync(Tenant tenant, IReadOnlyCollection<string> userIds, DateTimeOffset? start, int? lifetime,
-        bool? usableOnce, bool replaceExisting, AuditActor actor, CancellationToken ct = default)
+        bool? usableOnce, bool replaceExisting, PlatformUser actorUser, CancellationToken ct = default)
     {
+        var actor = AuditService.User(actorUser);
         Validate(userIds);
         if (lifetime is < 10 or > 43200) throw ApiException.BadRequest("invalid", "Die Gültigkeit muss zwischen 10 Minuten und 30 Tagen liegen.");
         if (start is { } s && s < DateTimeOffset.UtcNow.AddMinutes(-5)) throw ApiException.BadRequest("invalid", "Der Beginn darf nicht in der Vergangenheit liegen.");
@@ -243,6 +252,11 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
             try
             {
                 (upn, name) = await UserLabelAsync(tenant, graph, userId, ct);
+                if (await protection.DenyReasonAsync(tenant, graph, actorUser, userId, ct) is { } denied)
+                {
+                    results.Add(new(userId, upn, name, null, null, null, null, denied));
+                    continue;
+                }
                 var live = await graph.ListAuthenticationMethodsAsync(userId, ct);
                 var existing = live.Where(m => m.Kind == "temporaryAccessPass").ToList();
                 if (existing.Count > 0 && !replaceExisting)

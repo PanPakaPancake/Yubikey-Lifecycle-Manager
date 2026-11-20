@@ -1,6 +1,7 @@
 using Ylm.Core;
 using Ylm.Server.Audit;
 using Ylm.Server.Infrastructure;
+using Ylm.Server.Protection;
 using Ylm.Server.Security;
 
 namespace Ylm.Server.Registration;
@@ -11,15 +12,19 @@ public static class RegistrationEndpoints
     {
         var g = app.MapGroup("/api").RequireAuthorization();
 
-        g.MapPost("/tenants/{tenantId:guid}/registrations/preview", async (Guid tenantId, RegistrationPreviewRequest body, CurrentUser cu, RegistrationService reg) =>
+        g.MapPost("/tenants/{tenantId:guid}/registrations/preview", async (Guid tenantId, RegistrationPreviewRequest body, CurrentUser cu, RegistrationService reg,
+            ProtectedAccountService protection, Data.YlmDbContext db, Graph.IGraphClientFactory graphs) =>
         {
             var user = await cu.RequireTenantAsync(tenantId, Permission.RegisterKeys);
+            await protection.EnsureAllowedAsync(db, graphs, tenantId, user, [body.EntraUserId]);
             return Results.Ok(await reg.PreviewAsync(tenantId, user, body));
         });
 
-        g.MapPost("/tenants/{tenantId:guid}/registrations", async (Guid tenantId, RegistrationRequest body, CurrentUser cu, RegistrationService reg, JobStore jobs, IServiceScopeFactory scopes) =>
+        g.MapPost("/tenants/{tenantId:guid}/registrations", async (Guid tenantId, RegistrationRequest body, CurrentUser cu, RegistrationService reg, JobStore jobs, IServiceScopeFactory scopes,
+            ProtectedAccountService protection, Data.YlmDbContext db, Graph.IGraphClientFactory graphs) =>
         {
             var user = await cu.RequireTenantAsync(tenantId, Permission.RegisterKeys);
+            await protection.EnsureAllowedAsync(db, graphs, tenantId, user, [body.EntraUserId]);
             var job = reg.Start(tenantId, user, body, jobs, scopes);
             return Results.Accepted($"/api/jobs/{job.Id}", job.ToDto());
         });

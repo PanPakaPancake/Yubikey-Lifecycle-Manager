@@ -28,13 +28,13 @@ Lokal auf einem Windows-PC mit Docker Desktop (PowerShell):
 irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
 ```
 
-Auf einem Linux-Server oder VPS mit eigener Domain und automatischem HTTPS:
+Auf einem Linux-Server im internen Netz oder hinter ZTNA, mit HTTPS über interne CA, eigenes Zertifikat oder vorhandenen Reverse Proxy:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.sh | sudo bash
 ```
 
-Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images, richtet die tägliche Datensicherung ein und zeigt am Ende das Setup-Token. Details, Reverse Proxy, Sicherung und Umzug: [Betrieb und Installation](docs/BETRIEB.md).
+Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images, richtet die tägliche, verschlüsselte Datensicherung ein und zeigt am Ende Passphrase und Setup-Token. Die Plattform ist nicht dafür gedacht, offen im Internet zu stehen. Details zu den Varianten, Reverse Proxy/ZTNA, Sicherung und Umzug: [Betrieb und Installation](docs/BETRIEB.md).
 
 ## Dokumentation
 

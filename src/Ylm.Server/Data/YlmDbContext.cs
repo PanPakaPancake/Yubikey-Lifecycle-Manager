@@ -86,6 +86,8 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.Property(x => x.PolicySnapshotJson).HasColumnType("jsonb");
             e.Property(x => x.TargetIncludeGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
             e.Property(x => x.TargetExcludeGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
+            e.Property(x => x.ProtectedGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
+            e.Property(x => x.ProtectAdmins).HasDefaultValue(true);
         });
 
         b.Entity<YubiKey>(e =>

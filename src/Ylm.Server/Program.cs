@@ -74,6 +74,7 @@ builder.Services.AddSingleton<IEntraBootstrap, EntraBootstrap>();
 builder.Services.AddSingleton<SetupSignInStore>();
 builder.Services.AddScoped<TenantCheckService>();
 builder.Services.AddScoped<SyncService>();
+builder.Services.AddScoped<Ylm.Server.Secrets.CertificateRenewalService>();
 builder.Services.AddScoped<KeyService>();
 builder.Services.AddScoped<RegistrationService>();
 builder.Services.AddScoped<BatchService>();
@@ -88,6 +89,7 @@ builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<AssignmentService>();
 builder.Services.AddScoped<Ylm.Server.Rollout.RolloutService>();
+builder.Services.AddSingleton<Ylm.Server.Protection.ProtectedAccountService>();
 builder.Services.AddScoped<Ylm.Server.Setup.BrandingService>();
 builder.Services.AddHostedService<BackgroundJobs>();
 
@@ -127,6 +129,9 @@ builder.Services.AddRateLimiter(o =>
     o.RejectionStatusCode = 429;
     o.AddPolicy(AgentEndpoints.PairingRateLimit, ctx => RateLimitPartition.GetFixedWindowLimiter(
         ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1) }));
+    // Anmeldung und Kontoeinrichtung ohne Anmeldung: bremst Durchprobieren und das Füllen des Speichers mit WebAuthn-Anfragen.
+    o.AddPolicy(SecurityHeaders.AuthRateLimit, ctx => RateLimitPartition.GetFixedWindowLimiter(
+        ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 30, Window = TimeSpan.FromMinutes(1) }));
 });
 
 builder.Services.AddSignalR(o =>
@@ -164,11 +169,15 @@ builder.Services.Configure<ForwardedHeadersOptions>(o =>
     o.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto | ForwardedHeaders.XForwardedHost;
     o.KnownIPNetworks.Clear();
     o.KnownProxies.Clear();
+    // Ohne Einschränkung könnte jeder, der Port 8080 direkt erreicht, Absender-IP (Rate-Limit), Schema und Host vortäuschen.
+    if (!ylm.TrustedProxies.Any(p => p?.Trim() == "*"))
+        foreach (var network in ProxyTrust.Networks(ylm.TrustedProxies)) o.KnownIPNetworks.Add(network);
 });
 
 var app = builder.Build();
 
 app.UseForwardedHeaders();
+app.UseMiddleware<SecurityHeaders>();
 app.UseMiddleware<ApiExceptionMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -200,6 +209,7 @@ Ylm.Server.Integrations.IntegrationEndpoints.MapIntegrations(app);
 app.MapReporting();
 Ylm.Server.Rollout.RolloutEndpoints.MapRollout(app);
 Ylm.Server.Setup.BrandingEndpoints.MapBranding(app);
+Ylm.Server.Secrets.CertificateEndpoints.MapAppCertificate(app);
 app.MapAudit();
 app.MapPublicApi();
 app.MapApiKeyManagement();

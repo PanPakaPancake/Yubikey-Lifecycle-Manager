@@ -82,11 +82,17 @@ public sealed class TrayPipeServer(AgentConnection connection, AgentUpdater upda
                         await SendAsync(new TrayMessage { Type = TrayMessageType.Status, Status = connection.Status });
                         break;
                     case TrayMessageType.PairRequest when msg.ServerUrl is not null && msg.PairingCode is not null:
-                        var (ok, text) = await connection.PairAsync(msg.ServerUrl, msg.PairingCode, ct);
+                        // Nur Administratoren: Der Dienst läuft als SYSTEM und installiert Updates vom gekoppelten Server.
+                        // Könnte jeder Benutzer koppeln, ließe sich der Agent an einen fremden Server hängen, der ein
+                        // präpariertes MSI als "Update" ausliefert (Rechteausweitung auf SYSTEM).
+                        var (ok, text) = IsAdministrator(pipe)
+                            ? await connection.PairAsync(msg.ServerUrl, msg.PairingCode, ct)
+                            : (false, AdminOnlyMessage);
                         await SendAsync(new TrayMessage { Type = TrayMessageType.PairResult, Text = text, IsError = !ok });
                         break;
                     case TrayMessageType.Unpair:
-                        await connection.UnpairAsync();
+                        if (IsAdministrator(pipe)) await connection.UnpairAsync();
+                        else await SendAsync(new TrayMessage { Type = TrayMessageType.CommandResult, Text = AdminOnlyMessage, IsError = true });
                         break;
                     case TrayMessageType.SetAutoUpdate when msg.Enabled is { } enabled:
                         var (changed, message) = IsAdministrator(pipe)
@@ -116,6 +122,9 @@ public sealed class TrayPipeServer(AgentConnection connection, AgentUpdater upda
             connection.TrayExitRequested -= OnTrayExit;
         }
     }
+
+    internal const string AdminOnlyMessage =
+        "Koppeln und Entkoppeln dürfen nur Administratoren dieses PCs. Bitte mit einem Konto aus der Gruppe „Administratoren“ anmelden oder die IT bitten.";
 
     /// <summary>
     /// Gehört der Benutzer am anderen Ende der Pipe zu den lokalen Administratoren? Zählt auch ohne erhöhte Rechte (UAC):

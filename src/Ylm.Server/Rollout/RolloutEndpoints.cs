@@ -72,14 +72,14 @@ public static class RolloutEndpoints
             CurrentUser cu, YlmDbContext db, RolloutService rollout, CancellationToken ct) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.RemoveAuthMethods);
-            var methods = await rollout.RemoveMethodAsync(await TenantAsync(db, id), userId, kind, methodId, AuditService.User(user), ct);
+            var methods = await rollout.RemoveMethodAsync(await TenantAsync(db, id), userId, kind, methodId, user, ct);
             return Results.Ok(methods.Select(RolloutService.ToDto));
         });
 
         g.MapPost("/remove-methods", async (Guid id, BulkRemoveRequest body, CurrentUser cu, YlmDbContext db, RolloutService rollout, CancellationToken ct) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.RemoveAuthMethods);
-            return Results.Ok(await rollout.RemoveBulkAsync(await TenantAsync(db, id), body.UserIds ?? [], body.Kinds ?? [], body.KeepPhishingResistantOnly, AuditService.User(user), ct));
+            return Results.Ok(await rollout.RemoveBulkAsync(await TenantAsync(db, id), body.UserIds ?? [], body.Kinds ?? [], body.KeepPhishingResistantOnly, user, ct));
         });
 
         g.MapGet("/tap-policy", async (Guid id, CurrentUser cu, YlmDbContext db, RolloutService rollout, CancellationToken ct) =>
@@ -98,7 +98,7 @@ public static class RolloutEndpoints
         {
             var user = await cu.RequireTenantAsync(id, Permission.IssueTemporaryAccessPass);
             var results = await rollout.CreateTapsAsync(await TenantAsync(db, id), body.UserIds ?? [], body.StartDateTime, body.LifetimeInMinutes, body.IsUsableOnce,
-                body.ReplaceExisting, AuditService.User(user), ct);
+                body.ReplaceExisting, user, ct);
             // Die Codes sollen in keinem Zwischenspeicher landen.
             http.Response.Headers.CacheControl = "no-store";
             return Results.Ok(results);

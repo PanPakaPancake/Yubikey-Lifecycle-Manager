@@ -86,6 +86,8 @@ export interface Tenant {
   lastSyncAt?: string; lastSyncSucceeded?: boolean; lastSyncMessage?: string; targetUserCount?: number; lastCheckAt?: string;
   checks: TenantCheck[]; offboardedAt?: string; dataDeletionDueAt?: string;
   requireBreakglassApproval: boolean;
+  protectAdmins?: boolean;
+  protectedGroups?: GroupRef[];
 }
 
 export interface Registration {

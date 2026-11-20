@@ -11,6 +11,13 @@ public sealed class InstallationSettings
     public Guid? ClientId { get; set; }
     public string? CertificateThumbprint { get; set; }
     public DateTimeOffset? CertificateExpiresAt { get; set; }
+    /// <summary>Objekt-ID der App-Registrierung im Heim-Tenant (für die automatische Zertifikatserneuerung).</summary>
+    public string? ApplicationObjectId { get; set; }
+    /// <summary>Letzter Versuch, das App-Zertifikat automatisch zu erneuern, und dessen Fehler.</summary>
+    public DateTimeOffset? CertificateRenewalAttemptAt { get; set; }
+    public string? CertificateRenewalError { get; set; }
+    /// <summary>Wann zuletzt vor dem Ablauf gewarnt wurde (Audit-Log, Webhooks, Mail-Alarme).</summary>
+    public DateTimeOffset? CertificateWarnedAt { get; set; }
     public string? BootstrapOwnerUpn { get; set; }
     public DateTimeOffset? SetupCompletedAt { get; set; }
     public bool IsSetupComplete => SetupCompletedAt is not null;
@@ -127,6 +134,10 @@ public sealed class Tenant
     public DateTimeOffset? DataDeletionDueAt { get; set; }
     /// <summary>Vier-Augen-Freigabe für Breakglass-Registrierungen (planning 6.3, standardmäßig aus).</summary>
     public bool RequireBreakglassApproval { get; set; }
+    /// <summary>Konten mit Entra-Admin-Rolle schützen (TAP, Methoden entfernen, Registrierung nur mit „Geschützte Konten bearbeiten“).</summary>
+    public bool ProtectAdmins { get; set; } = true;
+    /// <summary>Mitglieder dieser Gruppen sind ebenfalls geschützt (z. B. Breakglass, Geschäftsführung).</summary>
+    public List<GroupRef> ProtectedGroups { get; set; } = [];
 }
 
 public sealed class YubiKey

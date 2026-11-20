@@ -10,21 +10,29 @@ Die Plattform läuft als kleiner Docker-Compose-Stapel aus fertigen Images. Geba
 | `db` | PostgreSQL |
 | `backup` | tägliche Datensicherung nach `backups/` (nutzt das PostgreSQL-Image, kein zusätzlicher Download) |
 | `updater` | Update per Klick aus der Oberfläche |
-| `caddy` | nur auf Servern: HTTPS mit automatischem Let's-Encrypt-Zertifikat |
+| `caddy` | nur auf Servern: HTTPS mit interner CA, eigenem Zertifikat oder Let's Encrypt |
 
 Ressourcen: 1 vCPU, 1 GB RAM und 10 GB Platte reichen für den Anfang. Die Images gibt es für `linux/amd64` und `linux/arm64` (ab dem nächsten Release).
 
 ### Welche Variante?
 
-| | Lokal auf dem Admin-PC | Server/VPS mit eigener Domain | Server hinter vorhandenem Reverse Proxy |
-|---|---|---|---|
-| Adresse | `http://localhost:8080` | `https://ylm.example.com` | `https://ylm.example.com` |
-| HTTPS | nicht nötig (`localhost` ist erlaubt) | automatisch (Caddy, Let's Encrypt) | macht der vorhandene Proxy |
-| Voraussetzung | Docker Desktop | Linux mit Docker, DNS-Eintrag, Ports 80/443 offen | Linux mit Docker, Proxy-Konfiguration |
-| Agents anderer PCs | nein, nur dieser PC | ja | ja |
-| Installation | `install.ps1` | `install.sh` (Auswahl 1) | `install.sh` (Auswahl 2) |
+Die Plattform verwaltet Anmeldemethoden in allen angebundenen Tenants. Sie gehört deshalb **nicht offen ins Internet**, sondern ins interne Netz oder hinter einen geschützten Zugang (ZTNA, VPN, Application Proxy). Darauf sind die Varianten 1 bis 3 ausgelegt.
 
-Passkeys und Entra funktionieren außerhalb von `localhost` nur über HTTPS. Deshalb gibt es auf einem Server immer HTTPS.
+| Nr. | Variante | Adresse | HTTPS | Für wen |
+|---|---|---|---|---|
+| 1 | **Intern, eigene CA** (`--mode internal`, Standard) | `https://ylm.firma.local` | Caddy mit interner Zertifizierungsstelle; Stammzertifikat per GPO/Intune verteilen | internes Netz, ZTNA ohne eigene PKI |
+| 2 | **Intern, eigenes Zertifikat** (`--mode cert`) | `https://ylm.firma.de` | Zertifikat der Firmen-PKI oder ein gekauftes | wer schon eine PKI hat |
+| 3 | **Reverse Proxy / ZTNA-Connector** (`--mode proxy`) | Adresse des Proxys | macht der Proxy (nginx, Traefik, Cloudflare Tunnel, Entra Private Access, Zscaler …) | wer Zugänge zentral veröffentlicht |
+| 4 | Öffentlich mit Let's Encrypt (`--mode https`) | `https://ylm.example.com` | automatisch | nur wenn der Server bewusst aus dem Internet erreichbar sein soll |
+| 5 | Lokal auf dem Admin-PC (`--mode local`, `install.ps1`) | `http://localhost:8080` | nicht nötig | Ausprobieren, Einzelplatz |
+
+Passkeys und Entra funktionieren außerhalb von `localhost` nur über HTTPS mit einem Zertifikat, dem der Browser vertraut. Deshalb gibt es auf einem Server immer HTTPS, auch intern.
+
+Was in jedem Fall gilt:
+
+- Die Plattform braucht **ausgehend** HTTPS zu `login.microsoftonline.com`, `graph.microsoft.com` und (für Updates) `ghcr.io`/`api.github.com`. **Eingehend** braucht es nur den Zugang der Admin-PCs. Entra ruft die Plattform nie selbst auf; die Umleitung nach der Anmeldung läuft über den Browser des Admins. Deshalb reicht ein interner DNS-Name.
+- Die Agents verbinden sich ausgehend vom Admin-PC zur Plattform (WebSocket unter `/hubs/`). Über ZTNA muss diese Verbindung ebenfalls durchgehen.
+- Die Datenbank lauscht nie nach außen, der Server-Port 8080 nur auf `127.0.0.1` (änderbar mit `YLM_BIND`).
 
 ### 1.1 Lokal auf dem Admin-PC (Windows)
 
@@ -34,38 +42,56 @@ Voraussetzung: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
 ```
 
-Das Skript legt `%USERPROFILE%\YubikeyLifecycleManager` an, erzeugt dort die `.env` mit zufälligem Datenbank-Passwort und Updater-Geheimnis, lädt die Images, startet alles und zeigt am Ende das **Setup-Token**. Der Browser öffnet `http://localhost:8080/setup`; weiter mit [Abschnitt 2](#2-einrichtung-einmalig).
+Das Skript legt `%USERPROFILE%\YubikeyLifecycleManager` an, erzeugt dort die `.env` mit zufälligem Datenbank-Passwort, Updater-Geheimnis und Passphrase für die Sicherungen, lädt die Images, startet alles und zeigt am Ende die **Passphrase** (in den Passwortmanager übernehmen) und das **Setup-Token**. Der Browser öffnet `http://localhost:8080/setup`; weiter mit [Abschnitt 2](#2-einrichtung-einmalig).
 
-Anderer Ordner: `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1))) -Dir D:\ylm`
+Anderer Ordner oder andere Variante: `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1))) -Dir D:\ylm -Mode internal -Domain ylm.firma.local` (Varianten wie bei `install.sh`, eigenes Zertifikat mit `-Mode cert -Cert ylm.crt -Key ylm.key`).
 
-### 1.2 Server/VPS mit eigener Domain (empfohlen für den Dauerbetrieb)
+### 1.2 Server im internen Netz (empfohlen)
 
 Voraussetzungen:
 
-- Linux-Server (z. B. Debian 12/13 oder Ubuntu 24.04), Zugang per SSH mit `sudo`
-- DNS-Eintrag (A und ggf. AAAA) für die Domain, z. B. `ylm.example.com`, zeigt auf den Server
-- Ports **80** und **443** (TCP, für HTTP/3 auch 443/UDP) sind in der Firewall des Anbieters offen
+- Linux-Server oder VM (z. B. Debian 12/13 oder Ubuntu 24.04), Zugang per SSH mit `sudo`
+- Interner DNS-Eintrag, z. B. `ylm.firma.local`, zeigt auf den Server
+- Port **443** (und 80 für die Umleitung) aus dem Admin-Netz bzw. vom ZTNA-Connector erreichbar
 - Docker muss nicht vorinstalliert sein; das Skript bietet die Installation über `get.docker.com` an
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.sh | sudo bash
 ```
 
-Das Skript fragt nach der Variante (1 = eigene Domain) und der Domain, legt `/opt/ylm` mit `.env` an (Rechte `600`), prüft DNS und Ports, startet die Dienste samt Caddy und zeigt das Setup-Token. Caddy holt das Zertifikat beim ersten Aufruf selbst und verlängert es automatisch. Danach `https://ylm.example.com/setup` öffnen und mit [Abschnitt 2](#2-einrichtung-einmalig) weitermachen.
+Das Skript fragt nach der Variante und dem DNS-Namen, legt `/opt/ylm` mit `.env` an (Rechte `600`), startet die Dienste samt Caddy und zeigt Passphrase und Setup-Token. Danach `https://ylm.firma.local/setup` öffnen und mit [Abschnitt 2](#2-einrichtung-einmalig) weitermachen.
 
-Ohne Rückfragen: `curl -fsSL …/install.sh | sudo bash -s -- --domain ylm.example.com --yes`
+**Variante 1, interne CA:** Caddy erzeugt eine eigene Zertifizierungsstelle und stellt damit das Serverzertifikat aus (verlängert es auch selbst). Das Skript legt das Stammzertifikat als `/opt/ylm/ylm-root-ca.crt` ab. Es muss auf allen Admin-PCs als vertrauenswürdige Stammzertifizierungsstelle installiert sein, sonst warnt der Browser und der Agent verbindet sich nicht:
 
-Weitere Optionen: `--dir PFAD`, `--version v0.3.0`, `--mode local|https|proxy`, `--url https://…`.
+- **GPO:** Computerkonfiguration → Richtlinien → Windows-Einstellungen → Sicherheitseinstellungen → Richtlinien für öffentliche Schlüssel → Vertrauenswürdige Stammzertifizierungsstellen → Importieren.
+- **Intune:** Geräte → Konfiguration → Vorlage „Vertrauenswürdiges Zertifikat“ (Windows 10 und höher), Zielspeicher „Computerzertifikatspeicher – Stamm“.
+- **Einzelner PC:** als Administrator `certutil -addstore Root ylm-root-ca.crt`.
 
-Empfehlungen für einen VPS:
+Die CA liegt im Volume `caddy-data` und bleibt bei Updates erhalten. Das Stammzertifikat ist 10 Jahre gültig.
 
-- Nur die Ports 22, 80 und 443 freigeben. Die Plattform selbst lauscht nur auf `127.0.0.1:8080`, die Datenbank gar nicht nach außen.
+**Variante 2, eigenes Zertifikat:** Zertifikat (PEM, mit Zwischenzertifikaten) und unverschlüsselten Schlüssel mitgeben. Das Skript kopiert sie nach `/opt/ylm/certs/ylm.crt` und `ylm.key`:
+
+```bash
+sudo bash install.sh --mode cert --domain ylm.firma.de --cert ylm.crt --key ylm.key
+```
+
+Erneuern: neue Dateien nach `certs/` kopieren (gleiche Namen), dann `docker compose restart caddy`.
+
+Ohne Rückfragen: `… | sudo bash -s -- --mode internal --domain ylm.firma.local --yes`. Weitere Optionen: `--dir PFAD`, `--version v0.7.0`, `--url https://…`, `--bind 10.0.0.5` (Caddy bzw. Port 8080 nur auf dieser Adresse). Die Variante lässt sich später umstellen, indem man das Skript mit einem anderen `--mode` erneut ausführt; Daten und `.env` bleiben erhalten.
+
+Empfehlungen für den Server:
+
+- In der Firewall nur SSH (aus dem Admin-Netz) und 80/443 (aus dem Admin-Netz bzw. vom ZTNA-Connector) zulassen.
 - SSH nur mit Schlüssel, automatische Sicherheitsupdates des Betriebssystems einschalten (z. B. `unattended-upgrades`).
 - Die Sicherungen in `/opt/ylm/backups` regelmäßig auf einen anderen Rechner kopieren (siehe [1.6](#16-datensicherung-und-wiederherstellung)).
 
-### 1.3 Server hinter einem vorhandenen Reverse Proxy
+**Variante 4, öffentlich mit Let's Encrypt:** `--mode https --domain ylm.example.com`. Dafür muss der öffentliche DNS-Eintrag auf den Server zeigen und Port 80/443 aus dem Internet offen sein. Nur wählen, wenn das gewollt ist; dann zusätzlich den Zugang beschränken (z. B. Firewall auf bekannte Adressen).
 
-Läuft auf dem Server schon nginx, Traefik o. ä., im Skript Variante 2 wählen (oder `--url https://ylm.example.com`). Caddy bleibt dann aus. Der Proxy leitet HTTPS auf `127.0.0.1:8080` weiter, setzt `X-Forwarded-Proto` und `X-Forwarded-Host` und lässt WebSockets durch (Agent-Verbindung unter `/hubs/`). Beispiel nginx:
+### 1.3 Hinter einem Reverse Proxy oder ZTNA-Connector
+
+Läuft schon nginx, Traefik o. ä. oder veröffentlicht ein ZTNA-Dienst die Plattform (Cloudflare Tunnel, Entra Private Access, Zscaler Private Access …), im Skript Variante 3 wählen (oder `--mode proxy --url https://ylm.firma.de`). Caddy bleibt dann aus. Das Skript fragt, ob der Proxy auf demselben Server läuft; sonst lauscht Port 8080 auf der internen Adresse (`YLM_BIND`, z. B. `10.0.0.5:8080`).
+
+Der Proxy leitet HTTPS auf Port 8080 weiter, setzt `X-Forwarded-Proto` und `X-Forwarded-Host` und lässt WebSockets durch (Agent-Verbindung unter `/hubs/`, Zeitlimit mindestens 5 Minuten). Beispiel nginx:
 
 ```nginx
 location / {
@@ -81,9 +107,11 @@ location / {
 }
 ```
 
-Läuft der Proxy auf einem anderen Rechner, in `.env` z. B. `YLM_BIND=10.0.0.5:8080` setzen (interne Adresse).
+ZTNA-Hinweise:
 
-> Der Server vertraut den Forwarded-Headern des vorgeschalteten Proxys. Port 8080 darf deshalb nie direkt aus dem Internet erreichbar sein.
+- `YLM_PUBLIC_URL` ist die Adresse, die Browser und Agents über den ZTNA-Zugang aufrufen. Unter genau dieser Adresse muss auch die Umleitungs-URI der Entra-App stehen (setzt der Setup-Assistent).
+- Vorgeschaltete Anmeldung des ZTNA-Dienstes (z. B. Cloudflare Access) ist gut, darf aber die Agent-Verbindung nicht blockieren: Der Agent kann keine interaktive Anmeldung. Entweder `/hubs/agent` und `/api/agent/` (Kopplung, Updates) per Service-Token oder Geräteprüfung freigeben oder die Agents über den Geräte-Client des ZTNA-Dienstes verbinden.
+- Der Server übernimmt Forwarded-Header (Client-IP für Audit-Log und Anmeldebremse) nur von Loopback und privaten Netzen (10/8, 172.16/12, 192.168/16, 100.64/10, fc00::/7). Kommt der Connector von einer anderen Adresse, diese in `.env` eintragen: `YLM_TRUSTED_PROXIES=203.0.113.10, 2001:db8::/32` (`*` vertraut allen, nicht empfohlen). Port 8080 sollte nie direkt aus dem Internet erreichbar sein.
 
 ### 1.4 Ohne Skript installieren
 
@@ -112,33 +140,45 @@ Beim ersten Start einer leeren Datenbank meldet Entity Framework einmal einen Fe
         Ylm__RequirePhishingResistantSignIn: "false"
   ```
 
-- **Eigenes Zertifikat** statt Let's Encrypt (z. B. internes Netz ohne öffentliches DNS): eigene Caddyfile mit `tls /certs/cert.pem /certs/key.pem` anlegen und per Override einbinden (`./my.Caddyfile:/etc/caddy/Caddyfile:ro` und `./certs:/certs:ro` unter `caddy.volumes`).
+- **Eigenes Zertifikat**: Variante 2 in [1.2](#12-server-im-internen-netz-empfohlen), keine eigene Caddyfile mehr nötig.
 
 Den Ordner der Installation nicht umbenennen, wenn `.env` kein `COMPOSE_PROJECT_NAME` enthält: Docker leitet die Namen der Volumes sonst vom Ordnernamen ab und startet mit leeren Daten.
 
 ### 1.6 Datensicherung und Wiederherstellung
 
-Der Dienst `backup` sichert täglich um 02:30 (`BACKUP_TIME`) die Datenbank und das Volume `data` in **ein** Archiv `backups/ylm-JJJJMMTT-HHMMSS.tar.gz` und löscht Sicherungen, die älter als 14 Tage sind (`BACKUP_KEEP_DAYS`). Das Volume `data` enthält App-Zertifikat, Data-Protection-Schlüssel und Geheimnisse. Ohne diese Schlüssel sind Zertifikat, feste Profil-PINs, SMTP-Passwort und Anmelde-Cookies nicht mehr lesbar. Deshalb gehören beide Teile immer zusammen, und das Archiv ist so schützenswert wie der Server.
+Der Dienst `backup` sichert täglich um 02:30 (`BACKUP_TIME`) die Datenbank und das Volume `data` in **ein** Archiv in `backups/` und löscht Sicherungen, die älter als 14 Tage sind (`BACKUP_KEEP_DAYS`). Das Volume `data` enthält App-Zertifikat, Data-Protection-Schlüssel und Geheimnisse. Ohne diese Schlüssel sind Zertifikat, feste Profil-PINs, SMTP-Passwort und Anmelde-Cookies nicht mehr lesbar. Deshalb gehören beide Teile immer zusammen.
+
+**Verschlüsselung:** Mit `BACKUP_PASSPHRASE` in `.env` (legt das Installationsskript an, auch bei bestehenden Installationen) wird das Archiv mit AES-256 verschlüsselt (`ylm-JJJJMMTT-HHMMSS.tar.gz.enc`, OpenSSL-Format, Schlüssel per PBKDF2-SHA256 mit 600 000 Runden). Damit kann eine Kopie außer Haus nicht mehr als Generalschlüssel für alle Tenants missbraucht werden. Die Passphrase **zusätzlich im Passwortmanager** ablegen: Ist der Server weg, ist sie sonst mit ihm verloren. Ohne Passphrase sind die Archive unverschlüsselt (`.tar.gz`); das Protokoll des Dienstes weist darauf hin.
 
 ```bash
 docker compose exec backup sh /backup.sh now        # sofort sichern
-docker compose exec backup sh /backup.sh list       # vorhandene Sicherungen
+docker compose exec backup sh /backup.sh list       # vorhandene Sicherungen (verschlüsselt/unverschlüsselt)
 ```
 
 Wiederherstellen (gleiche oder neuere Version der Plattform):
 
 ```bash
 docker compose stop server
-docker compose exec backup sh /backup.sh restore ylm-20261119-023000.tar.gz
+docker compose exec backup sh /backup.sh restore ylm-20261119-023000.tar.gz.enc
 docker compose start server
 ```
 
-Eine Sicherung von einem anderen Rechner vorher nach `backups/` kopieren. Kopie außer Haus, z. B. per Cron auf einem anderen Rechner: `rsync -a root@vps:/opt/ylm/backups/ /srv/ylm-backups/`.
+Auf einem neuen Server mit anderer Passphrase die alte mitgeben: `docker compose exec -e BACKUP_PASSPHRASE='…' backup sh /backup.sh restore DATEI`. Von Hand entschlüsseln: `openssl enc -d -aes-256-cbc -pbkdf2 -iter 600000 -md sha256 -in DATEI.enc -out DATEI.tar.gz`. Ältere, unverschlüsselte Sicherungen lassen sich weiter einspielen.
+
+Eine Sicherung von einem anderen Rechner vorher nach `backups/` kopieren. Kopie außer Haus, z. B. per Cron auf einem anderen Rechner: `rsync -a root@ylm-server:/opt/ylm/backups/ /srv/ylm-backups/`.
+
+### 1.6a App-Zertifikat
+
+Mit dem App-Zertifikat meldet sich die Plattform in jedem angebundenen Tenant bei Microsoft Graph an. Es ist zwei Jahre gültig. **Globale Einstellungen → App-Zertifikat** zeigt Ablaufdatum und Zustand; ab 30 Tagen vor dem Ablauf erscheint es auch unter „Handlungsbedarf“ in der Übersicht, im Audit-Log und als Ereignis „App-Zertifikat läuft bald ab“ für Webhooks und Mail-Alarme (Gruppe „Plattform“).
+
+- **Automatische Erneuerung** (Standard, `YLM_CERT_AUTO_RENEW=true`): 30 Tage vor dem Ablauf erzeugt die Plattform ein neues Zertifikat und hängt es per Graph `addKey` an ihre eigene App-Registrierung. Den Nachweis signiert sie mit dem noch gültigen Zertifikat; ein zusätzliches Recht braucht die App dafür nicht. Erst wenn Entra mit dem neuen Zertifikat Token ausgibt, schaltet sie um. Das alte läuft in Entra von selbst ab. Schlägt es fehl, versucht sie es alle 6 Stunden erneut und warnt wöchentlich, in der letzten Woche täglich. „Jetzt erneuern“ startet die Erneuerung sofort.
+- **Von Hand** (App-Registrierung per PowerShell-Skript angelegt, Zertifikat schon abgelaufen, automatische Erneuerung abgeschaltet): „Neues Zertifikat von Hand vorbereiten“, `.cer` herunterladen, im Entra Admin Center unter App-Registrierungen → YLM-App → Zertifikate und Geheimnisse hochladen, dann „Jetzt aktivieren“.
+- Nach einem Wechsel sofort eine Sicherung machen (`backup.sh now`): Ältere Sicherungen enthalten nur das alte Zertifikat.
 
 ### 1.7 Umzug, z. B. vom Admin-PC auf einen VPS
 
 1. Alte Installation: `docker compose exec backup sh /backup.sh now`, Archiv aus `backups\` kopieren.
-2. Neue Installation per Skript anlegen (1.2) und das Archiv nach `/opt/ylm/backups/` kopieren.
+2. Neue Installation per Skript anlegen (1.2) und das Archiv nach `/opt/ylm/backups/` kopieren. Bei verschlüsselten Sicherungen die alte Passphrase bereithalten.
 3. Wiederherstellen wie in 1.6. Die Plattform läuft danach mit allen Daten unter der neuen Adresse aus `YLM_PUBLIC_URL`.
 4. **Entra:** In der App-Registrierung der Plattform (Heim-Tenant → App-Registrierungen → „Yubikey Lifecycle Manager <Organisation>“ → Authentifizierung) die neuen Umleitungs-URIs `https://<neu>/signin-oidc` und `https://<neu>/api/tenants/consent-callback` ergänzen.
 5. **Lokale Benutzer** mit Passkey brauchen einen neuen Einrichtungslink (Passkeys gehören zur Adresse), **Agents** einen neuen Kopplungscode.
@@ -151,13 +191,20 @@ In `.env`:
 | Variable | Standard | Bedeutung |
 |---|---|---|
 | `POSTGRES_PASSWORD` | – | Datenbank-Passwort (Pflicht, nach der Installation nicht mehr ändern) |
-| `YLM_PUBLIC_URL` | aus der Einrichtung | öffentliche Adresse für Browser, Entra und Agents |
+| `YLM_PUBLIC_URL` | aus der Einrichtung | Adresse für Browser, Entra und Agents |
+| `YLM_MODE` | – | gewählte Variante (nur Information; umstellen per Installationsskript) |
 | `COMPOSE_PROFILES` | leer | `https` schaltet Caddy ein |
-| `YLM_DOMAIN` | – | Domain für Caddy |
+| `YLM_DOMAIN` | – | DNS-Name für Caddy |
+| `YLM_CADDY_TLS` | leer | `tls internal` (interne CA), `tls /certs/ylm.crt /certs/ylm.key` (eigenes Zertifikat), leer = Let's Encrypt |
+| `YLM_HTTPS_BIND` | `0.0.0.0` | Adresse, auf der Caddy die Ports 80/443 öffnet |
 | `YLM_BIND` | `127.0.0.1:8080` | Adresse, auf der der Server-Port lauscht |
+| `YLM_TRUSTED_PROXIES` | private Netze | Proxys/Connectoren, deren Forwarded-Header gelten (Komma-Liste) |
 | `UPDATER_TOKEN` | leer | Geheimnis für das Update per Klick; leer = aus |
 | `YLM_VERSION` | `latest` | Version des Server-Images festhalten |
 | `BACKUP_TIME`, `BACKUP_KEEP_DAYS`, `BACKUP_DIR` | `02:30`, `14`, `./backups` | Datensicherung (`BACKUP_TIME=off` schaltet sie ab) |
+| `BACKUP_PASSPHRASE` | vom Skript erzeugt | verschlüsselt die Sicherungen; leer = unverschlüsselt |
+| `YLM_CERT_AUTO_RENEW` | `true` | App-Zertifikat selbst erneuern (sonst nur warnen) |
+| `YLM_REQUIRE_PHISHING_RESISTANT` | `true` | Anmeldung der Admins nur mit Passkey/YubiKey (nur für Tests abschalten) |
 | `TZ` | `Europe/Berlin` | Zeitzone |
 
 Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services.server.environment`):
@@ -166,7 +213,7 @@ Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services
 |---|---|---|
 | `Ylm__DefaultSyncIntervalMinutes` | 60 | Sync-Intervall für neue Tenants |
 | `Ylm__OffboardingRetentionDays` | 30 | Aufbewahrung nach dem Offboarding |
-| `Ylm__RequirePhishingResistantSignIn` | true | Anmeldung nur mit Passkey/YubiKey (Claim `amr` = `fido`) |
+| `Ylm__AppCertificateRenewalDays` | 30 | so viele Tage vor dem Ablauf warnen und erneuern |
 | `Ylm__UpdateCheckEnabled` | true | Auf GitHub nach neuen Versionen suchen |
 
 ### 1.9 Updates
@@ -239,7 +286,7 @@ Beim Offboarding entfernt die Plattform ihre Daten nach der Aufbewahrungsfrist. 
    - Dienst `YubikeyLifecycleManagerAgent` (LocalSystem, Autostart). Adminrechte sind nötig, weil Windows den direkten FIDO-Zugriff (PIN setzen, Reset) sonst sperrt.
    - Tray-App `YlmTray.exe` startet bei jeder Anmeldung.
 2. In der Web-Oberfläche unter „Agent“ einen Kopplungscode erzeugen.
-3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben.
+3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben. Koppeln und Entkoppeln dürfen nur Mitglieder der lokalen Gruppe „Administratoren“ (ohne erhöhte Rechte reicht), weil der Agent-Dienst als SYSTEM Updates vom gekoppelten Server installiert.
 
 Protokolle: `C:\ProgramData\YubikeyLifecycleManager\Agent\logs`. Update: neueres MSI installieren.
 

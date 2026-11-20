@@ -34,33 +34,33 @@ public static class LocalAuthEndpoints
             });
         }).AllowAnonymous();
 
-        app.MapPost("/auth/passkey/options", async (LocalAuthService local) => Results.Ok(await local.LoginOptionsAsync())).AllowAnonymous();
+        app.MapPost("/auth/passkey/options", async (LocalAuthService local) => Results.Ok(await local.LoginOptionsAsync())).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
 
         app.MapPost("/auth/passkey/login", async (PasskeyLoginRequest body, LocalAuthService local, CancellationToken ct) =>
         {
             var user = await local.CompleteLoginAsync(body.RequestId, Parse<AuthenticatorAssertionRawResponse>(body.Response), ct);
             return Results.Ok(new { user.Id, user.Upn });
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
 
         app.MapPost("/auth/emergency", async (EmergencyLoginRequest body, LocalAuthService local) =>
         {
             var user = await local.EmergencyLoginAsync(body.Upn ?? "", body.Password ?? "", body.Code ?? "");
             return Results.Ok(new { user.Id, user.Upn });
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
 
         // ----- Kontoeinrichtung per Einmal-Link -----
         app.MapPost("/auth/account-setup", async (TokenRequest body, LocalAuthService local) =>
         {
             var user = await local.UserForSetupTokenAsync(body.Token);
             return Results.Ok(new { user.Upn, user.DisplayName, loginKind = user.LoginKind.ToString(), user.SetupTokenExpiresAt });
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
 
         app.MapPost("/auth/account-setup/passkey/options", async (TokenRequest body, LocalAuthService local) =>
         {
             var user = await local.UserForSetupTokenAsync(body.Token);
             if (user.LoginKind != UserLoginKind.Local) throw ApiException.Conflict("wrong_kind", "Dieses Konto meldet sich nicht mit Passkey an.");
             return Results.Ok(await local.RegistrationOptionsAsync(user));
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
 
         app.MapPost("/auth/account-setup/passkey", async (SetupPasskeyRequest body, LocalAuthService local, YlmDbContext db, CancellationToken ct) =>
         {
@@ -70,21 +70,21 @@ public static class LocalAuthEndpoints
             await db.SaveChangesAsync(ct);
             await local.SignInAsync(user, "passkey");
             return Results.Ok(new { user.Id, user.Upn });
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
 
         app.MapPost("/auth/account-setup/totp", async (TokenRequest body, LocalAuthService local) =>
         {
             var user = await local.UserForSetupTokenAsync(body.Token);
             var (secret, uri) = await local.StartTotpAsync(user);
             return Results.Ok(new { secret, uri });
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
 
         app.MapPost("/auth/account-setup/emergency", async (SetupEmergencyRequest body, LocalAuthService local) =>
         {
             var user = await local.UserForSetupTokenAsync(body.Token);
             await local.CompleteEmergencySetupAsync(user, body.Password ?? "", body.Code ?? "");
             return Results.Ok(new { user.Id, user.Upn });
-        }).AllowAnonymous();
+        }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
 
         // ----- Eigene Passkeys -----
         var me = app.MapGroup("/api/me/passkeys").RequireAuthorization();

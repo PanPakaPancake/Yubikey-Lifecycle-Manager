@@ -83,6 +83,9 @@ public static class AuditActions
     public const string AuthMethodRemoved = "authmethod.removed";
     public const string TapCreated = "authmethod.tap_created";
     public const string TapPolicyEnabled = "tenant.tap_policy_enabled";
+    public const string AppCertificateExpiring = "platform.certificate_expiring";
+    public const string AppCertificateRenewed = "platform.certificate_renewed";
+    public const string AppCertificateRenewalFailed = "platform.certificate_renewal_failed";
 }
 
 public sealed record AuditActor(ActorType Type, Guid? Id, string? Name);

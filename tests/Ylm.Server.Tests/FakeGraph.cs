@@ -13,6 +13,11 @@ public sealed class FakeGraph : IGraphClient
 {
     public Guid TenantId { get; } = Guid.NewGuid();
     public List<GraphUser> Users { get; } = [];
+    /// <summary>Benutzer mit Entra-Admin-Rolle (wie isAdmin im Registrierungsbericht).</summary>
+    public HashSet<string> Admins { get; } = [];
+
+    public Task<bool?> IsAdminAsync(string userId, CancellationToken ct = default) =>
+        Task.FromResult<bool?>(ReportAvailable ? Admins.Contains(userId) : null);
     public ConcurrentDictionary<string, List<GraphFido2Method>> Methods { get; } = new();
     public Fido2Policy Policy { get; set; } = new() { Enabled = true, IncludeTargets = [new PolicyTarget(PolicyTarget.AllUsers)] };
     public List<string> GrantedPermissions { get; set; } = [.. SetupService.RequiredApplicationPermissions];
@@ -138,6 +143,20 @@ public sealed class FakeGraph : IGraphClient
     /// <summary>Weitere Methoden pro Benutzer (zusätzlich zu den FIDO2-Methoden aus <see cref="Methods"/>).</summary>
     public ConcurrentDictionary<string, List<GraphAuthMethod>> OtherMethods { get; } = new();
     public bool ReportAvailable { get; set; } = true;
+
+    /// <summary>Simuliert die eigene App-Registrierung im Heim-Tenant (addKey).</summary>
+    public string? ApplicationObjectId { get; set; } = "app-object-1";
+    public List<(string ObjectId, byte[] Der, string Proof)> AddedKeys { get; } = [];
+    public Exception? AddKeyError { get; set; }
+
+    public Task<string?> GetApplicationObjectIdAsync(Guid appId, CancellationToken ct = default) => Task.FromResult(ApplicationObjectId);
+
+    public Task AddApplicationCertificateAsync(string applicationObjectId, byte[] certificateDer, string displayName, string proof, CancellationToken ct = default)
+    {
+        if (AddKeyError is not null) throw AddKeyError;
+        AddedKeys.Add((applicationObjectId, certificateDer, proof));
+        return Task.CompletedTask;
+    }
     public GraphTapPolicy TapPolicy { get; set; } = new(true, 60, 60, 480, false, false, 1);
     public List<(string UserId, string Pass)> Taps { get; } = [];
 
@@ -149,7 +168,7 @@ public sealed class FakeGraph : IGraphClient
     ];
 
     public Task<GraphRegistrationResult> ListUserRegistrationDetailsAsync(CancellationToken ct = default) =>
-        Task.FromResult(new GraphRegistrationResult(Users.Select(u => new GraphUserRegistration(u.Id, u.UserPrincipalName, u.DisplayName, "member", false,
+        Task.FromResult(new GraphRegistrationResult(Users.Select(u => new GraphUserRegistration(u.Id, u.UserPrincipalName, u.DisplayName, "member", Admins.Contains(u.Id),
             AllMethods(u.Id).Select(m => m.ReportName).Distinct().ToList(), null, DateTimeOffset.UtcNow)).ToList(), ReportAvailable));
 
     public Task<IReadOnlyList<GraphDirectoryUser>> ListDirectoryUsersAsync(CancellationToken ct = default) =>
@@ -197,4 +216,15 @@ public sealed class FakeGraphFactory : IGraphClientFactory
     {
         if (Tenants.TryGetValue(entraTenantId, out var g)) g.TokenRoles = null;
     }
+
+    /// <summary>Thumbprints, mit denen Entra (simuliert) schon Token ausgibt. Leer = jedes Zertifikat.</summary>
+    public HashSet<string> AcceptedCertificates { get; } = new(StringComparer.OrdinalIgnoreCase);
+    public int Resets { get; private set; }
+
+    public Task TestCertificateAsync(Guid entraTenantId, System.Security.Cryptography.X509Certificates.X509Certificate2 certificate, CancellationToken ct = default) =>
+        AcceptedCertificates.Count == 0 || AcceptedCertificates.Contains(certificate.Thumbprint)
+            ? Task.CompletedTask
+            : throw new InvalidOperationException("AADSTS700027: Client assertion contains an invalid signature.");
+
+    public void Reset() => Resets++;
 }

@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { Badge, Card, CountUp, Donut, download, Empty, ErrorBox, MenuButton, PageHeader, Spinner, useApi } from '../ui';
 import { Icon } from '../icons';
 import { useTenant } from '../tenant';
+import type { CertificateStatus } from './Platform';
 
 interface DashboardData {
   generatedAt: string; byStatus: Record<string, number>; inStock: number; total: number; needsDetails: number;
@@ -24,6 +25,7 @@ export default function DashboardPage() {
   const can = useCan();
   const q = tenantId ? '?tenantId=' + tenantId : '';
   const { data, error, loading } = useApi<DashboardData>('/api/dashboard' + q, [tenantId]);
+  const { data: cert } = useApi<CertificateStatus>(can('ManageSettings') ? '/api/platform/certificate' : null);
   // Kennzahlen führen ins passend gefilterte Inventar (auf Partnerebene: über alle Tenants).
   const keysLink = (status: KeyStatus) => '/keys?status=' + status;
   const maxMonth = Math.max(1, ...(data?.issuedPerMonth.map((m) => m.count) ?? [1]));
@@ -46,7 +48,7 @@ export default function DashboardPage() {
       {!data && loading && <Spinner label="Wird geladen …" />}
       {data && (
         <>
-          <ActionItems data={data} keysLink={keysLink} />
+          <ActionItems data={data} keysLink={keysLink} cert={cert} />
 
           <div className="grid cols-4">
             <Kpi label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
@@ -144,8 +146,15 @@ function Kpi({ label, value, sub, to, tone, children, aside }: { label: string; 
 }
 
 /** „Handlungsbedarf“: alles, was ein Admin heute anfassen sollte, mit direktem Link. */
-function ActionItems({ data, keysLink }: { data: DashboardData; keysLink: (s: KeyStatus) => string }) {
+function ActionItems({ data, keysLink, cert }: { data: DashboardData; keysLink: (s: KeyStatus) => string; cert?: CertificateStatus }) {
   const items: { tone: 'error' | 'warn' | 'info'; text: ReactNode; to: string; cta: string }[] = [];
+  if (cert && cert.state !== 'ok' && cert.state !== 'missing') items.push({
+    tone: cert.state === 'warning' ? 'warn' : 'error',
+    text: cert.state === 'expired'
+      ? <>Das App-Zertifikat ist abgelaufen. Die Plattform kann sich bei keinem Tenant mehr anmelden.</>
+      : <>Das App-Zertifikat läuft in {cert.daysLeft} Tag(en) ab{cert.lastError ? ', die automatische Erneuerung ist fehlgeschlagen' : cert.nextThumbprint ? ', ein neues wartet auf Entra' : ''}.</>,
+    to: '/platform#certificate', cta: 'Zertifikat',
+  });
   for (const t of data.tenants) {
     if (t.checksFailed > 0) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: {t.checksFailed} FIDO2-Prüfung(en) fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Beheben' });
     if (t.lastSyncSucceeded === false) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: letzte Synchronisation fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Ansehen' });

@@ -43,6 +43,12 @@ public interface IGraphClient
     /// <summary>Schaltet die Methode „Befristeter Zugriffspass“ ein (ohne Ziel: für alle Benutzer).</summary>
     Task EnableTapPolicyAsync(CancellationToken ct = default);
     Task<GraphTemporaryAccessPass> CreateTemporaryAccessPassAsync(string userId, DateTimeOffset? startDateTime, int? lifetimeInMinutes, bool? isUsableOnce, CancellationToken ct = default);
+    /// <summary>Hat der Benutzer eine Entra-Admin-Rolle? Null = nicht ermittelbar (Bericht braucht Entra ID P1).</summary>
+    Task<bool?> IsAdminAsync(string userId, CancellationToken ct = default);
+    /// <summary>Objekt-ID der eigenen App-Registrierung (nur im Heim-Tenant). Null = nicht lesbar.</summary>
+    Task<string?> GetApplicationObjectIdAsync(Guid appId, CancellationToken ct = default);
+    /// <summary>Hängt der eigenen App ein neues Zertifikat an (addKey). Der Nachweis ist ein mit dem aktuellen Zertifikat signiertes JWT.</summary>
+    Task AddApplicationCertificateAsync(string applicationObjectId, byte[] certificateDer, string displayName, string proof, CancellationToken ct = default);
 }
 
 public interface IGraphClientFactory
@@ -54,6 +60,12 @@ public interface IGraphClientFactory
     /// consent change: the token's "roles" claim only reflects permissions granted when it was issued.
     /// </summary>
     void Invalidate(Guid entraTenantId);
+
+    /// <summary>Holt mit dem angegebenen Zertifikat ein Token im Tenant; wirft, wenn Entra es (noch) nicht annimmt.</summary>
+    Task TestCertificateAsync(Guid entraTenantId, System.Security.Cryptography.X509Certificates.X509Certificate2 certificate, CancellationToken ct = default);
+
+    /// <summary>Verwirft alle zwischengespeicherten Anmeldungen, z. B. nach einem Zertifikatswechsel.</summary>
+    void Reset();
 }
 
 public delegate Task<string> GraphTokenProvider(CancellationToken ct);
@@ -246,6 +258,43 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
         using var doc = await SendAsync(HttpMethod.Get,
             $"{V1}/users?$search={search}&$top={top}&$select=id,userPrincipalName,displayName,mail,department,accountEnabled&$count=true", ct, eventual: true);
         return doc!.RootElement.GetProperty("value").EnumerateArray().Select(ToUser).ToList();
+    }
+
+    public async Task<bool?> IsAdminAsync(string userId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var doc = await SendAsync(HttpMethod.Get,
+                $"{V1}/reports/authenticationMethods/userRegistrationDetails/{Uri.EscapeDataString(userId)}?$select=id,isAdmin", ct, allowNotFound: true);
+            return doc is null ? null : doc.RootElement.TryGetProperty("isAdmin", out var a) && a.ValueKind is JsonValueKind.True or JsonValueKind.False ? a.GetBoolean() : null;
+        }
+        catch (GraphException ex) when (ex.StatusCode == 403)
+        {
+            return null;
+        }
+    }
+
+    public async Task<string?> GetApplicationObjectIdAsync(Guid appId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var doc = await SendAsync(HttpMethod.Get, $"{V1}/applications(appId='{appId}')?$select=id", ct, allowNotFound: true);
+            return doc is null ? null : Str(doc.RootElement, "id");
+        }
+        catch (GraphException ex) when (ex.StatusCode is 401 or 403)
+        {
+            return null;
+        }
+    }
+
+    public async Task AddApplicationCertificateAsync(string applicationObjectId, byte[] certificateDer, string displayName, string proof, CancellationToken ct = default)
+    {
+        using var _ = await SendAsync(HttpMethod.Post, $"{V1}/applications/{Uri.EscapeDataString(applicationObjectId)}/addKey", ct, new
+        {
+            keyCredential = new { type = "AsymmetricX509Cert", usage = "Verify", key = Convert.ToBase64String(certificateDer), displayName },
+            passwordCredential = (object?)null,
+            proof,
+        });
     }
 
     public async Task<GraphUser?> GetUserAsync(string idOrUpn, CancellationToken ct = default)
