@@ -364,3 +364,16 @@
 .ver-kind-security { --k: var(--c-red, #ef4444); }
 @media (max-width: 600px) { .ver-changes li { flex-direction: column; gap: 4px; } .ver-update-actions { margin-left: 0; } }
 @media (prefers-reduced-motion: reduce) { .hero-chip-update, .ver-item { animation: none; } }
+
+/* Größeres Logo in der Seitenleiste */
+.sidebar .brand { gap: 12px; padding-top: 8px; }
+.sidebar .brand .ylm-wordmark-eyebrow { font-size: .72rem; }
+.sidebar .brand .ylm-wordmark-name { font-size: 1.42rem; }
+.sidebar .brand .ylm-wordmark small { font-size: .8rem; }
+
+/* Whitelabeling: Farbvorschläge aus dem Logo */
+.color-field { flex-wrap: wrap; }
+.color-suggestions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 10px; }
+.swatch { display: inline-flex; align-items: center; gap: 8px; padding: 5px 10px 5px 6px; border-radius: 999px; animation: bento-pop .35s var(--spring, ease) both; }
+.swatch-dot { width: 20px; height: 20px; border-radius: 50%; background: var(--sw); box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .15); }
+.swatch.selected { border-color: var(--sw); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sw) 35%, transparent); }
