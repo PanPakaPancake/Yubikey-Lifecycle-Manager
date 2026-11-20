@@ -84,4 +84,13 @@ jobs:
       - name: GitHub-Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" agent-package/*.msi --title "$GITHUB_REF_NAME" --generate-notes
+        # Beschreibung aus web/src/changelog.md (Abschnitt "## <Version> · <Datum>"); fehlt er, erzeugt GitHub die Notizen.
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          awk -v v="$v" '/^## /{ if (on) exit; split($2, a, " "); on = (a[1] == v) } on' web/src/changelog.md > notes.md
+          if [ -s notes.md ]; then
+            gh release create "$GITHUB_REF_NAME" agent-package/*.msi --title "$GITHUB_REF_NAME" --notes-file notes.md
+          else
+            echo "::warning::Kein Abschnitt für $v in web/src/changelog.md, GitHub erzeugt die Notizen."
+            gh release create "$GITHUB_REF_NAME" agent-package/*.msi --title "$GITHUB_REF_NAME" --generate-notes
+          fi

@@ -68,6 +68,21 @@ public sealed class UpdateTests : IAsyncLifetime
         Assert.Equal(newer, UpdateService.IsNewer(candidate, current));
 
     [Fact]
+    public async Task Every_signed_in_user_sees_the_version_summary_but_only_admins_may_apply()
+    {
+        var auditor = await LoginAsync("auditor@home.example", PlatformRole.Auditor);
+        var s = await Json(await auditor.GetAsync("/api/updates/summary"));
+        Assert.Equal(UpdateService.CurrentVersion, s.GetProperty("currentVersion").GetString());
+        Assert.False(s.GetProperty("updateAvailable").GetBoolean());
+        Assert.False(s.GetProperty("canApply").GetBoolean());
+        Assert.Equal(HttpStatusCode.Forbidden, (await auditor.GetAsync("/api/platform/updates")).StatusCode);
+
+        var owner = await LoginAsync("owner@home.example", PlatformRole.Owner);
+        Assert.True((await Json(await owner.GetAsync("/api/updates/summary"))).GetProperty("canApply").GetBoolean());
+        Assert.Equal(HttpStatusCode.Unauthorized, (await Client().GetAsync("/api/updates/summary")).StatusCode);
+    }
+
+    [Fact]
     public async Task Owner_sees_versions_and_admins_can_download_the_bundled_agent()
     {
         var owner = await LoginAsync("owner@home.example", PlatformRole.Owner);

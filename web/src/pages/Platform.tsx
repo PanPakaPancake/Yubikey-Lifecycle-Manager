@@ -390,7 +390,14 @@ function UpdatesCard() {
   };
 
   const status = data?.updater.status;
+  // Aus der Übersicht oder dem Versionsverlauf kommend (/platform#updates): direkt zu dieser Karte springen.
+  const location = useLocation();
+  const loaded = data != null;
+  useEffect(() => {
+    if (loaded && location.hash === '#updates') document.getElementById('updates')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [loaded, location.hash]);
   return (
+    <div id="updates" className="anchor-target">
     <Card title="Version und Updates" actions={<button disabled={busy || phase !== 'idle'} onClick={() => setRefresh((r) => r + 1)}>Jetzt prüfen</button>}>
       <ErrorBox error={error ?? actionError} />
       {!data && !error && <Spinner />}
@@ -401,7 +408,7 @@ function UpdatesCard() {
             <tr><th>Neueste Version</th><td>{data.latestVersion
               ? <><span className="mono">{data.latestVersion}</span> {data.updateAvailable ? <Badge tone="warn">Update verfügbar</Badge> : <Badge tone="ok">aktuell</Badge>}
                 {data.publishedAt && <span className="small muted"> vom {fmtDate(data.publishedAt, false)}</span>}
-                {data.releaseUrl && <> · <a href={data.releaseUrl} target="_blank" rel="noreferrer">Änderungen</a></>}</>
+                {data.updateAvailable && <> · <Link to="/versionen">Was ist neu?</Link></>}{data.releaseUrl && <> · <a href={data.releaseUrl} target="_blank" rel="noreferrer">auf GitHub</a></>}</>
               : <span className="muted">{data.error ?? 'unbekannt'}</span>}</td></tr>
             <AgentUpdates agent={data.agent} onChanged={reload} />
             <tr><th>Update per Klick</th><td>{!data.updater.configured
@@ -425,5 +432,6 @@ function UpdatesCard() {
         )}
       </>}
     </Card>
+    </div>
   );
 }

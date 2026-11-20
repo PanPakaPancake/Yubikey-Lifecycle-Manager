@@ -32,6 +32,8 @@ import IdentifyPage from './pages/Identify';
 import IntegrationsPage from './pages/Integrations';
 import PasskeyInfoPage from './pages/PasskeyInfo';
 import RolloutPage from './pages/Rollout';
+import VersionsPage from './pages/Versions';
+import type { UpdateSummary } from './changelog';
 import { isRegisterPath } from './register';
 import { ChooseTenant, TenantProvider, TenantSwitcher, useTenant } from './tenant';
 
@@ -99,7 +101,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   const [menuOpen, setMenuOpen] = useState(false);
   // Close the mobile menu on every navigation.
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
-  const { data: updates } = useApi<{ updateAvailable: boolean; latestVersion?: string }>(can('ManageSettings') ? '/api/platform/updates' : null);
+  const { data: updates } = useApi<UpdateSummary>('/api/updates/summary');
   useReveal(location.pathname);
   const item = (to: string, icon: IconName, label: ReactNode, end = false) => (
     <NavLink to={to} end={end} title={typeof label === 'string' ? label : undefined}><Icon name={icon} /><span className="nav-label">{label}</span></NavLink>
@@ -138,13 +140,14 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           {item('/profiles', 'sliders', 'Profile')}
           {can('ManageUsers') && item('/users', 'users', 'Benutzer & Rollen')}
           {can('ManageApiKeys') && item('/partner/notifications', 'bell', 'Benachrichtigungen')}
-          {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
+          {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && updates.canApply && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
           {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
           </div>
 
           <div className="nav-group nav-group-help">
           <div className="section">Hilfe</div>
           {item('/passkey', 'info', 'Passkeys erklärt')}
+          {item('/versionen', 'history', <>Versionsverlauf{updates?.updateAvailable && <span className="dot-warn pulse" title={`Version ${updates.latestVersion} ist verfügbar`} />}</>)}
           </div>
         </nav>
         <div className="sidebar-foot">
@@ -159,7 +162,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
             <ThemeToggle />
             <button type="button" className="ghost small" onClick={logout}><Icon name="logout" size={16} />Abmelden</button>
           </div>
-          {me.version && <div className="small muted version">Version {me.version}</div>}
+          {me.version && <Link to="/versionen" className="small muted version" title="Versionsverlauf">Version {me.version}{updates?.updateAvailable && <> · Update auf {updates.latestVersion}</>}</Link>}
         </div>
       </aside>
       <main className="main">
@@ -205,6 +208,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/agents" element={<AgentsPage />} />
           <Route path="/users" element={<UsersPage />} />
           <Route path="/platform" element={<PlatformPage />} />
+          <Route path="/versionen" element={<VersionsPage />} />
           <Route path="/account" element={<AccountPage />} />
           <Route path="/passkey/*" element={<PasskeyInfoPage authenticated embedded />} />
           <Route path="/login" element={<Navigate to="/" replace />} />

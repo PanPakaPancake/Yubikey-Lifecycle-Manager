@@ -7,6 +7,7 @@ import { Badge, Card, CountUp, Donut, download, Empty, ErrorBox, MenuButton, Pag
 import { Icon, type IconName } from '../icons';
 import { useTenant } from '../tenant';
 import type { CertificateStatus } from './Platform';
+import type { UpdateSummary } from '../changelog';
 
 interface DashboardData {
   generatedAt: string; byStatus: Record<string, number>; inStock: number; total: number; needsDetails: number;
@@ -27,6 +28,7 @@ export default function DashboardPage() {
   const q = tenantId ? '?tenantId=' + tenantId : '';
   const { data, error, loading } = useApi<DashboardData>('/api/dashboard' + q, [tenantId]);
   const { data: cert } = useApi<CertificateStatus>(can('ManageSettings') ? '/api/platform/certificate' : null);
+  const { data: update } = useApi<UpdateSummary>('/api/updates/summary');
   // Kennzahlen führen ins passend gefilterte Inventar (auf Partnerebene: über alle Tenants).
   const keysLink = (status: KeyStatus) => '/keys?status=' + status;
   const maxMonth = Math.max(1, ...(data?.issuedPerMonth.map((m) => m.count) ?? [1]));
@@ -50,8 +52,8 @@ export default function DashboardPage() {
       {data && (
         <>
           <div className="dash">
-          <DashHero data={data} cert={cert} />
-          <ActionItems data={data} keysLink={keysLink} cert={cert} />
+          <DashHero data={data} cert={cert} update={update} />
+          <ActionItems data={data} keysLink={keysLink} cert={cert} update={update} />
 
           <div className="grid cols-4 dash-kpis">
             <Kpi icon="users" className="kpi-coverage" label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
@@ -139,13 +141,13 @@ export default function DashboardPage() {
  * Einstieg im Stil der Passkey-Seite: Begrüßung, Lage in einem Satz und Abkürzungen.
  * Gestaltung in bento.css.
  */
-function DashHero({ data, cert }: { data: DashboardData; cert?: CertificateStatus }) {
+function DashHero({ data, cert, update }: { data: DashboardData; cert?: CertificateStatus; update?: UpdateSummary }) {
   const { me } = useAuth();
   const h = new Date().getHours();
   const hello = h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend';
   const first = me.user?.displayName?.split(/\s+/)[0];
   const todo = data.tenants.reduce((n, t) => n + (t.checksFailed > 0 ? 1 : 0) + (t.lastSyncSucceeded === false ? 1 : 0), 0)
-    + (cert && cert.state !== 'ok' && cert.state !== 'missing' ? 1 : 0) + (data.byStatus.Locked ? 1 : 0) + (data.vulnerableKeys ? 1 : 0) + (data.pendingApprovals ? 1 : 0) + (data.openTodos ? 1 : 0) + (data.needsDetails ? 1 : 0);
+    + (cert && cert.state !== 'ok' && cert.state !== 'missing' ? 1 : 0) + (data.byStatus.Locked ? 1 : 0) + (data.vulnerableKeys ? 1 : 0) + (data.pendingApprovals ? 1 : 0) + (data.openTodos ? 1 : 0) + (data.needsDetails ? 1 : 0) + (update?.updateAvailable && update.canApply ? 1 : 0);
   return (
     <section className="dash-hero">
       <div className="dash-hero-text">
@@ -158,6 +160,9 @@ function DashHero({ data, cert }: { data: DashboardData; cert?: CertificateStatu
         <div className="dash-hero-links">
           <Link to="/register" className="hero-chip"><Icon name="keyPlus" size={15} />Key registrieren</Link>
           <Link to="/passkey" className="hero-chip"><Icon name="info" size={15} />Passkeys erklärt</Link>
+          {update && (update.updateAvailable
+            ? <Link to="/versionen" className="hero-chip hero-chip-update" title={`Installiert: ${update.currentVersion}`}><Icon name="sparkle" size={15} />Update auf {update.latestVersion} verfügbar</Link>
+            : <Link to="/versionen" className="hero-chip hero-chip-version" title="Versionsverlauf"><Icon name="history" size={15} />Version {update.currentVersion}{!update.error && ' · aktuell'}</Link>)}
         </div>
       </div>
       <div className="dash-hero-art"><span className="pk-float"><KeyArt size={190} glow /></span></div>
@@ -184,7 +189,7 @@ function Kpi({ label, value, sub, to, tone, children, aside, icon, className = '
 }
 
 /** „Handlungsbedarf“: alles, was ein Admin heute anfassen sollte, mit direktem Link. */
-function ActionItems({ data, keysLink, cert }: { data: DashboardData; keysLink: (s: KeyStatus) => string; cert?: CertificateStatus }) {
+function ActionItems({ data, keysLink, cert, update }: { data: DashboardData; keysLink: (s: KeyStatus) => string; cert?: CertificateStatus; update?: UpdateSummary }) {
   const items: { tone: 'error' | 'warn' | 'info'; text: ReactNode; to: string; cta: string }[] = [];
   if (cert && cert.state !== 'ok' && cert.state !== 'missing') items.push({
     tone: cert.state === 'warning' ? 'warn' : 'error',
@@ -201,6 +206,7 @@ function ActionItems({ data, keysLink, cert }: { data: DashboardData; keysLink: 
   if (data.vulnerableKeys > 0) items.push({ tone: 'warn', text: <>{data.vulnerableKeys} Key(s) mit Firmware-Sicherheitshinweis</>, to: '#firmware', cta: 'Firmware-Stände' });
   if (data.pendingApprovals > 0) items.push({ tone: 'warn', text: <>{data.pendingApprovals} Breakglass-Antrag/Anträge warten auf Freigabe</>, to: '/approvals', cta: 'Freigaben' });
   if (data.openTodos > 0) items.push({ tone: 'info', text: <>{data.openTodos} offene(s) ToDo(s): Personen, die einen Key bekommen sollen</>, to: '/todos', cta: 'ToDo-Liste' });
+  if (update?.updateAvailable && update.canApply) items.push({ tone: 'info', text: <>Version {update.latestVersion} ist verfügbar (installiert: {update.currentVersion})</>, to: '/versionen', cta: 'Was ist neu' });
   if (data.needsDetails > 0) items.push({ tone: 'info', text: <>{data.needsDetails} selbst registrierte Key(s) ohne Seriennummer/Firmware</>, to: '/keys/identify', cta: 'Nacherfassen' });
 
   if (items.length === 0) return (
