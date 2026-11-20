@@ -1,3 +1,4 @@
+import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './icons';
 
@@ -53,7 +54,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     <ToastCtx.Provider value={api}>
       <ConfirmCtx.Provider value={confirm}>
         {children}
-        <div className="toasts" aria-live="polite">
+        {createPortal(<div className="toasts" aria-live="polite">
           {toasts.map((t) => (
             <div key={t.id} className={'toast tone-' + t.tone + (t.leaving ? ' leaving' : '')} role={t.tone === 'error' ? 'alert' : 'status'}>
               <span className="toast-icon"><Icon name={toneIcon[t.tone]} size={16} /></span>
@@ -61,8 +62,9 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               <button type="button" className="icon-btn" aria-label="Schließen" onClick={() => dismiss(t.id)}><Icon name="x" size={14} /></button>
             </div>
           ))}
-        </div>
-        {dialog && <ConfirmDialog {...dialog} onClose={close} />}
+        </div>, document.body)}
+        {/* An body hängen und über alle Dialoge legen: Bestätigungen kommen oft aus einem offenen Dialog heraus. */}
+        {dialog && createPortal(<ConfirmDialog {...dialog} onClose={close} />, document.body)}
       </ConfirmCtx.Provider>
     </ToastCtx.Provider>
   );
@@ -77,7 +79,7 @@ function ConfirmDialog({ title, message, confirmLabel = 'Bestätigen', danger, o
     return () => window.removeEventListener('keydown', h);
   }, [onClose]);
   return (
-    <div className="modal-backdrop" onMouseDown={() => onClose(false)}>
+    <div className="modal-backdrop confirm-backdrop" onMouseDown={() => onClose(false)}>
       <div className="modal confirm" role="alertdialog" aria-modal="true" aria-label={title} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-body confirm-body">
           <span className={'confirm-icon' + (danger ? ' danger' : '')}><Icon name={danger ? 'alert' : 'info'} size={20} /></span>
