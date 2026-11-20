@@ -70,4 +70,13 @@ public sealed class SecurityHeaderTests : IDisposable
         Assert.Equal("nosniff", res.Headers.GetValues("X-Content-Type-Options").Single());
         Assert.Contains("frame-ancestors 'none'", res.Headers.GetValues("Content-Security-Policy").Single());
     }
+
+    [Fact]
+    public async Task Agent_hub_with_invalid_token_answers_401_not_login_redirect()
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/hubs/agent/negotiate?negotiateVersion=1");
+        req.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", "ylma_00000000000000000000000000000000_ungueltig");
+        var res = await _app.Client().SendAsync(req);
+        Assert.Equal(HttpStatusCode.Unauthorized, res.StatusCode);
+    }
 }

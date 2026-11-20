@@ -37,6 +37,8 @@ public sealed class AgentSettingsStore(string path, ISecretProtector protector)
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
     private readonly Lock _lock = new();
 
+    public string FilePath => path;
+
     public AgentSettings Load()
     {
         try
