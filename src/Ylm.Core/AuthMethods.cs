@@ -91,6 +91,45 @@ public static class AuthMethodCatalog
         _ => kind,
     };
 
+    private static readonly HashSet<Guid> AuthenticatorAaguids =
+    [
+        Guid.Parse("90a3ccdf-635c-4729-a248-9b709135078f"), // Microsoft Authenticator iOS
+        Guid.Parse("de1e552d-db1d-4423-a619-566b625cdc84"), // Microsoft Authenticator Android
+    ];
+
+    private static readonly HashSet<Guid> WindowsHelloAaguids =
+    [
+        Guid.Parse("08987058-cadc-4b81-b6e1-30de50dcbe96"),
+        Guid.Parse("9ddd1817-af5a-4672-a2b9-3e3dd95000a9"),
+        Guid.Parse("6028b017-b1d4-4c02-b4b3-afcdafc96bb2"),
+    ];
+
+    private static readonly HashSet<Guid> SyncedAaguids =
+    [
+        Guid.Empty, // iCloud-Schlüsselbund meldet keine AAGUID
+        Guid.Parse("fbfc3007-154e-4ecc-8c0b-6e020557d7bd"), // iCloud-Schlüsselbund
+        Guid.Parse("ea9b8d66-4d01-1d21-3ce4-b6b48cb575d4"), // Google Passwortmanager
+        Guid.Parse("adce0002-35bc-c60a-648b-0b25f1f05503"), // Chrome auf dem Mac
+        Guid.Parse("bada5566-a7aa-401f-bd96-45619a55120d"), // 1Password
+        Guid.Parse("d548826e-79b4-db40-a3d8-11116f7e8349"), // Bitwarden
+        Guid.Parse("531126d6-e717-415c-9320-3d9aa6981239"), // Dashlane
+        Guid.Parse("53414d53-554e-4700-0000-000000000000"), // Samsung Pass
+    ];
+
+    /// <summary>
+    /// Ordnet eine FIDO2-Methode aus /authentication/methods ein. Graph meldet Passkeys im Authenticator und in
+    /// Windows Hello ebenfalls als fido2; erst AAGUID bzw. Modell zeigen, ob es ein Sicherheitsschlüssel ist.
+    /// </summary>
+    public static string Fido2ReportName(Guid? aaGuid, string? model)
+    {
+        if ((aaGuid is { } a && AuthenticatorAaguids.Contains(a)) || model?.Contains("Authenticator", StringComparison.OrdinalIgnoreCase) == true)
+            return "passKeyDeviceBoundAuthenticator";
+        if ((aaGuid is { } w && WindowsHelloAaguids.Contains(w)) || model?.Contains("Windows Hello", StringComparison.OrdinalIgnoreCase) == true)
+            return "passKeyDeviceBoundWindowsHello";
+        if (aaGuid is { } s && SyncedAaguids.Contains(s)) return "passKeySynced";
+        return "passKeyDeviceBound";
+    }
+
     /// <summary>Methodentypen, die auf der Rollout-Seite entfernt werden dürfen (Graph-Pfad pro Typ).</summary>
     public static readonly IReadOnlyDictionary<string, string> RemovablePaths = new Dictionary<string, string>
     {

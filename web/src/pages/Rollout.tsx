@@ -19,7 +19,7 @@ export interface RolloutUser {
 }
 interface MethodInfo { name: string; label: string; strength: 'None' | 'Mfa' | 'PhishingResistant'; isPasskey: boolean }
 export interface RolloutData { generatedAt: string; fromReport: boolean; hasSignInData: boolean; targetDefined: boolean; methods: MethodInfo[]; users: RolloutUser[] }
-interface LiveMethod { id: string; kind: string; reportName: string; label: string; strength: MethodInfo['strength']; isPasskey: boolean; displayName?: string | null; detail?: string | null; createdDateTime?: string | null; removable: boolean }
+interface LiveMethod { id: string; kind: string; reportName: string; label: string; strength: MethodInfo['strength']; isPasskey: boolean; displayName?: string | null; detail?: string | null; createdDateTime?: string | null; removable: boolean; device?: string | null; isSecurityKey?: boolean }
 interface TapPolicy { enabled: boolean; defaultLifetimeInMinutes: number; minimumLifetimeInMinutes: number; maximumLifetimeInMinutes: number; defaultUsableOnce: boolean; isUsableOnceEnforced: boolean; targetCount: number }
 interface TapResult { userId: string; upn: string; displayName?: string | null; pass?: string | null; startDateTime?: string | null; lifetimeInMinutes?: number | null; isUsableOnce?: boolean | null; error?: string | null }
 interface RemovalResult { userId: string; upn: string; removed: number; removedLabels: string[]; skipped?: string | null; error?: string | null }
@@ -400,14 +400,15 @@ function UserDialog({ tenantId, user, data, onClose, onChanged, onTap }: { tenan
         <ul className="ro-live">
           {live.map((m) => (
             <li key={m.id} className={'s-' + m.strength}>
-              <span className="ro-live-icon"><Icon name={m.isPasskey ? 'key' : m.kind === 'phone' ? 'phone' : m.kind === 'temporaryAccessPass' ? 'ticket' : m.strength === 'PhishingResistant' ? 'monitor' : m.kind === 'password' ? 'scroll' : 'shield'} size={18} /></span>
+              <span className="ro-live-icon"><Icon name={m.isSecurityKey ? 'key' : m.isPasskey && m.kind === 'fido2' && m.reportName.toLowerCase().includes('authenticator') ? 'phone' : m.isPasskey ? 'key' : m.kind === 'phone' ? 'phone' : m.kind === 'temporaryAccessPass' ? 'ticket' : m.strength === 'PhishingResistant' ? 'monitor' : m.kind === 'password' ? 'scroll' : 'shield'} size={18} /></span>
               <div>
                 <strong>{m.label}</strong>
-                <div className="small muted">{[m.displayName, m.detail, m.createdDateTime ? 'seit ' + fmtDate(m.createdDateTime, false) : null].filter(Boolean).join(' · ') || ' '}</div>
+                {m.device && <div className="ro-device"><Icon name="monitor" size={14} />{m.device}</div>}
+                <div className="small muted">{methodDetails(m).join(' · ') || ' '}</div>
               </div>
               {m.removable && can('RemoveAuthMethods')
                 ? <button type="button" className="ghost small danger" disabled={busyId === m.id} onClick={() => remove(m)}><Icon name="trash" size={15} />{busyId === m.id ? '…' : 'Entfernen'}</button>
-                : m.kind === 'fido2' ? <span className="small muted" title="Passkeys auf Sicherheitsschlüsseln werden über das Inventar gesperrt">über Inventar</span> : <span />}
+                : m.isSecurityKey ? <span className="small muted" title="Passkeys auf Sicherheitsschlüsseln werden über das Inventar gesperrt">über Inventar</span> : <span />}
             </li>
           ))}
         </ul>
@@ -415,6 +416,14 @@ function UserDialog({ tenantId, user, data, onClose, onChanged, onTap }: { tenan
       <p className="small muted">Microsoft aktualisiert den Registrierungsbericht mit etwas Verzögerung. Diese Liste kommt live aus Entra.</p>
     </Modal>
   );
+}
+
+/** Zusatzangaben ohne Dopplungen (z. B. „Authenticator - iOS“ steckt schon in „Microsoft Authenticator - iOS“). */
+function methodDetails(m: LiveMethod) {
+  const name = m.device ? null : m.displayName;
+  const parts = [name, m.detail].filter((x): x is string => !!x);
+  const unique = parts.filter((p, i) => !parts.some((q, j) => j !== i && q.length > p.length && q.toLowerCase().includes(p.toLowerCase())) && parts.indexOf(p) === i);
+  return [...unique, m.createdDateTime ? 'seit ' + fmtDate(m.createdDateTime, false) : null].filter((x): x is string => !!x);
 }
 
 const lifetimes = [60, 120, 240, 480, 1440, 2880, 10080, 43200];

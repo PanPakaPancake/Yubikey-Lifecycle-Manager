@@ -36,7 +36,7 @@ public sealed record GraphDirectoryUser(
 /// <summary>Eine registrierte Anmeldemethode eines Benutzers (live aus /authentication/methods).</summary>
 /// <param name="Kind">Typ ohne Präfix/Suffix, z. B. „phone“, „microsoftAuthenticator“, „fido2“.</param>
 /// <param name="ReportName">Name wie im Bericht (methodsRegistered), z. B. „mobilePhone“.</param>
-public sealed record GraphAuthMethod(string Id, string Kind, string ReportName, string? DisplayName, string? Detail, DateTimeOffset? CreatedDateTime);
+public sealed record GraphAuthMethod(string Id, string Kind, string ReportName, string? DisplayName, string? Detail, DateTimeOffset? CreatedDateTime, string? Device = null);
 
 /// <summary>Einstellungen der Methode „Befristeter Zugriffspass“ im Tenant.</summary>
 public sealed record GraphTapPolicy(bool Enabled, int DefaultLifetimeInMinutes, int MinimumLifetimeInMinutes, int MaximumLifetimeInMinutes, bool DefaultUsableOnce, bool IsUsableOnceEnforced, int TargetCount);
