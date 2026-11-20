@@ -15,6 +15,17 @@ public sealed class FakeEntraBootstrap : IEntraBootstrap
     public List<AppProvisioningRequest> Requests { get; } = [];
     public int Polls { get; private set; }
 
+    public List<(string Code, string RedirectUri, string Verifier)> Redeemed { get; } = [];
+
+    public string BuildAuthorizeUrl(string redirectUri, string state, string codeChallenge) =>
+        $"https://login.example/authorize?redirect_uri={Uri.EscapeDataString(redirectUri)}&state={Uri.EscapeDataString(state)}&code_challenge={codeChallenge}&code_challenge_method=S256";
+
+    public Task<DeviceCodePoll> RedeemCodeAsync(string code, string redirectUri, string codeVerifier, CancellationToken ct = default)
+    {
+        Redeemed.Add((code, redirectUri, codeVerifier));
+        return Task.FromResult(new DeviceCodePoll(DeviceCodeStatus.SignedIn, "delegated-token", DateTimeOffset.UtcNow.AddHours(1)));
+    }
+
     public Task<DeviceCodeStart> StartDeviceCodeAsync(CancellationToken ct = default) =>
         Task.FromResult(new DeviceCodeStart("device-123", "ABCD-EFGH", "https://microsoft.com/devicelogin", 900, 1));
 
@@ -83,6 +94,41 @@ public sealed class SetupAssistantTests : IAsyncLifetime
             Assert.Equal("pending", poll.GetProperty("status").GetString());
         }
         throw new Xunit.Sdk.XunitException("Anmeldung nicht abgeschlossen");
+    }
+
+    [Fact]
+    public async Task Interactive_sign_in_with_pasted_redirect_address()
+    {
+        var start = await Json(await _client.PostAsync("/api/setup/signin/interactive", null));
+        var url = start.GetProperty("url").GetString()!;
+        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(new Uri(url).Query);
+        var state = query["state"].ToString();
+        Assert.Equal("S256", query["code_challenge_method"].ToString());
+        Assert.StartsWith("http://localhost", start.GetProperty("redirectUri").GetString());
+
+        // Der Rücksprung braucht kein Setup-Token, aber den passenden state.
+        var anonymous = _app.Client();
+        var wrong = await Json(await anonymous.PostAsJsonAsync("/api/setup/signin/complete", new { url = "http://localhost/?code=abc&state=falsch" }));
+        Assert.Equal("expired", wrong.GetProperty("status").GetString());
+        var denied = await Json(await anonymous.PostAsJsonAsync("/api/setup/signin/complete", new { url = $"http://localhost/?error=access_denied&error_description=abgelehnt&state={state}" }));
+        Assert.Equal("failed", denied.GetProperty("status").GetString());
+
+        var ok = await Json(await anonymous.PostAsJsonAsync("/api/setup/signin/complete", new { url = $"http://localhost/?code=abc123&state={Uri.EscapeDataString(state)}&session_state=x" }));
+        Assert.Equal("signed_in", ok.GetProperty("status").GetString());
+        var (code, redirect, verifier) = Assert.Single(_app.Bootstrap.Redeemed);
+        Assert.Equal("abc123", code);
+        Assert.Equal(start.GetProperty("redirectUri").GetString(), redirect);
+        // PKCE: Challenge = SHA256(Verifier)
+        var challenge = Convert.ToBase64String(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.ASCII.GetBytes(verifier))).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        Assert.Equal(challenge, query["code_challenge"].ToString());
+
+        // Einmalig: derselbe state geht nicht noch einmal.
+        var again = await Json(await anonymous.PostAsJsonAsync("/api/setup/signin/complete", new { url = $"http://localhost/?code=abc123&state={Uri.EscapeDataString(state)}" }));
+        Assert.Equal("expired", again.GetProperty("status").GetString());
+
+        // Der Assistent im ursprünglichen Fenster sieht die Anmeldung beim nächsten Abfragen.
+        var poll = await Json(await _client.PostAsync("/api/setup/signin/poll", null));
+        Assert.Equal("signed_in", poll.GetProperty("status").GetString());
     }
 
     [Fact]

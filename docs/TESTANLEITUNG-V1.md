@@ -117,9 +117,9 @@ Browser (Edge oder Chrome): `http://localhost:8080/setup` (Variante B: `https://
 
 ### 2.2 Bei Microsoft anmelden
 
-1. **Bei Microsoft anmelden** klicken. Der Assistent zeigt einen Code (z. B. `ABCD-EFGH`).
-2. **Code kopieren und Anmeldeseite öffnen** klicken. Es öffnet sich `microsoft.com/devicelogin` in einem kleinen Fenster.
-3. Code einfügen, mit dem **Global Admin des Test-Tenants** anmelden. Microsoft fragt, ob du dich bei „Microsoft Graph Command Line Tools“ anmelden willst, und zeigt die Berechtigungen `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All`, `DelegatedPermissionGrant.ReadWrite.All` und `User.Read`. Bestätigen. Das Fenster kann danach geschlossen werden.
+1. **Bei Microsoft anmelden** klicken. Es öffnet sich die normale Microsoft-Anmeldung in einem kleinen Fenster.
+2. Mit dem **Global Admin des Test-Tenants** anmelden. Microsoft fragt, ob du dich bei „Microsoft Graph Command Line Tools“ anmelden willst, und zeigt die Berechtigungen `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All`, `DelegatedPermissionGrant.ReadWrite.All` und `User.Read`. Bestätigen.
+3. Läuft die Plattform unter `http://localhost:8080`, meldet das Fenster „Angemeldet“ und schließt sich. Auf einem Server zeigt das Fenster „Seite nicht erreichbar“ unter `http://localhost/?code=…`: die komplette Adresse aus der Adresszeile kopieren, im Assistenten einfügen und **Anmeldung abschließen** klicken.
 
 **Erwartet:**
 

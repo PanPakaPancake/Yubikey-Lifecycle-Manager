@@ -10,6 +10,7 @@ public static class SetupEndpoints
     public sealed record BasicsRequest(string OrganizationName, string PublicBaseUrl, string? BootstrapOwnerUpn);
     public sealed record CompleteRequest(string? BootstrapOwnerUpn, bool? AddHomeTenant);
     public sealed record AppRegistrationRequest(Guid ClientId, Guid HomeTenantId);
+    public sealed record InteractiveCompleteRequest(string? Url, string? Code, string? State);
 
     public static void MapSetup(this IEndpointRouteBuilder app)
     {
@@ -18,6 +19,16 @@ public static class SetupEndpoints
             var s = await setup.GetSettingsAsync();
             return Results.Ok(new { setupComplete = s.IsSetupComplete, organizationName = s.OrganizationName, suggestedBaseUrl = setup.BaseUrl(s, req) });
         }).AllowAnonymous();
+
+        // Rücksprung der interaktiven Anmeldung. Ohne Setup-Token: Die Seite auf http://localhost wird in einem neuen Tab
+        // geöffnet. Berechtigt ist, wer den einmaligen state kennt; den bekommt nur, wer die Anmeldung mit Token gestartet hat
+        // (PKCE-Verifier bleibt auf dem Server).
+        app.MapPost("/api/setup/signin/complete", async (InteractiveCompleteRequest body, SetupService setup, CancellationToken ct) =>
+        {
+            var s = await setup.GetSettingsAsync();
+            if (s.IsSetupComplete) return Results.Json(new ApiError("setup_token", "Die Einrichtung ist bereits abgeschlossen."), statusCode: 401);
+            return Results.Ok(await setup.CompleteInteractiveSignInAsync(body.Url, body.Code, body.State, ct));
+        }).AllowAnonymous().RequireRateLimiting(Security.SecurityHeaders.AuthRateLimit);
 
         var group = app.MapGroup("/api/setup").AllowAnonymous().AddEndpointFilter(async (ctx, next) =>
         {
@@ -45,7 +56,14 @@ public static class SetupEndpoints
             });
         });
 
-        // Sign-in with Microsoft (device code), then the platform creates the app registration itself.
+        // Sign-in with Microsoft (interactive, authorization code + PKCE), then the platform creates the app registration itself.
+        group.MapPost("/signin/interactive", (SetupService setup, HttpRequest req) =>
+        {
+            var (url, redirectUri, automatic) = setup.StartInteractiveSignIn(req);
+            return Results.Ok(new { url, redirectUri, automatic });
+        });
+
+        // Fallback: device code (often blocked by Conditional Access).
         group.MapPost("/signin/start", async (SetupService setup, CancellationToken ct) =>
         {
             var p = await setup.StartSignInAsync(ct);
