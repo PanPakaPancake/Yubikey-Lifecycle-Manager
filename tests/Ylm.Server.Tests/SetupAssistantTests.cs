@@ -159,6 +159,10 @@ public sealed class SetupAssistantTests : IAsyncLifetime
         await Json(await _client.PostAsync("/api/setup/provision", null));
         Assert.Equal(_app.Bootstrap.ClientId, _app.Bootstrap.Requests[1].ExistingClientId);
 
+        // A token fetched before Entra replicated the consent carries no roles; verify must not reuse it.
+        var home = _app.Graph.Tenants[_app.Bootstrap.TenantId];
+        home.SimulateTokenCache = true;
+        home.TokenRoles = [];
         var verify = await Json(await _client.PostAsync("/api/setup/verify", null));
         Assert.True(verify.GetProperty("ok").GetBoolean());
         Assert.Equal(0, verify.GetProperty("missing").GetArrayLength());
