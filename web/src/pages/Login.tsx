@@ -31,7 +31,19 @@ function safeReturnUrl(value: string | null): string {
   }
 }
 
-type Methods = { entraSso: boolean; passkey: boolean; emergency: boolean };
+type Methods = { entraSso: boolean; passkey: boolean; emergency: boolean; development?: boolean };
+
+const amrLabels: Record<string, string> = {
+  pwd: 'Passwort', mfa: 'Multi-Faktor', otp: 'Einmalcode', sms: 'SMS', tel: 'Anruf', rsa: 'Windows Hello oder Zertifikat',
+  ngcmfa: 'Windows Hello', wia: 'Windows-Anmeldung', kba: 'Sicherheitsfragen', face: 'Gesichtserkennung', fpt: 'Fingerabdruck',
+};
+
+/** Hinweis, womit bei Microsoft tatsächlich angemeldet wurde (amr aus dem abgelehnten Token). */
+function amrHint(amr: string | null): string {
+  const list = (amr ?? '').split(',').filter((a) => /^[a-z0-9]{1,20}$/i.test(a));
+  if (list.length === 0) return '';
+  return ` Microsoft meldet als Anmeldung: ${list.map((a) => amrLabels[a.toLowerCase()] ?? a).join(', ')}. Bei Microsoft „Anmeldeoptionen“ wählen und mit dem Sicherheitsschlüssel anmelden.`;
+}
 
 export default function LoginPage({ setupComplete }: { setupComplete: boolean }) {
     const params = new URLSearchParams(window.location.search);
@@ -39,9 +51,9 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
   const err = params.get('error');
   const [devUpn, setDevUpn] = useState('admin@contoso.dev');
   const [devError, setDevError] = useState<string>();
-  const [devAvailable, setDevAvailable] = useState(true);
+  const [devAvailable, setDevAvailable] = useState(false);
   const [methods, setMethods] = useState<Methods>({ entraSso: true, passkey: false, emergency: false });
-  useEffect(() => { void api.get<Methods>('/auth/methods').then(setMethods).catch(() => {}); }, []);
+  useEffect(() => { void api.get<Methods>('/auth/methods').then((m) => { setMethods(m); setDevAvailable(!!m.development); }).catch(() => {}); }, []);
   const passkey = useAction();
   const emergency = useAction();
   const [em, setEm] = useState({ upn: '', password: '', code: '' });
@@ -90,11 +102,13 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
         <div className="brand compact"><LogoMark /><Wordmark /></div>
         <h1>Anmelden</h1>
         {!setupComplete && <div className="alert warn">Die Einrichtung ist noch nicht abgeschlossen. <a href="/setup">Zur Einrichtung</a></div>}
-        {err && <ErrorBox error={errorTexts[err] ?? decodeURIComponent(err)} />}
+        {err && <ErrorBox error={(errorTexts[err] ?? decodeURIComponent(err)) + (err === 'not_phishing_resistant' ? amrHint(params.get('amr')) : '')} />}
         <p className="muted">Melden Sie sich mit Ihrem YubiKey an. <a href="/passkey">Was ist ein Passkey?</a></p>
         <div className="login-buttons">
           {methods.entraSso && (
-            <a className="btn primary" href={'/auth/login?returnUrl=' + encodeURIComponent(returnUrl)}>Mit Microsoft anmelden</a>
+            err === 'not_phishing_resistant'
+              ? <a className="btn primary" href={'/auth/login?reauth=true&returnUrl=' + encodeURIComponent(returnUrl)} title="Microsoft fragt Konto und Anmeldemethode neu ab">Erneut mit YubiKey anmelden</a>
+              : <a className="btn primary" href={'/auth/login?returnUrl=' + encodeURIComponent(returnUrl)}>Mit Microsoft anmelden</a>
           )}
           {(methods.passkey || !methods.entraSso) && passkeysSupported() && (
             <button className={methods.entraSso ? '' : 'primary'} disabled={passkey.busy} onClick={passkeyLogin}>
