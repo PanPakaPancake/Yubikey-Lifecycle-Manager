@@ -95,6 +95,9 @@ jobs:
   agent:
     name: Agent, Tray-App und MSI
     runs-on: windows-latest
+    # VORÜBERGEHEND (vor dem Merge entfernen): Screenshots in den PR-Branch committen.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -118,3 +121,16 @@ jobs:
         with:
           name: tray-screenshots
           path: tray-screenshots/*.png
+      # VORÜBERGEHEND (vor dem Merge entfernen): Screenshots in den PR-Branch legen, damit sie ohne Artefakt-Download lesbar sind.
+      - name: Screenshots in den PR-Branch
+        if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+        shell: pwsh
+        run: |
+          git fetch origin "${{ github.head_ref }}"
+          git checkout -B screenshots FETCH_HEAD
+          New-Item -ItemType Directory -Force docs/bilder/agent | Out-Null
+          Copy-Item tray-screenshots/*.png docs/bilder/agent/
+          git add docs/bilder/agent
+          git -c user.name=github-actions -c user.email=github-actions@users.noreply.github.com commit -m "Tray-Screenshots aus der CI"
+          if ($LASTEXITCODE -eq 0) { git push origin "HEAD:${{ github.head_ref }}" }
+          exit 0
