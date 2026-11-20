@@ -246,7 +246,7 @@ Alternativ selbst bauen (Windows, .NET 10 SDK): `pwsh installer/build.ps1`, Erge
 
 ### 4.2 Installieren
 
-Doppelklick auf das MSI. Das MSI ist nicht signiert; SmartScreen warnt deshalb („Weitere Informationen“ → „Trotzdem ausführen“). Die UAC-Abfrage bestätigen. Im letzten Dialog „Tray-App jetzt starten“ angehakt lassen.
+Doppelklick auf das MSI. Solange die Signierung nicht eingerichtet ist (docs/SIGNIERUNG.md), ist das MSI nicht signiert; SmartScreen warnt dann („Weitere Informationen“ → „Trotzdem ausführen“). Die UAC-Abfrage bestätigen. Im letzten Dialog „Tray-App jetzt starten“ angehakt lassen.
 
 Wenn die Installation scheitert, bitte mit Protokoll wiederholen:
 

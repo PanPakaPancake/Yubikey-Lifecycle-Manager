@@ -15,14 +15,88 @@ jobs:
   agent:
     name: Agent-MSI
     runs-on: windows-latest
+    # Umgebung "release": Azure vertraut per Federated Credential genau diesem Job (Subject ...:environment:release).
+    environment: release
+    # Signierung mit Azure Artifact Signing (früher Trusted Signing), sobald die Variable SIGNING_ENDPOINT gesetzt ist.
+    # Einrichtung: docs/SIGNIERUNG.md. Ohne die Variable entsteht wie bisher ein unsigniertes MSI.
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      SIGN: ${{ vars.SIGNING_ENDPOINT != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
+      - name: Programmdateien bauen
+        shell: pwsh
+        run: ./installer/build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v') -Stage publish
+      - name: Bei Azure anmelden (OIDC, ohne gespeichertes Passwort)
+        if: env.SIGN == 'true'
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Agent und Tray signieren
+        if: env.SIGN == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\installer\publish
+          files-folder-filter: exe
+          files-folder-recurse: true
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
       - name: MSI bauen
         shell: pwsh
-        run: ./installer/build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v')
+        run: ./installer/build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v') -Stage package
+      - name: MSI signieren
+        if: env.SIGN == 'true'
+        uses: azure/artifact-signing-action@v2
+        with:
+          endpoint: ${{ vars.SIGNING_ENDPOINT }}
+          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
+          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
+          files-folder: ${{ github.workspace }}\installer\out
+          files-folder-filter: msi
+          file-digest: SHA256
+          timestamp-rfc3161: http://timestamp.acs.microsoft.com
+          timestamp-digest: SHA256
+          exclude-environment-credential: true
+          exclude-workload-identity-credential: true
+          exclude-managed-identity-credential: true
+          exclude-shared-token-cache-credential: true
+          exclude-visual-studio-credential: true
+          exclude-visual-studio-code-credential: true
+          exclude-azure-cli-credential: false
+          exclude-azure-powershell-credential: true
+          exclude-azure-developer-cli-credential: true
+          exclude-interactive-browser-credential: true
+      - name: Signaturen prüfen
+        if: env.SIGN == 'true'
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem installer/publish -Recurse -Filter *.exe) + @(Get-ChildItem installer/out -Filter *.msi)
+          foreach ($f in $files) {
+            $s = Get-AuthenticodeSignature $f.FullName
+            Write-Host "$($f.Name): $($s.Status) $($s.SignerCertificate.Subject)"
+            if ($s.Status -ne 'Valid') { throw "$($f.Name) ist nicht gültig signiert." }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: agent-msi
