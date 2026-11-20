@@ -90,6 +90,26 @@ public static class UpdateEndpoints
             return Results.Accepted();
         });
 
+        // ----- Versionsstand für alle Angemeldeten (Übersicht, Versionsverlauf) -----
+        // Nur lesend: welche Version läuft, welche ist die neueste, was ist neu. Das Update starten bleibt bei ManageSettings.
+        app.MapGet("/api/updates/summary", async (CurrentUser cu, UpdateService updates, CancellationToken ct) =>
+        {
+            await cu.GetAsync();
+            var check = await updates.CheckAsync(false, ct);
+            return Results.Ok(new
+            {
+                currentVersion = UpdateService.CurrentVersion,
+                latestVersion = check.Latest?.Version,
+                updateAvailable = UpdateService.IsNewer(check.Latest?.Version, UpdateService.CurrentVersion),
+                releaseUrl = check.Latest?.Url,
+                publishedAt = check.Latest?.PublishedAt,
+                notes = check.Latest?.Notes,
+                error = check.Error,
+                checkedAt = check.CheckedAt,
+                canApply = await cu.HasAsync(Permission.ManageSettings),
+            });
+        }).RequireAuthorization();
+
         // ----- Agent zum Herunterladen (Admin im Browser) -----
         app.MapGet("/api/agent-package", async (CurrentUser cu, UpdateService updates, CancellationToken ct) =>
         {
