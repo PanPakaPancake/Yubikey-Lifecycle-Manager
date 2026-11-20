@@ -61,7 +61,7 @@ jobs:
           if [ "${{ github.event_name }}" = workflow_dispatch ] && [ "${{ inputs.force }}" = true ]; then need=1; fi
           if [ "$(date -u +%u)" = 1 ]; then need=1; fi   # montags immer
           echo "need=$need" >> "$GITHUB_OUTPUT"
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         if: steps.scan.outputs.need == '1'
         with:
           ref: ${{ steps.rel.outputs.tag }}

@@ -25,7 +25,7 @@ jobs:
     env:
       YLM_TEST_POSTGRES: Host=localhost;Username=ylm;Password=ylm
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
@@ -48,7 +48,7 @@ jobs:
     name: Docker-Images und Installation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Shell-Skripte (shellcheck)
         run: shellcheck install.sh && shellcheck -s sh deploy/backup.sh
       - name: Compose-Datei (lokal und mit HTTPS-Profil)
@@ -88,7 +88,7 @@ jobs:
     name: install.ps1 (Syntax)
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Parsen mit Windows PowerShell 5.1 und PowerShell 7
         shell: pwsh
         run: |
@@ -101,7 +101,7 @@ jobs:
     name: Agent, Tray-App und MSI
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 10.0.x
