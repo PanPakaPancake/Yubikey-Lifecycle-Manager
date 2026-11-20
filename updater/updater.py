@@ -1,11 +1,15 @@
 """Updater für Yubikey Lifecycle Manager (Docker Compose).
 
 POST /update  {"version": "1.2.3" | null}  -> holt das Image und erstellt den Server-Container neu (202)
+POST /refresh                              -> Sicherheitsupdates: alle Images neu laden (gleiche Version),
+                                              geänderte Container neu erstellen, auch diesen Updater (202)
 GET  /status                               -> Zustand und Protokoll des letzten Updates
 GET  /health                               -> ohne Anmeldung, nur "ok"
 
 Anmeldung: Header "Authorization: Bearer <UPDATER_TOKEN>". Ohne UPDATER_TOKEN nimmt der Updater keine Aufträge an.
 Erreichbar nur im internen Compose-Netz (kein veröffentlichter Port).
+
+AUTO_REFRESH=HH:MM (Standard 04:00, "off" = aus) startet /refresh täglich zu dieser Uhrzeit (Zeitzone TZ).
 """
 import hmac
 import json
@@ -21,8 +25,12 @@ TOKEN = os.environ.get("UPDATER_TOKEN", "").strip()
 PROJECT_DIR = os.environ.get("PROJECT_DIR", "/project")
 SERVICE = os.environ.get("UPDATE_SERVICE", "server")
 VERSION_RE = re.compile(r"^v?\d+\.\d+\.\d+([-.][0-9A-Za-z.]+)?$")
+AUTO_REFRESH = os.environ.get("AUTO_REFRESH", "04:00").strip().lower()
+TIME_RE = re.compile(r"^([01]?\d|2[0-3]):([0-5]\d)$")
 
-state = {"state": "idle", "startedAt": None, "finishedAt": None, "version": None, "log": []}
+state = {"state": "idle", "startedAt": None, "finishedAt": None, "version": None, "log": [],
+         "refresh": {"schedule": AUTO_REFRESH if TIME_RE.match(AUTO_REFRESH) else None,
+                     "lastAt": None, "result": None, "trigger": None}}
 lock = threading.Lock()
 
 
@@ -39,6 +47,15 @@ def compose_project():
     out = subprocess.run(["docker", "inspect", socket.gethostname(), "--format",
                           '{{ index .Config.Labels "com.docker.compose.project" }}'], capture_output=True, text=True)
     return out.stdout.strip() or None
+
+
+def now_iso():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def inspect(target, fmt):
+    out = subprocess.run(["docker", "inspect", target, "--format", fmt], capture_output=True, text=True)
+    return out.stdout.strip() if out.returncode == 0 else ""
 
 
 def run(cmd, env):
@@ -71,6 +88,94 @@ def do_update(version):
         lock.release()
 
 
+def helper_name(project):
+    return f"{project}-refresh"
+
+
+def do_refresh(trigger):
+    """Lädt alle Images der Installation neu (gleiche Version, aktuelle Sicherheitsupdates der Basis-Images)
+    und erstellt geänderte Container neu. Läuft in einem eigenen Hilfscontainer: der darf auch diesen Updater
+    ersetzen, und er sieht den Installationsordner unter dem Pfad des Hosts, damit relative Pfade in
+    docker-compose.yml (Caddyfile, backup.sh, certs) richtig aufgelöst werden."""
+    refresh = state["refresh"]
+    refresh.update({"lastAt": now_iso(), "result": "running", "trigger": trigger})
+    try:
+        project = compose_project()
+        if not project:
+            raise RuntimeError("Compose-Projekt nicht gefunden. Bitte COMPOSE_PROJECT_NAME setzen.")
+        me = socket.gethostname()
+        host_dir = inspect(me, '{{range .Mounts}}{{if eq .Destination "/project"}}{{.Source}}{{end}}{{end}}')
+        image = inspect(me, "{{.Config.Image}}")
+        if not host_dir or not image:
+            raise RuntimeError("Installationsordner bzw. eigenes Image nicht ermittelbar.")
+        # Gleiche Version behalten: Tag des laufenden Server-Images (sonst "latest" aus .env bzw. Standard).
+        env_args = []
+        server = subprocess.run(["docker", "ps", "-q", "--filter", f"label=com.docker.compose.project={project}",
+                                 "--filter", "label=com.docker.compose.service=server"], capture_output=True, text=True).stdout.split()
+        if server:
+            tag = inspect(server[0], "{{.Config.Image}}").rsplit(":", 1)
+            if len(tag) == 2 and VERSION_RE.match(tag[1]):
+                env_args = ["-e", f"YLM_VERSION={tag[1]}"]
+                log(f"Server bleibt auf Version {tag[1]}.")
+        name = helper_name(project)
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+        script = ("set -e; docker compose pull --ignore-pull-failures; "
+                  "docker compose up -d --no-build; docker image prune -f >/dev/null; echo Sicherheitsupdates abgeschlossen.")
+        run(["docker", "run", "--name", name, "--label", f"ylm.refresh={project}",
+             "-v", "/var/run/docker.sock:/var/run/docker.sock", "-v", f"{host_dir}:{host_dir}:ro", "-w", host_dir,
+             "-e", f"COMPOSE_PROJECT_NAME={project}", *env_args, "--entrypoint", "sh", image, "-c", script], dict(os.environ))
+        refresh["result"] = "done"
+        state["state"] = "done"
+    except Exception as e:  # noqa: BLE001
+        refresh["result"] = "failed"
+        state["state"] = "failed"
+        log(f"Fehler: {e}")
+    finally:
+        state["finishedAt"] = now_iso()
+        lock.release()
+
+
+def start_refresh(trigger):
+    if not lock.acquire(blocking=False):
+        return False
+    state.update({"state": "running", "startedAt": now_iso(), "finishedAt": None, "version": "refresh", "log": []})
+    log(f"Sicherheitsupdates der Container gestartet ({trigger}).")
+    threading.Thread(target=do_refresh, args=(trigger,), daemon=True).start()
+    return True
+
+
+def restore_refresh_state():
+    """Nach einem Neustart (z. B. weil der Hilfscontainer diesen Updater ersetzt hat): Ergebnis des letzten Laufs lesen."""
+    project = compose_project()
+    if not project:
+        return
+    name = helper_name(project)
+    info = inspect(name, "{{.State.Status}} {{.State.ExitCode}} {{.State.FinishedAt}}").split()
+    if len(info) == 3:
+        status, code, finished = info
+        state["refresh"].update({"lastAt": finished[:19] + "Z", "trigger": "zuletzt",
+                                 "result": "running" if status == "running" else ("done" if code == "0" else "failed")})
+        logs = subprocess.run(["docker", "logs", "--tail", "60", name], capture_output=True, text=True)
+        state["log"] = (logs.stdout + logs.stderr).splitlines()[-60:]
+
+
+def scheduler():
+    m = TIME_RE.match(AUTO_REFRESH)
+    if not m or not TOKEN:
+        print("Automatische Sicherheitsupdates der Container: aus.", flush=True)
+        return
+    print(f"Automatische Sicherheitsupdates der Container täglich um {AUTO_REFRESH}.", flush=True)
+    target = (int(m.group(1)), int(m.group(2)))
+    last_day = time.strftime("%Y-%m-%d")  # nicht direkt nach dem Start
+    while True:
+        time.sleep(30)
+        t = time.localtime()
+        day = time.strftime("%Y-%m-%d", t)
+        if (t.tm_hour, t.tm_min) >= target and day != last_day:
+            last_day = day
+            start_refresh("zeitgesteuert")
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body=None):
         data = json.dumps(body or {}).encode()
@@ -96,6 +201,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):
         if not self._authorized():
             return self._send(401, {"error": "unauthorized"})
+        if self.path == "/refresh":
+            return self._send(202, {"state": "running"}) if start_refresh("von Hand") else self._send(409, {"error": "running"})
         if self.path != "/update":
             return self._send(404)
         length = int(self.headers.get("Content-Length") or 0)
@@ -121,4 +228,9 @@ class Handler(BaseHTTPRequestHandler):
 if __name__ == "__main__":
     if not TOKEN:
         print("UPDATER_TOKEN ist nicht gesetzt: Updates per Klick sind deaktiviert.", flush=True)
+    try:
+        restore_refresh_state()
+    except Exception as e:  # noqa: BLE001
+        print(f"Letzter Lauf nicht lesbar: {e}", flush=True)
+    threading.Thread(target=scheduler, daemon=True).start()
     ThreadingHTTPServer(("0.0.0.0", 8090), Handler).serve_forever()

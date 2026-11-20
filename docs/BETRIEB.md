@@ -199,6 +199,7 @@ In `.env`:
 | `YLM_HTTPS_BIND` | `0.0.0.0` | Adresse, auf der Caddy die Ports 80/443 öffnet |
 | `YLM_BIND` | `127.0.0.1:8080` | Adresse, auf der der Server-Port lauscht |
 | `YLM_TRUSTED_PROXIES` | private Netze | Proxys/Connectoren, deren Forwarded-Header gelten (Komma-Liste) |
+| `YLM_AUTO_REFRESH` | `04:00` | Uhrzeit der täglichen Sicherheitsupdates der Container (`off` = aus) |
 | `UPDATER_TOKEN` | leer | Geheimnis für das Update per Klick; leer = aus |
 | `YLM_VERSION` | `latest` | Version des Server-Images festhalten |
 | `BACKUP_TIME`, `BACKUP_KEEP_DAYS`, `BACKUP_DIR` | `02:30`, `14`, `./backups` | Datensicherung (`BACKUP_TIME=off` schaltet sie ab) |
@@ -228,6 +229,10 @@ Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services
   - **Am PC:** Tray → **Einstellungen**: „Mit Windows starten“ (pro Benutzer), „Updates automatisch installieren“ (für den PC, nur lokale Administratoren), „Jetzt nach Updates suchen“. „Jetzt aktualisieren“ gibt es auch unter **Agent** in der Weboberfläche.
   - **Fehlersuche:** Jede Prüfung steht im Agent-Log (`Update: …`), das msiexec-Protokoll unter `C:\ProgramData\YubikeyLifecycleManager\Agent\updates\install-<Version>.log` (nur für Administratoren lesbar). Nach einem Fehler versucht der Agent es nach 30 Minuten erneut.
   - `"Agent": { "AutoUpdate": false }` in der `appsettings.json` des Agents setzt den Standard der lokalen Einstellung auf „aus“ (z. B. für Images).
+- **Sicherheitsupdates der Container:** Unabhängig von neuen Versionen lädt der Updater täglich um `YLM_AUTO_REFRESH` (Standard 04:00, nach der Sicherung) alle Images der installierten Version neu und erstellt geänderte Container neu, auch sich selbst (über einen kurzlebigen Hilfscontainer `<projekt>-refresh`). Die Plattform ist dabei kurz nicht erreichbar. „Jetzt einspielen“ unter **Version und Updates** startet es sofort; dort stehen Zeitpunkt und Ergebnis des letzten Laufs.
+  - **Woher die Patches kommen:** Der Workflow „Sicherheits-Neubau“ prüft täglich die veröffentlichten Images mit Trivy. Bei behebbaren HIGH/CRITICAL-Schwachstellen und ohnehin jeden Montag baut er Server- und Updater-Image der neuesten Version ohne Cache auf den aktuellen Basis-Images neu und veröffentlicht sie unter demselben Tag. PostgreSQL und Caddy kommen als offizielle Images (`postgres:16`, `caddy:2`), deren Patches der Updater ebenfalls lädt. Die CI scannt jeden Build und schlägt bei behebbaren CRITICAL-Funden fehl; Dependabot schlägt wöchentlich neue Basis-Images, Pakete und Actions vor.
+  - **Schlankes Server-Image:** Der Server läuft auf `aspnet:10.0-noble-chiseled-extra` (nur .NET-Laufzeit, ICU, Zeitzonen; keine Shell, kein Paketmanager). `docker compose exec server sh` gibt es daher nicht mehr; Protokolle wie gewohnt mit `docker compose logs server`.
+  - **Der Host:** Kernel (z. B. Schwachstellen im TCP-Stack), Docker Engine und Systembibliotheken des Servers teilen sich alle Container, sie aktualisiert kein Container-Update. Auf Debian/Ubuntu richtet das Installationsskript dafür `unattended-upgrades` ein (abschaltbar mit `--no-host-updates`). Nach Kernel-Updates braucht der Server einen Neustart: entweder von Hand in einem Wartungsfenster (`/var/run/reboot-required` zeigt es an) oder automatisch mit `Unattended-Upgrade::Automatic-Reboot "true";` und `Unattended-Upgrade::Automatic-Reboot-Time "04:30";` in `/etc/apt/apt.conf.d/50unattended-upgrades`. Docker startet die Plattform danach von selbst. Unter Windows hält Docker Desktop seinen Linux-Kernel selbst aktuell: Docker Desktop und Windows-Updates bitte aktuell halten (`wsl --update`).
 - Die Updateprüfung lässt sich mit `Ylm__UpdateCheckEnabled=false` abschalten (z. B. ohne Internetzugang).
 - Nicht `docker compose up --build` verwenden: Das ersetzt das Release-Image durch einen lokalen Build und blockiert so spätere Updates. Lokale Builds nur in der Entwicklung (Abschnitt 6).
 
@@ -292,6 +297,8 @@ Beim Offboarding entfernt die Plattform ihre Daten nach der Aufbewahrungsfrist. 
 3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben. Koppeln und Entkoppeln dürfen nur Mitglieder der lokalen Gruppe „Administratoren“ (ohne erhöhte Rechte reicht), weil der Agent-Dienst als SYSTEM Updates vom gekoppelten Server installiert.
 
 Protokolle: `C:\ProgramData\YubikeyLifecycleManager\Agent\logs`. Update: neueres MSI installieren.
+
+Signatur: Release-MSIs werden signiert, sobald Azure Artifact Signing eingerichtet ist ([SIGNIERUNG.md](SIGNIERUNG.md)). Ein signierter Agent installiert nur Updates vom selben Unterzeichner.
 
 Für Tests ohne Key: `YlmAgent.exe --simulate` startet den Agent mit einem simulierten YubiKey.
 

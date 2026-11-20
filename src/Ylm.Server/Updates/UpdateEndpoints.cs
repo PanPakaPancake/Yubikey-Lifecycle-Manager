@@ -82,6 +82,14 @@ public static class UpdateEndpoints
             return Results.Accepted();
         });
 
+        g.MapPost("/refresh", async (CurrentUser cu, UpdateService updates, AuditService audit, CancellationToken ct) =>
+        {
+            var user = await cu.RequireAsync(Permission.ManageSettings);
+            await updates.StartRefreshAsync(ct);
+            await audit.WriteAsync(AuditService.User(user), AuditActions.UpdateStarted, details: new { kind = "security_refresh", version = UpdateService.CurrentVersion });
+            return Results.Accepted();
+        });
+
         // ----- Agent zum Herunterladen (Admin im Browser) -----
         app.MapGet("/api/agent-package", async (CurrentUser cu, UpdateService updates, CancellationToken ct) =>
         {

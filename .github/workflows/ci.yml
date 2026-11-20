@@ -66,8 +66,13 @@ jobs:
         run: |
           rm .env
           # Images aus diesem Stand bauen und per Override verwenden, damit der Test nicht von Releases abhängt.
-          docker build -t ylm-ci/server .
-          docker build -t ylm-ci/updater ./updater
+          docker build --pull -t ylm-ci/server .
+          docker build --pull -t ylm-ci/updater ./updater
+          # Schwachstellen-Scan: behebbare CRITICAL-Funde lassen die CI scheitern, HIGH steht im Protokoll.
+          for img in ylm-ci/server ylm-ci/updater; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image --quiet --scanners vuln --ignore-unfixed --severity HIGH,CRITICAL "$img"
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.58.1 image --quiet --scanners vuln --ignore-unfixed --severity CRITICAL --exit-code 1 "$img"
+          done
           mkdir -p "$RUNNER_TEMP/ylm" "$RUNNER_TEMP/raw"
           printf 'services:\n  server:\n    image: ylm-ci/server\n  updater:\n    image: ylm-ci/updater\n' > "$RUNNER_TEMP/ylm/docker-compose.override.yml"
           ln -s "$GITHUB_WORKSPACE" "$RUNNER_TEMP/raw/main"
