@@ -57,7 +57,7 @@ export interface PlatformUser {
 }
 
 export type LoginKind = 'Entra' | 'Local' | 'Emergency';
-export const loginKindLabel: Record<LoginKind, string> = { Entra: 'Entra-SSO', Local: 'Lokal mit Passkey', Emergency: 'Notfallkonto' };
+export const loginKindLabel: Record<LoginKind, string> = { Entra: 'Entra-SSO', Local: 'Lokales Konto (Passkey)', Emergency: 'Lokales Konto (Passwort + TOTP)' };
 
 export interface UserPasskey { id: string; name: string; aaguid: string; createdAt: string; lastUsedAt?: string | null }
 

@@ -127,12 +127,12 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
         <ErrorBox error={passkey.error} />
         {methods.emergency && (
           <details style={{ marginTop: 18 }}>
-            <summary className="muted small">Notfallzugang (Passwort und Code)</summary>
+            <summary className="muted small">Lokales Konto mit Passwort und Code</summary>
             <form onSubmit={(e) => { e.preventDefault(); emergencyLogin(); }}>
               <Field label="Anmeldename"><input autoComplete="username" value={em.upn} onChange={(e) => setEm({ ...em, upn: e.target.value })} /></Field>
               <Field label="Passwort"><input type="password" autoComplete="current-password" value={em.password} onChange={(e) => setEm({ ...em, password: e.target.value })} /></Field>
               <Field label="Code aus der Authenticator-App"><input inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={em.code} onChange={(e) => setEm({ ...em, code: e.target.value })} /></Field>
-              <button type="submit" className="danger" disabled={emergency.busy || !em.upn || !em.password || em.code.length < 6}>Notfall-Anmeldung</button>
+              <button type="submit" disabled={emergency.busy || !em.upn || !em.password || em.code.length < 6}>Anmelden</button>
               <ErrorBox error={emergency.error} />
             </form>
           </details>

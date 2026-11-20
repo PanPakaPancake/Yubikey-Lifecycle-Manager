@@ -39,7 +39,7 @@ export default function AccountPage() {
       <Card title="Anmeldung">
         <p>Anmeldeart: <strong>{loginKindLabel[user.loginKind] ?? user.loginKind}</strong></p>
         {user.loginKind === 'Entra' && <p className="muted">Sie melden sich mit Ihrem Microsoft-Konto an. Passkeys verwalten Sie in Entra (My Sign-ins).</p>}
-        {user.loginKind === 'Emergency' && <p className="muted">Notfallkonto mit Passwort und Authenticator-Code. Zum Zurücksetzen erzeugt ein Owner einen neuen Einrichtungslink.</p>}
+        {user.loginKind === 'Emergency' && <p className="muted">Lokales Konto mit Passwort und Authenticator-Code. Zum Zurücksetzen erzeugt ein Owner einen neuen Einrichtungslink.</p>}
       </Card>
       {me.recoveryCodes != null && <RecoveryCodesCard />}
       {local && (

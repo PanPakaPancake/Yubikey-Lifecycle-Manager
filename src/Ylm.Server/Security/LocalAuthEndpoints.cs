@@ -172,7 +172,7 @@ public static class LocalAuthEndpoints
             {
                 var owners = await db.PlatformUsers.Include(u => u.Passkeys).Where(u => u.Role == PlatformRole.Owner && u.IsActive && u.LoginKind != UserLoginKind.Entra).ToListAsync();
                 if (!owners.Any(o => LocalAuthService.CanSignIn(o, false)))
-                    throw ApiException.Conflict("no_local_owner", "Ohne Entra-SSO braucht es mindestens einen aktiven Owner mit eingerichtetem lokalem Konto (Passkey oder Notfallkonto). Sonst sperren Sie sich aus.");
+                    throw ApiException.Conflict("no_local_owner", "Ohne Entra-SSO braucht es mindestens einen aktiven Owner mit eingerichtetem lokalem Konto (Passkey oder Passwort + TOTP). Sonst sperren Sie sich aus.");
             }
             audit.Add(AuditService.User(actor), AuditActions.LoginSettingsChanged, details: new { before = s.EntraSsoEnabled, after = body.EntraSsoEnabled });
             s.EntraSsoEnabled = body.EntraSsoEnabled;

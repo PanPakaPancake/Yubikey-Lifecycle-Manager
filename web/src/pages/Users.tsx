@@ -166,8 +166,8 @@ function LoginState({ u }: { u: PlatformUser }) {
 
 const kinds: { kind: LoginKind; text: string }[] = [
   { kind: 'Entra', text: 'Konto aus dem Heim-Tenant, Anmeldung über Microsoft mit YubiKey.' },
-  { kind: 'Local', text: 'Konto nur auf der Plattform, Anmeldung mit Passkey bzw. YubiKey. Einrichtung per Einmal-Link.' },
-  { kind: 'Emergency', text: 'Notfallzugang mit Passwort und Authenticator-Code, falls Entra oder Passkeys ausfallen.' },
+  { kind: 'Local', text: 'Konto nur auf der Plattform, z. B. für Kundenzugriffe oder Breakglass. Anmeldung mit Passkey bzw. YubiKey. Empfohlen.' },
+  { kind: 'Emergency', text: 'Konto nur auf der Plattform, Anmeldung mit Passwort und Code aus einer Authenticator-App.' },
 ];
 
 function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Partial<PlatformUser>; self: boolean; tenants: Tenant[]; roles?: RolesResponse; onClose: () => void; onSaved: (link?: SetupLink) => void }) {
@@ -196,7 +196,7 @@ function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Par
   });
   const newLink = () => run(async () => {
     const msg = user.loginKind === 'Emergency'
-      ? 'Passwort und Authenticator des Notfallkontos werden dabei zurückgesetzt.'
+      ? 'Passwort und Authenticator des Kontos werden dabei zurückgesetzt.'
       : 'Bestehende Passkeys bleiben gültig, mit dem Link kommt ein weiterer dazu.';
     if (!(await confirm({ title: 'Neuen Einrichtungslink erzeugen?', message: msg, confirmLabel: 'Link erzeugen', danger: user.loginKind === 'Emergency' }))) return;
     const l = await api.post<{ url: string; expiresAt: string }>(`/api/users/${user.id}/setup-link`);
@@ -216,6 +216,7 @@ function UserModal({ user, self, tenants, roles, onClose, onSaved }: { user: Par
         </Field>
       )}
       <div className="grid cols-2">
+        {isNew && loginKind === 'Emergency' && <Info tone="warn">Empfohlen ist ein lokales Konto mit Passkey. Passwort und Authenticator-Code lassen sich abfangen (Phishing). Diese Variante nur nutzen, wenn kein Passkey bzw. YubiKey möglich ist.</Info>}
         <Field label={loginKind === 'Entra' ? 'UPN' : 'Anmeldename'} hint={loginKind === 'Entra' ? 'Konto aus dem Heim-Tenant der Installation' : 'z. B. die E-Mail-Adresse der Person'}><input value={upn} disabled={!isNew} onChange={(e) => setUpn(e.target.value)} placeholder="name@contoso.com" /></Field>
         <Field label="Anzeigename"><input value={displayName} onChange={(e) => setDisplayName(e.target.value)} /></Field>
       </div>
