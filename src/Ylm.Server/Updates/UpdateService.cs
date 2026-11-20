@@ -119,16 +119,23 @@ public sealed class UpdateService(IHttpClientFactory httpFactory, IMemoryCache c
         }
     }
 
-    public async Task StartUpdateAsync(string? version, CancellationToken ct = default)
+    public Task StartUpdateAsync(string? version, CancellationToken ct = default) =>
+        PostUpdaterAsync("/update", new { version }, ct);
+
+    /// <summary>Sicherheitsupdates: alle Images derselben Version neu laden und geänderte Container neu erstellen.</summary>
+    public Task StartRefreshAsync(CancellationToken ct = default) => PostUpdaterAsync("/refresh", new { }, ct);
+
+    private async Task PostUpdaterAsync(string path, object body, CancellationToken ct)
     {
         if (!UpdaterConfigured) throw ApiException.Conflict("updater_missing", "Der Updater-Container ist nicht eingerichtet. Siehe docs/BETRIEB.md, Abschnitt Updates.");
-        using var req = UpdaterRequest(HttpMethod.Post, "/update");
-        req.Content = new StringContent(JsonSerializer.Serialize(new { version }), System.Text.Encoding.UTF8, "application/json");
+        using var req = UpdaterRequest(HttpMethod.Post, path);
+        req.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
         try
         {
             using var res = await httpFactory.CreateClient("updates").SendAsync(req, ct);
             if (res.StatusCode == System.Net.HttpStatusCode.Conflict) throw ApiException.Conflict("update_running", "Es läuft bereits ein Update.");
-            if (!res.IsSuccessStatusCode) throw ApiException.Conflict("updater_failed", $"Der Updater hat das Update abgelehnt ({(int)res.StatusCode}).");
+            if (res.StatusCode == System.Net.HttpStatusCode.NotFound) throw ApiException.Conflict("updater_outdated", "Der Updater kennt diese Funktion noch nicht. Bitte das Installationsskript einmal erneut ausführen (lädt den neuen Updater).");
+            if (!res.IsSuccessStatusCode) throw ApiException.Conflict("updater_failed", $"Der Updater hat den Auftrag abgelehnt ({(int)res.StatusCode}).");
         }
         catch (HttpRequestException e)
         {

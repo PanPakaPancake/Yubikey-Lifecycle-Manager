@@ -19,19 +19,22 @@ RUN dotnet restore src/Ylm.Server/Ylm.Server.csproj
 COPY src/Ylm.Contracts/ src/Ylm.Contracts/
 COPY src/Ylm.Core/ src/Ylm.Core/
 COPY src/Ylm.Server/ src/Ylm.Server/
-RUN dotnet publish src/Ylm.Server/Ylm.Server.csproj -c Release -o /out/app --no-restore -p:Version=${VERSION}
+RUN dotnet publish src/Ylm.Server/Ylm.Server.csproj -c Release -o /out/app --no-restore -p:Version=${VERSION} \
+    && mkdir -p /out/data
 
-FROM mcr.microsoft.com/dotnet/aspnet:10.0
+# Laufzeit: "chiseled" Ubuntu-Image (nur .NET-Laufzeit, ICU und Zeitzonen; keine Shell, kein Paketmanager),
+# dadurch kaum Pakete mit Schwachstellen. Neu gebaut wöchentlich bzw. bei Schwachstellen (rebuild.yml).
+FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra
 WORKDIR /app
 COPY --from=build /out/app ./
 COPY --from=web /out/wwwroot ./wwwroot
 # Agent-MSI zum Download und für das Auto-Update (nur im Release-Build vorhanden).
 COPY agent-package/ ./agent/
+COPY --from=build --chown=$APP_UID:$APP_UID /out/data /data
 ENV ASPNETCORE_URLS=http://+:8080 \
     Ylm__DataDirectory=/data
-RUN mkdir -p /data && chown app:app /data
 VOLUME /data
-USER app
+USER $APP_UID
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["dotnet", "Ylm.Server.dll", "--healthcheck"]
 ENTRYPOINT ["dotnet", "Ylm.Server.dll"]

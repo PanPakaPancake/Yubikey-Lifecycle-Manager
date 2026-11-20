@@ -234,6 +234,21 @@ public sealed partial class AgentUpdater(
                 throw new InvalidOperationException("Prüfsumme des heruntergeladenen MSI stimmt nicht.");
             }
         }
+        if (OperatingSystem.IsWindows())
+        {
+            // Signatur: Ist dieser Agent signiert, muss das Update vom selben Unterzeichner stammen.
+            var self = Authenticode.Inspect(Environment.ProcessPath ?? "");
+            var update = Authenticode.Inspect(msi);
+            var problem = UpdateSignaturePolicy.Check(self, update,
+                config.GetValue("Agent:RequireSignedUpdates", false), config["Agent:TrustedSigner"]);
+            if (problem is not null)
+            {
+                File.Delete(msi);
+                throw new InvalidOperationException(problem);
+            }
+            logger.LogInformation("Update {Version}: {Signature}", info.Version,
+                update.Valid ? "signiert von " + update.Subject : "nicht signiert (dieser Agent ist es auch nicht)");
+        }
         return msi;
     }
 

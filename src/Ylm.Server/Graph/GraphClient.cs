@@ -577,19 +577,48 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
             "email" => Str(m, "emailAddress"),
             "fido2" => Str(m, "model"),
             "microsoftAuthenticator" => Str(m, "deviceTag") is { } tag && tag != "SoftwareTokenActivated" ? tag : Str(m, "phoneAppVersion"),
-            "windowsHelloForBusiness" => Str(m, "keyStrength"),
+            "windowsHelloForBusiness" => Str(m, "keyStrength") == "weak" ? "schwacher Schlüssel" : null,
             "temporaryAccessPass" => Bool(m, "isUsable") ? "gültig" : Str(m, "methodUsabilityReason") ?? "nicht nutzbar",
             "platformCredential" => Str(m, "platform"),
             _ => null,
         };
-        return new GraphAuthMethod(Str(m, "id") ?? "", kind, AuthMethodCatalog.ReportNameFor(kind, Str(m, "phoneType")),
-            Str(m, "displayName"), detail, Date(m, "createdDateTime"));
+        var reportName = kind == "fido2"
+            ? AuthMethodCatalog.Fido2ReportName(Guid.TryParse(Str(m, "aaGuid"), out var g) ? g : null, Str(m, "model"))
+            : AuthMethodCatalog.ReportNameFor(kind, Str(m, "phoneType"));
+        return new GraphAuthMethod(Str(m, "id") ?? "", kind, reportName, Str(m, "displayName"), detail, Date(m, "createdDateTime"));
     }
+
+    /// <summary>Typen, bei denen Entra das Gerät verknüpft (Navigation „device“), mit ihrem Pfad.</summary>
+    private static readonly (string Kind, string Segment)[] DeviceBound =
+        [("windowsHelloForBusiness", "windowsHelloForBusinessMethods"), ("platformCredential", "platformCredentialMethods")];
 
     public async Task<IReadOnlyList<GraphAuthMethod>> ListAuthenticationMethodsAsync(string userId, CancellationToken ct = default)
     {
-        using var doc = await SendAsync(HttpMethod.Get, $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/methods", ct);
-        return doc!.RootElement.GetProperty("value").EnumerateArray().Select(ParseAuthMethod).ToList();
+        List<GraphAuthMethod> methods;
+        using (var doc = await SendAsync(HttpMethod.Get, $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/methods", ct))
+            methods = doc!.RootElement.GetProperty("value").EnumerateArray().Select(ParseAuthMethod).ToList();
+
+        // Windows Hello und Platform Credential: Gerät nachladen. Fehlt dafür eine Berechtigung, bleibt es beim Anzeigenamen.
+        foreach (var (kind, segment) in DeviceBound)
+        {
+            if (!methods.Any(m => m.Kind == kind)) continue;
+            try
+            {
+                using var doc = await SendAsync(HttpMethod.Get,
+                    $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/{segment}?$expand=device($select=id,displayName,operatingSystem)", ct);
+                var devices = new Dictionary<string, string>();
+                foreach (var m in doc!.RootElement.GetProperty("value").EnumerateArray())
+                {
+                    if (Str(m, "id") is not { } id || !m.TryGetProperty("device", out var d) || d.ValueKind != JsonValueKind.Object) continue;
+                    var name = Str(d, "displayName");
+                    var os = Str(d, "operatingSystem");
+                    if (!string.IsNullOrWhiteSpace(name)) devices[id] = string.IsNullOrWhiteSpace(os) ? name : $"{name} ({os})";
+                }
+                methods = methods.Select(m => m.Kind == kind && devices.TryGetValue(m.Id, out var dev) ? m with { Device = dev } : m).ToList();
+            }
+            catch (GraphException) { /* Gerät ist nur eine Zusatzinfo */ }
+        }
+        return methods;
     }
 
     public async Task DeleteAuthenticationMethodAsync(string userId, string kind, string methodId, CancellationToken ct = default)

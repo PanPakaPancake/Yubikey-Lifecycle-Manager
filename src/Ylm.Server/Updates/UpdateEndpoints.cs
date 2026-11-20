@@ -82,6 +82,14 @@ public static class UpdateEndpoints
             return Results.Accepted();
         });
 
+        g.MapPost("/refresh", async (CurrentUser cu, UpdateService updates, AuditService audit, CancellationToken ct) =>
+        {
+            var user = await cu.RequireAsync(Permission.ManageSettings);
+            await updates.StartRefreshAsync(ct);
+            await audit.WriteAsync(AuditService.User(user), AuditActions.UpdateStarted, details: new { kind = "security_refresh", version = UpdateService.CurrentVersion });
+            return Results.Accepted();
+        });
+
         // ----- Versionsstand für alle Angemeldeten (Übersicht, Versionsverlauf) -----
         // Nur lesend: welche Version läuft, welche ist die neueste, was ist neu. Das Update starten bleibt bei ManageSettings.
         app.MapGet("/api/updates/summary", async (CurrentUser cu, UpdateService updates, CancellationToken ct) =>

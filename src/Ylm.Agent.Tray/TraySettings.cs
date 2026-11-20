@@ -21,6 +21,13 @@ internal static class TraySettings
         set => Write("Notifications", value ? 1 : 0);
     }
 
+    /// <summary>Darstellung wie in der Weboberfläche: dunkel (Vorgabe), hell oder wie Windows.</summary>
+    public static ThemeMode Theme
+    {
+        get => Read("Theme", 0) switch { 1 => ThemeMode.Light, 2 => ThemeMode.System, _ => ThemeMode.Dark };
+        set => Write("Theme", (int)value);
+    }
+
     private static int Read(string name, int fallback)
     {
         try
