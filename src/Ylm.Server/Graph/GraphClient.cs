@@ -322,7 +322,7 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
     public async Task<int?> CountUsersAsync(string? groupId, CancellationToken ct = default)
     {
         var url = string.IsNullOrEmpty(groupId) || groupId == PolicyTarget.AllUsers
-            ? $"{V1}/users/$count?$filter=accountEnabled eq true"
+            ? $"{V1}/users/$count?$filter=accountEnabled eq true and userType eq 'Member'"
             : $"{V1}/groups/{Uri.EscapeDataString(groupId)}/transitiveMembers/microsoft.graph.user/$count";
         using var req = await RequestAsync(HttpMethod.Get, url, ct, eventual: true);
         using var res = await http.SendAsync(req, ct);
@@ -335,7 +335,7 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
     {
         var all = string.IsNullOrEmpty(groupId) || groupId == PolicyTarget.AllUsers;
         string? url = all
-            ? $"{V1}/users?$select=id,accountEnabled&$top=999"
+            ? $"{V1}/users?$select=id,accountEnabled,userType&$top=999"
             : $"{V1}/groups/{Uri.EscapeDataString(groupId!)}/transitiveMembers/microsoft.graph.user?$select=id,accountEnabled&$top=999";
         var ids = new HashSet<string>();
         while (url is not null)
@@ -345,6 +345,8 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
             foreach (var u in doc.RootElement.GetProperty("value").EnumerateArray())
             {
                 if (u.TryGetProperty("accountEnabled", out var en) && en.ValueKind == JsonValueKind.False) continue;
+                // "Alle Benutzer" means the tenant's own members; guests only count when a group adds them explicitly.
+                if (all && string.Equals(Str(u, "userType"), "Guest", StringComparison.OrdinalIgnoreCase)) continue;
                 if (Str(u, "id") is { } id) ids.Add(id);
             }
             url = Str(doc.RootElement, "@odata.nextLink");
