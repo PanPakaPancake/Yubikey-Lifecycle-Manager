@@ -119,7 +119,8 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
                 onChange: (e: { target: { value: string } }) => set(key, e.target.value),
                 onFocus: () => onFocus(key), onBlur: () => onBlur(key),
               };
-              const rows = Math.min(8, Math.max(2, (value || inherited(key)).split('\n').length + (key === 'hints' ? 0 : 1)));
+              const text = value || inherited(key);
+              const rows = Math.min(9, Math.max(2, text.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 85)), 0) + 1));
               return (
                 <div key={key} className={'le-field' + (value.trim() ? ' le-custom' : '')}>
                   <div className="le-label">
