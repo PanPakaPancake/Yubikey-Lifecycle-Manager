@@ -7,6 +7,15 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.9.3 · 2026-11-20
+- Verbessert: Der Versionsverlauf öffnet sich mit einem Klick auf die Versionsangabe unten in der Seitenleiste. Der eigene Menüpunkt unter „Hilfe“ entfällt.
+- Neu: Unten in der Seitenleiste erscheint das Profilbild aus Microsoft 365, sonst wie bisher die Initialen.
+- Verbessert: „Nacherfassen“ steht im Inventar direkt beim betroffenen Key statt oben als allgemeiner Knopf.
+- Verbessert: „Passkeys erklärt“ ohne den Knopf „Wie Endbenutzer öffnen“, der öffentliche Link lässt sich weiterhin kopieren.
+- Neu: Brief-Editor unter „Erscheinungsbild der Dokumente“. Alle Texte des PIN-Briefs lassen sich anpassen, mit Platzhaltern wie {{Vorname}} oder {{Seriennummer}} und einer Live-Vorschau als PDF. Tenants können einzelne Texte überschreiben.
+- Verbessert: Der PIN-Brief hat ein neues, helles Design passend zur App. Rahmen statt farbiger Flächen sparen beim Drucken Toner.
+- Behoben: In „Passkeys erklärt“ sind die Schritte unter „Am PC anmelden“ jetzt mit 1 bis 4 nummeriert.
+
 ## 0.9.2 · 2026-11-20
 - Neu: Rechte pro API-Schlüssel, ähnlich wie Rollen. Jeder Schlüssel bekommt eigene Lese- und Schreibrechte (Inventar, Zuweisungen, Kennzahlen, ToDo-Liste, Audit-Log), kombiniert mit allen oder ausgewählten Tenants. Vorlagen: „Nur lesen“, „Lesen + ToDo“, „Lesen + Schreiben“; „Keys sperren“ wird immer einzeln vergeben.
 - Neu: Über die API lassen sich jetzt Tags, Zusatzfelder und Notiz eines Keys pflegen und Keys sperren, z. B. aus dem Ticketsystem bei Verlust. Jede Änderung steht im Audit-Log.

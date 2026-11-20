@@ -6,6 +6,7 @@ import { Badge, Card, download, ErrorBox, Info, Modal, PageHeader, Spinner, useA
 import { FieldExplanation } from './TenantDetail';
 import { useConfirm } from '../feedback';
 import { BrandingCard } from './Branding';
+import { LetterEditorCard } from './LetterEditor';
 
 /** Platform level: settings that apply to the whole installation and are inherited by the tenants. */
 export default function PlatformPage() {
@@ -33,6 +34,7 @@ export default function PlatformPage() {
       {can('ManageSettings') && <AppCertificateCard />}
       {can('ManageSettings') && <LoginSettingsCard />}
       <BrandingCard editable={!!can('ManageSettings')} />
+      <LetterEditorCard editable={!!can('ManageSettings')} />
       <GlobalFieldsCard editable={can('ManageProfiles') && !!me.user?.allTenants} />
       {can('ManageApiKeys') && <ApiKeysCard />}
       {can('ManageApiKeys') && <Info>Webhooks, Mail-Alarme und Mail-Berichte stehen unter <Link to="/partner/notifications">Benachrichtigungen</Link>.</Info>}

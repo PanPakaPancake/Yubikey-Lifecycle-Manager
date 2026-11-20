@@ -574,5 +574,7 @@ public sealed class Branding
     /// <summary>Kontakt für Rückfragen, z. B. „IT-Service · 0123 456 · it@firma.de“.</summary>
     public string? Contact { get; set; }
     public string? Footer { get; set; }
+    /// <summary>Eigene Texte des PIN-Briefs als JSON (Schlüssel aus <see cref="Pdf.LetterTemplate.Fields"/>); fehlende übernehmen die Vorgabe.</summary>
+    public string? LetterTexts { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

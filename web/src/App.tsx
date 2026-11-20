@@ -147,12 +147,11 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div className="nav-group nav-group-help">
           <div className="section">Hilfe</div>
           {item('/passkey', 'info', 'Passkeys erklärt')}
-          {item('/versionen', 'history', <>Versionsverlauf{updates?.updateAvailable && <span className="dot-warn pulse" title={`Version ${updates.latestVersion} ist verfügbar`} />}</>)}
           </div>
         </nav>
         <div className="sidebar-foot">
           <NavLink to="/account" className="account-link">
-            <span className="avatar" aria-hidden>{initials(me.user?.displayName)}</span>
+            <Avatar name={me.user?.displayName} photo={me.user?.loginKind === 'Entra'} />
             <span className="account-text">
               <strong>{me.user?.displayName}</strong>
               <span className="muted small">{me.user?.role === 'Custom' ? me.user?.customRoleName : roleLabel[me.user?.role ?? ''] ?? me.user?.role}</span>
@@ -162,7 +161,8 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
             <ThemeToggle />
             <button type="button" className="ghost small" onClick={logout}><Icon name="logout" size={16} />Abmelden</button>
           </div>
-          {me.version && <Link to="/versionen" className="small muted version" title="Versionsverlauf">Version {me.version}{updates?.updateAvailable && <> · Update auf {updates.latestVersion}</>}</Link>}
+          {/* Klick auf die Version öffnet den Versionsverlauf (kein eigener Menüpunkt). */}
+          {me.version && <Link to="/versionen" className="small muted version" title="Versionsverlauf anzeigen"><Icon name="history" size={13} /><span>Version {me.version}</span>{updates?.updateAvailable && <span className="version-update"><span className="dot-warn pulse" />Update auf {updates.latestVersion}</span>}</Link>}
         </div>
       </aside>
       <main className="main">
@@ -284,6 +284,16 @@ function useReveal(path: string) {
     mo.observe(page, { childList: true, subtree: true });
     return () => { mo.disconnect(); io.disconnect(); root.classList.remove('reveal-on'); };
   }, [path]);
+}
+
+/** Profilbild aus Microsoft 365 (nur Entra-Konten); fehlt es, bleiben die Initialen. */
+function Avatar({ name, photo }: { name?: string; photo: boolean }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="avatar" aria-hidden>
+      {photo && !failed ? <img src="/api/me/photo" alt="" onError={() => setFailed(true)} /> : initials(name)}
+    </span>
+  );
 }
 
 function initials(name?: string) {
