@@ -17,6 +17,7 @@ public static class LocalAuthEndpoints
     public sealed record SetupPasskeyRequest(string Token, string RequestId, JsonElement Response, string? Name);
     public sealed record SetupEmergencyRequest(string Token, string Password, string Code);
     public sealed record LoginSettingsRequest(bool EntraSsoEnabled);
+    public sealed record RecoveryLoginRequest(string Code);
 
     public static object PasskeyDto(UserPasskey p) => new { p.Id, p.Name, p.Aaguid, p.CreatedAt, p.LastUsedAt };
 
@@ -31,6 +32,7 @@ public static class LocalAuthEndpoints
                 entraSso = s is { EntraSsoEnabled: true, ClientId: not null },
                 passkey = await db.UserPasskeys.AnyAsync(),
                 emergency = await db.PlatformUsers.AnyAsync(u => u.LoginKind == UserLoginKind.Emergency && u.PasswordHash != null),
+                recovery = await db.RecoveryCodes.AnyAsync(c => c.UsedAt == null),
                 development = AuthEndpoints.IsDevAuth(env, options.Value),
             });
         }).AllowAnonymous();
@@ -48,6 +50,27 @@ public static class LocalAuthEndpoints
             var user = await local.EmergencyLoginAsync(body.Upn ?? "", body.Password ?? "", body.Code ?? "");
             return Results.Ok(new { user.Id, user.Upn });
         }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
+
+        app.MapPost("/auth/recovery", async (RecoveryLoginRequest body, RecoveryCodeService recovery) =>
+        {
+            var (user, remaining) = await recovery.LoginAsync(body.Code);
+            return Results.Ok(new { user.Id, user.Upn, remaining });
+        }).AllowAnonymous().RequireRateLimiting(SecurityHeaders.AuthRateLimit);
+
+        // ----- Eigene Notfallcodes (nur Owner) -----
+        var codes = app.MapGroup("/api/me/recovery-codes").RequireAuthorization();
+        codes.MapGet("", async (CurrentUser cu, RecoveryCodeService recovery) =>
+        {
+            var user = await cu.GetAsync();
+            if (!RecoveryCodeService.Eligible(user)) throw ApiException.Forbidden("Notfallcodes gibt es nur für Owner.");
+            return Results.Ok(await recovery.StatusAsync(user.Id));
+        });
+        codes.MapPost("", async (CurrentUser cu, RecoveryCodeService recovery) =>
+        {
+            var user = await cu.GetAsync();
+            var list = await recovery.CreateAsync(user);
+            return Results.Ok(new { codes = list, createdAt = DateTimeOffset.UtcNow });
+        });
 
         // ----- Kontoeinrichtung per Einmal-Link -----
         app.MapPost("/auth/account-setup", async (TokenRequest body, LocalAuthService local) =>

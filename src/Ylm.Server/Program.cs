@@ -66,6 +66,7 @@ builder.Services.AddScoped<CurrentUser>();
 builder.Services.AddScoped<AuditService>();
 builder.Services.AddScoped<PlatformSignIn>();
 builder.Services.AddScoped<LocalAuthService>();
+builder.Services.AddScoped<RecoveryCodeService>();
 builder.Services.AddSingleton<Ylm.Server.Updates.UpdateService>();
 builder.Services.AddHttpClient("updates", c => c.Timeout = TimeSpan.FromSeconds(20));
 builder.Services.AddMemoryCache();

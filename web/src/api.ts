@@ -63,6 +63,8 @@ export interface UserPasskey { id: string; name: string; aaguid: string; created
 
 export interface Me {
   authenticated: boolean; setupComplete: boolean; organizationName?: string; version?: string; user?: PlatformUser; permissions?: string[];
+  /** Nur für Owner: verbleibende Notfallcodes. */
+  recoveryCodes?: number | null;
 }
 
 export interface AgentPackageInfo { available: boolean; version?: string | null; size?: number | null; sha256?: string | null; downloadUrl?: string | null }

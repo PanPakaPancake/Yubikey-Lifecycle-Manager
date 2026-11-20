@@ -23,7 +23,7 @@ public static class UserEndpoints
 
     public static void MapUsers(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/me", async (CurrentUser cu, SetupService setup) =>
+        app.MapGet("/api/me", async (CurrentUser cu, SetupService setup, YlmDbContext db) =>
         {
             var settings = await setup.GetSettingsAsync();
             var user = await cu.TryGetAsync();
@@ -36,6 +36,10 @@ public static class UserEndpoints
                 version = Updates.UpdateService.CurrentVersion,
                 user = ToDto(user),
                 permissions = RolePermissions.Split(CurrentUser.Effective(user)).Select(p => p.ToString()),
+                // Nur für Owner: verbleibende Notfallcodes (0 = noch keine erzeugt oder alle verbraucht).
+                recoveryCodes = Security.RecoveryCodeService.Eligible(user)
+                    ? await db.RecoveryCodes.CountAsync(c => c.PlatformUserId == user.Id && c.UsedAt == null)
+                    : (int?)null,
             });
         }).AllowAnonymous();
 

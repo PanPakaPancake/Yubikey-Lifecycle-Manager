@@ -10,7 +10,7 @@ import type { CertificateStatus } from './Platform';
 
 interface DashboardData {
   generatedAt: string; byStatus: Record<string, number>; inStock: number; total: number; needsDetails: number;
-  targetUsers?: number; usersWithKey: number; coveragePercent?: number;
+  targetUsers?: number; usersWithKey: number; coveragePercent?: number; targetAllUsers?: boolean;
   issuedPerMonth: { month: string; count: number }[];
   firmware: { firmware: string; count: number; advisories: string[]; vulnerable: boolean }[];
   vulnerableKeys: number; forcePinChangeUnsupported: number; openTodos: number; pendingApprovals: number;
@@ -55,7 +55,8 @@ export default function DashboardPage() {
 
           <div className="grid cols-4 dash-kpis">
             <Kpi icon="users" className="kpi-coverage" label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
-              sub={`${data.usersWithKey} von ${data.targetUsers ?? '?'} Personen mit Key`} to="/keys?view=people"
+              sub={data.targetUsers != null ? `${data.usersWithKey} von ${data.targetUsers} Personen mit Key` : `${data.usersWithKey} Personen mit Key, Zielgruppe noch nicht ermittelt`} to="/keys?view=people"
+              footer={data.targetAllUsers && <span className="kpi-foot">Zielgruppe: alle aktiven Konten · <Link to={tenantId ? '/tenant' : '/tenants'}>Zielgruppe festlegen</Link></span>}
               aside={data.coveragePercent != null && <Donut size={64} thickness={9} parts={[
                 { key: 'with', value: Math.min(100, data.coveragePercent), color: 'var(--ok)', label: 'Mit Key' },
                 { key: 'without', value: Math.max(0, 100 - data.coveragePercent), color: 'transparent', label: 'Ohne Key' },
@@ -152,7 +153,7 @@ function DashHero({ data, cert }: { data: DashboardData; cert?: CertificateStatu
         <p className="dash-hero-title">
           {data.coveragePercent != null ? <><b>{data.coveragePercent.toFixed(0)} %</b> der Zielgruppe haben einen YubiKey.</> : <><b>{data.byStatus.Active ?? 0}</b> Keys sind aktiv.</>}
         </p>
-        <p className="dash-hero-sub">{todo ? `${todo} Punkte brauchen heute Ihre Aufmerksamkeit.` : 'Alles in Ordnung, kein Handlungsbedarf.'} {data.inStock} Keys liegen bereit.</p>
+        <p className="dash-hero-sub">{todo ? (todo === 1 ? '1 Punkt braucht heute Ihre Aufmerksamkeit.' : `${todo} Punkte brauchen heute Ihre Aufmerksamkeit.`) : 'Alles in Ordnung, kein Handlungsbedarf.'} {data.inStock} Keys liegen bereit.</p>
         <div className="dash-hero-meter"><span style={{ width: Math.min(100, data.coveragePercent ?? 0) + '%' }} /></div>
         <div className="dash-hero-links">
           <Link to="/register" className="hero-chip"><Icon name="keyPlus" size={15} />Key registrieren</Link>
@@ -166,7 +167,7 @@ function DashHero({ data, cert }: { data: DashboardData; cert?: CertificateStatu
 
 const statusColor: Record<KeyStatus, string> = { Active: 'var(--ok)', InStock: 'var(--accent)', Locked: 'var(--error)', Retired: 'var(--muted)' };
 
-function Kpi({ label, value, sub, to, tone, children, aside, icon, className = '' }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode; aside?: ReactNode; icon?: IconName; className?: string }) {
+function Kpi({ label, value, sub, to, tone, children, aside, icon, className = '', footer }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode; aside?: ReactNode; icon?: IconName; className?: string; footer?: ReactNode }) {
   const text = <>
     {icon && <span className="kpi-ico" aria-hidden><Icon name={icon} size={20} /></span>}
     <div className="label">{label}</div>
@@ -175,7 +176,9 @@ function Kpi({ label, value, sub, to, tone, children, aside, icon, className = '
     {children}
   </>;
   const body = aside ? <div className="kpi-gauge"><div style={{ flex: 1, minWidth: 0 }}>{text}</div>{aside}</div> : text;
-  if (!to) return <div className={'card kpi ' + className}>{body}</div>;
+  if (!to) return <div className={'card kpi ' + className}>{body}{footer}</div>;
+  // A footer holds its own link, so the tile itself cannot be one link: link the body and keep the footer beside it.
+  if (footer) return <div className={'card kpi kpi-has-foot ' + className}><Link className="kpi-body-link" to={to}>{body}</Link>{footer}</div>;
   if (to.startsWith('#')) return <a className={'card kpi kpi-link ' + className} href={to}>{body}</a>;
   return <Link className={'card kpi kpi-link ' + className} to={to}>{body}</Link>;
 }

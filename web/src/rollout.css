@@ -141,3 +141,5 @@
   .ro > *, .ro-journey span, .ro-stage-bar i, .ro-method-bar i, .ro-live li, .ro-selbar, .icon.spin { animation: none !important; }
   .ro-stage:hover:not(:disabled) { transform: none; }
 }
+.ro-device { display: inline-flex; align-items: center; gap: 5px; font-size: .86rem; font-weight: 600; color: var(--ink); margin: 1px 0; }
+.ro-device .icon { color: var(--muted); }

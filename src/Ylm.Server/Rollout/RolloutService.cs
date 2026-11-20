@@ -119,6 +119,9 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
         {
             m.Id, m.Kind, m.ReportName, Label = info.Label, Strength = info.Strength.ToString(), info.IsPasskey,
             m.DisplayName, m.Detail, m.CreatedDateTime, Removable = AuthMethodCatalog.IsRemovable(m.Kind),
+            // Windows Hello for Business: Entra nennt im Anzeigenamen das Gerät, falls die Geräteabfrage nichts liefert.
+            Device = m.Device ?? (m.Kind is "windowsHelloForBusiness" or "platformCredential" ? m.DisplayName : null),
+            info.IsSecurityKey,
         };
     }
 

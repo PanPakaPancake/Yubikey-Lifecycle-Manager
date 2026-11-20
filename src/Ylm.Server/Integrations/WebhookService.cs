@@ -53,6 +53,7 @@ public sealed class WebhookService(YlmDbContext db, IHttpClientFactory http, IDa
         new(AuditActions.TodoCompleted, "ToDo-Liste", "ToDo erledigt"),
         new(AuditActions.TodoCancelled, "ToDo-Liste", "ToDo zurückgezogen"),
         new(AuditActions.BatchCompleted, "Stapel", "Stapelregistrierung abgeschlossen"),
+        new(AuditActions.RecoveryCodeUsed, "Plattform", "Anmeldung mit Notfallcode"),
         new(AuditActions.AppCertificateExpiring, "Plattform", "App-Zertifikat läuft bald ab"),
         new(AuditActions.AppCertificateRenewed, "Plattform", "App-Zertifikat erneuert"),
         new(AuditActions.AppCertificateRenewalFailed, "Plattform", "Erneuerung des App-Zertifikats fehlgeschlagen"),
