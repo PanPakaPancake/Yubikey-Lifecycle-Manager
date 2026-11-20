@@ -35,9 +35,9 @@ services:
       Ylm__PublicBaseUrl: ${YLM_PUBLIC_URL:-}
       Ylm__UpdaterUrl: http://updater:8090
       Ylm__UpdaterToken: ${UPDATER_TOKEN:-}
-      # Anmeldung der Admins per Entra nur passwortlos mit Sicherheitsschlüssel (nur für Tests abschalten).
-      Ylm__RequirePhishingResistantSignIn: ${YLM_REQUIRE_PHISHING_RESISTANT:-true}
-      # Als phishing-resistent akzeptierte Anmeldemethoden (amr im Microsoft-Token, Komma-Liste).
+      # Optional: zusätzlich die Anmeldemethode der Admins prüfen (Standard aus, das regelt Entra per Bedingtem Zugriff).
+      Ylm__RequirePhishingResistantSignIn: ${YLM_REQUIRE_PHISHING_RESISTANT:-false}
+      # Bei eingeschalteter Prüfung akzeptierte Anmeldemethoden (amr im Microsoft-Token, Komma-Liste).
       Ylm__PhishingResistantAmrValues__0: ${YLM_ACCEPTED_AMR:-fido}
       Ylm__AutoRenewAppCertificate: ${YLM_CERT_AUTO_RENEW:-true}
       # Weitere vertrauenswürdige Reverse Proxys/ZTNA-Connectoren mit öffentlicher Adresse (Komma-Liste, Standard: private Netze).

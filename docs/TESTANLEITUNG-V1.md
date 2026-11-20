@@ -80,18 +80,9 @@ Variante 1 wählen und die Domain eingeben.
 - `docker compose ps` im Installationsordner zeigt `db` und nach ca. 30 Sekunden auch `server` als `healthy`.
 - B: `https://ylm.<deine-domain>/healthz` antwortet mit `{"status":"ok"}` und gültigem Zertifikat.
 
-### 1.2 Test-Einstellung: Anmeldung vorerst ohne YubiKey-Pflicht
+### 1.2 Anmeldemethode
 
-Standardmäßig lässt die Plattform nur Anmeldungen mit Passkey/YubiKey zu (Claim `amr` = `fido`). Damit wir in Schritt 3 „Jetzt beheben“ an einer **ausgeschalteten** FIDO2-Richtlinie testen können, schalten wir diese Pflicht für den ersten Durchlauf ab. Lege dazu im Installationsordner eine Datei **`docker-compose.override.yml`** an (Docker Compose liest sie automatisch mit):
-
-```yaml
-services:
-  server:
-    environment:
-      Ylm__RequirePhishingResistantSignIn: "false"
-```
-
-Dann im Installationsordner `docker compose up -d`. Die Pflicht testen wir am Ende in Schritt 7 wieder mit eingeschalteter Einstellung.
+Die Plattform prüft die Anmeldemethode der Admins standardmäßig nicht selbst. Welche Methoden erlaubt sind (z. B. nur YubiKey/Passkey), regelt der Tenant-Betreiber in Entra per Bedingtem Zugriff. Die optionale zusätzliche Prüfung testen wir in Schritt 7.
 
 ### 1.3 Datensicherung
 
@@ -607,20 +598,17 @@ Voraussetzung: Mailserver ist im Reiter **Mail-Berichte** eingetragen (siehe 6.3
 
 ---
 
-## 7. Anmeldung nur mit YubiKey (Abschlusstest)
+## 7. Optionale Prüfung der Anmeldemethode (Abschlusstest)
 
 1. Für das **Owner-Konto** selbst einen YubiKey/Passkey registrieren (z. B. über `https://mysignins.microsoft.com/security-info`).
-2. Die Datei `docker-compose.override.yml` löschen und neu starten:
-   ```powershell
-   Remove-Item docker-compose.override.yml
-   docker compose up -d
-   ```
+2. In `.env` die Zeile `YLM_REQUIRE_PHISHING_RESISTANT=true` ergänzen und `docker compose up -d server`.
 3. Abmelden und neu anmelden.
 
 **Erwartet:**
 
-- Anmeldung mit **Passwort** (ohne Key) wird von der Plattform abgelehnt: Login-Seite mit „Anmeldung muss passwortlos mit Sicherheitsschlüssel erfolgen (amr: pwd …)“.
+- Anmeldung mit **Passwort** (ohne Key) wird von der Plattform abgelehnt; die Anmeldeseite nennt die gemeldete Methode und bietet „Erneut mit YubiKey anmelden“.
 - Anmeldung mit dem **YubiKey** klappt.
+- Danach die Zeile wieder entfernen (oder auf `false` setzen) und `docker compose up -d server`.
 
 ---
 

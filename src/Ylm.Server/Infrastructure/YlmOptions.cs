@@ -10,8 +10,11 @@ public sealed class YlmOptions
     /// <summary>"Entra" (default) or "Development" (local fake login, only in the Development environment).</summary>
     public string AuthMode { get; set; } = "Entra";
 
-    /// <summary>Require a phishing-resistant sign-in (amr claim) for platform admins.</summary>
-    public bool RequirePhishingResistantSignIn { get; set; } = true;
+    /// <summary>
+    /// Zusätzlich die Anmeldemethode (amr claim) der Admins prüfen. Standard aus: welche Methoden gelten,
+    /// regelt der Tenant-Betreiber in Entra (Bedingter Zugriff, Authentifizierungsstärken).
+    /// </summary>
+    public bool RequirePhishingResistantSignIn { get; set; }
 
     /// <summary>App-Zertifikat vor dem Ablauf selbst erneuern (Graph addKey). Aus: nur warnen.</summary>
     public bool AutoRenewAppCertificate { get; set; } = true;

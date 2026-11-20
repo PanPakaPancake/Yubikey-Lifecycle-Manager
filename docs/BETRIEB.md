@@ -137,7 +137,7 @@ Beim ersten Start einer leeren Datenbank meldet Entity Framework einmal einen Fe
   services:
     server:
       environment:
-        Ylm__RequirePhishingResistantSignIn: "false"
+        Ylm__TrustedProxies__1: "203.0.113.10"
   ```
 
 - **Eigenes Zertifikat**: Variante 2 in [1.2](#12-server-im-internen-netz-empfohlen), keine eigene Caddyfile mehr nötig.
@@ -204,8 +204,8 @@ In `.env`:
 | `BACKUP_TIME`, `BACKUP_KEEP_DAYS`, `BACKUP_DIR` | `02:30`, `14`, `./backups` | Datensicherung (`BACKUP_TIME=off` schaltet sie ab) |
 | `BACKUP_PASSPHRASE` | vom Skript erzeugt | verschlüsselt die Sicherungen; leer = unverschlüsselt |
 | `YLM_CERT_AUTO_RENEW` | `true` | App-Zertifikat selbst erneuern (sonst nur warnen) |
-| `YLM_REQUIRE_PHISHING_RESISTANT` | `true` | Anmeldung der Admins nur mit Passkey/YubiKey (nur für Tests abschalten) |
-| `YLM_ACCEPTED_AMR` | `fido` | akzeptierte Anmeldemethoden laut Microsoft-Token (Komma-Liste); abgelehnte Methode steht auf der Anmeldeseite |
+| `YLM_REQUIRE_PHISHING_RESISTANT` | `false` | zusätzlich die Anmeldemethode der Admins prüfen. Standard aus: das regelt der Tenant-Betreiber in Entra (Bedingter Zugriff, Authentifizierungsstärke „Phishing-resistente MFA“) |
+| `YLM_ACCEPTED_AMR` | `fido` | bei eingeschalteter Prüfung akzeptierte Anmeldemethoden laut Microsoft-Token (Komma-Liste); abgelehnte Methode steht auf der Anmeldeseite |
 | `TZ` | `Europe/Berlin` | Zeitzone |
 
 Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services.server.environment`):
