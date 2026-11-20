@@ -82,7 +82,6 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
           ? <>Keys, die keinem Kunden zugeordnet sind{data ? ` (${data.total})` : ''}. Von hier aus weisen Sie Keys einem Tenant zu.</>
           : 'Alle Keys mit Status, und wer welchen Key gerade hat.'}
         actions={<>
-          {canIntake && !partner && <Link className="btn" to="/keys/identify">Nacherfassen</Link>}
           {canIntake && <button onClick={() => setModal('import')}>CSV importieren</button>}
           {!partner && can('ReadReports') && <MenuButton label="Exportieren" items={[
             { label: 'Alle Keys (CSV)', hint: 'Inventar mit Status, Tags und Zusatzfeldern', icon: 'key', onClick: () => download('/api/exports/keys.csv' + exportQs) },
@@ -144,7 +143,13 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
                 return (
                   <tr key={k.id} className={selected.has(k.id) ? 'selected-row' : undefined}>
                     {canBulk && <td><input type="checkbox" aria-label={'Auswählen ' + (k.serialNumber ?? '')} checked={selected.has(k.id)} onChange={(e) => toggle(k.id, e.target.checked)} /></td>}
-                    <td><Link to={'/keys/' + k.id} className="mono">{k.serialNumber ?? '— nicht erfasst —'}</Link></td>
+                    <td><Link to={'/keys/' + k.id} className="mono">{k.serialNumber ?? '— nicht erfasst —'}</Link>
+                      {/* Nacherfassen nur dort, wo es gebraucht wird: selbst registrierter Key ohne Seriennummer und Firmware. */}
+                      {k.serialNumber == null && canIntake && !partner && k.status !== 'Retired' && (
+                        <Link className="btn small identify-link" to={`/keys/identify?keyId=${k.id}`} title="Vom Nutzer selbst registriert, Seriennummer und Firmware fehlen. Key einstecken und nacherfassen.">
+                          <Icon name="scan" size={13} />Nacherfassen
+                        </Link>
+                      )}</td>
                     <td>{k.model ?? '–'}</td>
                     <td className="mono">{k.firmwareVersion ?? '–'} {k.advisories.some((a) => a.affectsFido) && <Badge tone="warn">Hinweis</Badge>}</td>
                     <td><StatusBadge status={k.status} /></td>

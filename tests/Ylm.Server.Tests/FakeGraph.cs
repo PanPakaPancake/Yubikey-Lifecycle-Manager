@@ -25,6 +25,10 @@ public sealed class FakeGraph : IGraphClient
     public string? LastChallenge { get; private set; }
     public int PolicyUpdates { get; private set; }
 
+    public Dictionary<string, byte[]> Photos { get; } = [];
+    public Task<byte[]?> GetUserPhotoAsync(string userId, CancellationToken ct = default) =>
+        Task.FromResult(Photos.TryGetValue(userId, out var p) ? p : null);
+
     public Task<GraphOrganization> GetOrganizationAsync(CancellationToken ct = default) =>
         Task.FromResult(new GraphOrganization(TenantId.ToString(), "Contoso GmbH", "contoso.com"));
 

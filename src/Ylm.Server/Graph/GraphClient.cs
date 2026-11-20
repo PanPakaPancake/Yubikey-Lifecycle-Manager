@@ -11,6 +11,9 @@ namespace Ylm.Server.Graph;
 public interface IGraphClient
 {
     Task<GraphOrganization> GetOrganizationAsync(CancellationToken ct = default);
+
+    /// <summary>Profilbild (96×96, JPEG) eines Benutzers; null, wenn keins hinterlegt ist oder Graph es verweigert.</summary>
+    Task<byte[]?> GetUserPhotoAsync(string userId, CancellationToken ct = default);
     Task<IReadOnlyList<string>> GetGrantedApplicationPermissionsAsync(CancellationToken ct = default);
     Task<Fido2Policy> GetFido2PolicyAsync(CancellationToken ct = default);
     Task UpdateFido2PolicyAsync(Fido2Policy policy, CancellationToken ct = default);
@@ -132,6 +135,14 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
         Str(m, "id")!, Str(m, "displayName"),
         DateTimeOffset.TryParse(Str(m, "createdDateTime"), out var c) ? c : null,
         Guid.TryParse(Str(m, "aaGuid"), out var g) ? g : null, Str(m, "model"));
+
+    public async Task<byte[]?> GetUserPhotoAsync(string userId, CancellationToken ct = default)
+    {
+        using var req = await RequestAsync(HttpMethod.Get, $"{V1}/users/{Uri.EscapeDataString(userId)}/photos/96x96/$value", ct);
+        using var res = await http.SendAsync(req, ct);
+        // 404 = kein Bild, 403 = Berechtigung fehlt: beides heißt hier nur "Initialen anzeigen".
+        return res.IsSuccessStatusCode ? await res.Content.ReadAsByteArrayAsync(ct) : null;
+    }
 
     public async Task<GraphOrganization> GetOrganizationAsync(CancellationToken ct = default)
     {

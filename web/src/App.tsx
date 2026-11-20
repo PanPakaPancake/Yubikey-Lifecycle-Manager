@@ -151,7 +151,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         </nav>
         <div className="sidebar-foot">
           <NavLink to="/account" className="account-link">
-            <span className="avatar" aria-hidden>{initials(me.user?.displayName)}</span>
+            <Avatar name={me.user?.displayName} photo={me.user?.loginKind === 'Entra'} />
             <span className="account-text">
               <strong>{me.user?.displayName}</strong>
               <span className="muted small">{me.user?.role === 'Custom' ? me.user?.customRoleName : roleLabel[me.user?.role ?? ''] ?? me.user?.role}</span>
@@ -284,6 +284,16 @@ function useReveal(path: string) {
     mo.observe(page, { childList: true, subtree: true });
     return () => { mo.disconnect(); io.disconnect(); root.classList.remove('reveal-on'); };
   }, [path]);
+}
+
+/** Profilbild aus Microsoft 365 (nur Entra-Konten); fehlt es, bleiben die Initialen. */
+function Avatar({ name, photo }: { name?: string; photo: boolean }) {
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="avatar" aria-hidden>
+      {photo && !failed ? <img src="/api/me/photo" alt="" onError={() => setFailed(true)} /> : initials(name)}
+    </span>
+  );
 }
 
 function initials(name?: string) {

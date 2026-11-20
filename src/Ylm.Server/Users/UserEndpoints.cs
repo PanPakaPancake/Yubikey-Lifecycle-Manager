@@ -43,6 +43,28 @@ public static class UserEndpoints
             });
         }).AllowAnonymous();
 
+        // Profilbild des angemeldeten Entra-Benutzers aus Microsoft 365 (Heim-Tenant, App-Berechtigung User.Read.All).
+        // Ohne Bild oder Berechtigung: 404, die Oberfläche zeigt dann die Initialen. Zwischengespeichert, damit nicht jede Seite Graph fragt.
+        app.MapGet("/api/me/photo", async (CurrentUser cu, SetupService setup, Graph.IGraphClientFactory graphs, Microsoft.Extensions.Caching.Memory.IMemoryCache cache, ILogger<PlatformUser> logger, CancellationToken ct) =>
+        {
+            var user = await cu.GetAsync();
+            var settings = await setup.GetSettingsAsync();
+            if (user.LoginKind != UserLoginKind.Entra || user.EntraObjectId is null || settings.HomeTenantId is null) return Results.NotFound();
+            var key = "me-photo:" + user.EntraObjectId;
+            if (!cache.TryGetValue(key, out byte[]? photo))
+            {
+                try { photo = await (await graphs.ForTenantAsync(settings.HomeTenantId.Value, ct)).GetUserPhotoAsync(user.EntraObjectId.Value.ToString(), ct); }
+                catch (Exception e) when (e is not OperationCanceledException)
+                {
+                    logger.LogInformation("Profilbild nicht abrufbar: {Message}", e.Message);
+                    photo = null;
+                }
+                cache.Set(key, photo, photo is null ? TimeSpan.FromMinutes(30) : TimeSpan.FromHours(6));
+            }
+            if (photo is null || photo.Length == 0) return Results.NotFound();
+            return Results.File(photo, "image/jpeg");
+        }).RequireAuthorization();
+
         var g = app.MapGroup("/api/users").RequireAuthorization();
 
         g.MapGet("", async (CurrentUser cu, YlmDbContext db) =>

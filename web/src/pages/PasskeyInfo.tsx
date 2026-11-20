@@ -111,7 +111,6 @@ export default function PasskeyInfoPage({ authenticated, embedded = false }: { a
         <div className="actions">
           {tabs}
           <button type="button" onClick={copyLink} title={publicUrl}><Icon name={copied ? 'check' : 'copy'} size={16} />{copied ? 'Kopiert' : 'Öffentlichen Link kopieren'}</button>
-          <a className="btn" href={'/passkey?oeffentlich=1' + (tech ? '&ansicht=techniker' : '')} target="_blank" rel="noreferrer"><Icon name="share" size={16} />Wie Endbenutzer öffnen</a>
         </div>
       </header>
       <main className="pk-main" key={view}>
@@ -414,13 +413,13 @@ function EndUser({ brand, onSwitch }: { brand: PublicBrand | null; onSwitch: () 
 
       <Section id="anmelden" n={5} title="Am PC anmelden">
         <div className="pk-steps">
-          <Step n={3} title="Key einstecken" art={<PlugArt />}>Stecken Sie den YubiKey in einen freien USB-Anschluss. Es passiert noch nichts, das ist richtig so.</Step>
-          <Step n={4} title="Anmeldeoption wählen" art={<OptionsArt />}>
+          <Step n={1} title="Key einstecken" art={<PlugArt />}>Stecken Sie den YubiKey in einen freien USB-Anschluss. Es passiert noch nichts, das ist richtig so.</Step>
+          <Step n={2} title="Anmeldeoption wählen" art={<OptionsArt />}>
             Geben Sie bei der Microsoft-Anmeldung Ihre E-Mail-Adresse ein. Falls nach einem Passwort gefragt wird, wählen Sie
             „Andere Anmeldemöglichkeiten“ und dann „Gesicht, Fingerabdruck, PIN oder Sicherheitsschlüssel“.
           </Step>
-          <Step n={5} title="PIN eingeben" art={<PinArt />}>Windows oder der Browser fragt nach der PIN des Sicherheitsschlüssels. Geben Sie Ihre PIN ein und bestätigen Sie.</Step>
-          <Step n={6} title="Goldene Fläche berühren" art={<TouchArt />}>Sobald der Key blinkt, berühren Sie kurz die goldene Fläche. Fertig, Sie sind angemeldet.</Step>
+          <Step n={3} title="PIN eingeben" art={<PinArt />}>Windows oder der Browser fragt nach der PIN des Sicherheitsschlüssels. Geben Sie Ihre PIN ein und bestätigen Sie.</Step>
+          <Step n={4} title="Goldene Fläche berühren" art={<TouchArt />}>Sobald der Key blinkt, berühren Sie kurz die goldene Fläche. Fertig, Sie sind angemeldet.</Step>
         </div>
         <Note kind="ok" title="Beim nächsten Mal">Microsoft merkt sich, dass Sie einen Sicherheitsschlüssel nutzen, und bietet ihn direkt an.</Note>
       </Section>
