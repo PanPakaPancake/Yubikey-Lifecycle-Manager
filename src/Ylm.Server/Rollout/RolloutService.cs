@@ -118,7 +118,7 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
         return new
         {
             m.Id, m.Kind, m.ReportName, Label = info.Label, Strength = info.Strength.ToString(), info.IsPasskey,
-            m.DisplayName, m.Detail, m.CreatedDateTime, Removable = AuthMethodCatalog.IsRemovable(m.Kind),
+            m.DisplayName, m.Detail, m.CreatedDateTime, Removable = AuthMethodCatalog.IsRemovable(m.Kind, m.ReportName),
             // Windows Hello for Business: Entra nennt im Anzeigenamen das Gerät, falls die Geräteabfrage nichts liefert.
             Device = m.Device ?? (m.Kind is "windowsHelloForBusiness" or "platformCredential" ? m.DisplayName : null),
             info.IsSecurityKey,
@@ -143,15 +143,15 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
 
     public async Task<IReadOnlyList<GraphAuthMethod>> RemoveMethodAsync(Tenant tenant, string userId, string kind, string methodId, PlatformUser actorUser, CancellationToken ct = default)
     {
-        if (!AuthMethodCatalog.IsRemovable(kind))
-            throw ApiException.BadRequest("not_removable", kind == "fido2"
-                ? "Passkeys auf Sicherheitsschlüsseln bitte über das Inventar sperren, damit der Key-Status stimmt."
-                : "Diese Methode kann hier nicht entfernt werden.");
+        if (!AuthMethodCatalog.IsRemovable(kind) && kind != "fido2")
+            throw ApiException.BadRequest("not_removable", "Diese Methode kann hier nicht entfernt werden.");
         var actor = AuditService.User(actorUser);
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
         await protection.EnsureAllowedAsync(tenant, graph, actorUser, [userId], ct);
         var before = await graph.ListAuthenticationMethodsAsync(userId, ct);
         var method = before.FirstOrDefault(m => m.Id == methodId && m.Kind == kind) ?? throw ApiException.NotFound("Methode");
+        if (!AuthMethodCatalog.IsRemovable(kind, method.ReportName))
+            throw ApiException.BadRequest("not_removable", "Passkeys auf Sicherheitsschlüsseln bitte über das Inventar sperren, damit der Key-Status stimmt.");
         var (upn, _) = await UserLabelAsync(tenant, graph, userId, ct);
         await graph.DeleteAuthenticationMethodAsync(userId, kind, methodId, ct);
         audit.Add(actor, AuditActions.AuthMethodRemoved, tenant.Id, target: upn,

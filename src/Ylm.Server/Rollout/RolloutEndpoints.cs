@@ -108,7 +108,7 @@ public static class RolloutEndpoints
     public static string StageLabel(string stage) => stage switch
     {
         nameof(RolloutStage.SecurityKey) => "Sicherheitsschlüssel",
-        nameof(RolloutStage.OtherPasskey) => "Anderer Passkey / Windows Hello",
+        nameof(RolloutStage.OtherPasskey) => "Passkey (App / Windows Hello)",
         nameof(RolloutStage.ClassicMfa) => "Nur klassische MFA",
         _ => "Keine MFA",
     };
