@@ -31,7 +31,7 @@ function safeReturnUrl(value: string | null): string {
   }
 }
 
-type Methods = { entraSso: boolean; passkey: boolean; emergency: boolean; development?: boolean };
+type Methods = { entraSso: boolean; passkey: boolean; emergency: boolean; recovery?: boolean; development?: boolean };
 
 const amrLabels: Record<string, string> = {
   pwd: 'Passwort', mfa: 'Multi-Faktor', otp: 'Einmalcode', sms: 'SMS', tel: 'Anruf', rsa: 'Windows Hello oder Zertifikat',
@@ -57,6 +57,8 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
   const passkey = useAction();
   const emergency = useAction();
   const [em, setEm] = useState({ upn: '', password: '', code: '' });
+  const recovery = useAction();
+  const [recoveryCode, setRecoveryCode] = useState('');
 
   const passkeyLogin = () => passkey.run(async () => {
     const { requestId, options } = await api.post<{ requestId: string; options: Record<string, unknown> }>('/auth/passkey/options');
@@ -67,6 +69,11 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
   });
   const emergencyLogin = () => emergency.run(async () => {
     await api.post('/auth/emergency', em);
+    window.location.href = returnUrl;
+  });
+
+  const recoveryLogin = () => recovery.run(async () => {
+    await api.post('/auth/recovery', { code: recoveryCode });
     window.location.href = returnUrl;
   });
 
@@ -127,6 +134,19 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
               <Field label="Code aus der Authenticator-App"><input inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={em.code} onChange={(e) => setEm({ ...em, code: e.target.value })} /></Field>
               <button type="submit" className="danger" disabled={emergency.busy || !em.upn || !em.password || em.code.length < 6}>Notfall-Anmeldung</button>
               <ErrorBox error={emergency.error} />
+            </form>
+          </details>
+        )}
+        {methods.recovery && (
+          <details style={{ marginTop: 18 }}>
+            <summary className="muted small">Mit Notfallcode anmelden</summary>
+            <form onSubmit={(e) => { e.preventDefault(); recoveryLogin(); }}>
+              <Field label="Notfallcode (vom ausgedruckten Blatt)">
+                <input autoComplete="off" spellCheck={false} placeholder="XXXX-XXXX-XXXX-XXXX" maxLength={24} value={recoveryCode} onChange={(e) => setRecoveryCode(e.target.value)} style={{ fontFamily: 'ui-monospace, monospace', letterSpacing: 1 }} />
+              </Field>
+              <p className="small muted">Jeder Code gilt nur einmal. Die Anmeldung wird im Audit-Log festgehalten.</p>
+              <button type="submit" className="danger" disabled={recovery.busy || recoveryCode.replace(/[^a-z0-9]/gi, '').length < 16}>Mit Notfallcode anmelden</button>
+              <ErrorBox error={recovery.error} />
             </form>
           </details>
         )}

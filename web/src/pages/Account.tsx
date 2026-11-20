@@ -3,6 +3,7 @@ import { useAuth } from '../auth';
 import { Card, ErrorBox, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { createPasskey, passkeyError } from '../webauthn';
 import { useConfirm, useToast } from '../feedback';
+import RecoveryCodesCard from './RecoveryCodes';
 
 /** Eigenes Konto: Anmeldeart und, bei lokalen Konten, die eigenen Passkeys. */
 export default function AccountPage() {
@@ -40,6 +41,7 @@ export default function AccountPage() {
         {user.loginKind === 'Entra' && <p className="muted">Sie melden sich mit Ihrem Microsoft-Konto an. Passkeys verwalten Sie in Entra (My Sign-ins).</p>}
         {user.loginKind === 'Emergency' && <p className="muted">Notfallkonto mit Passwort und Authenticator-Code. Zum Zurücksetzen erzeugt ein Owner einen neuen Einrichtungslink.</p>}
       </Card>
+      {me.recoveryCodes != null && <RecoveryCodesCard />}
       {local && (
         <Card title="Meine Passkeys" actions={<button className="primary" disabled={busy} onClick={add}>Passkey hinzufügen</button>}>
           <p className="muted">Richten Sie am besten einen zweiten YubiKey als Ersatz ein. Ohne Passkey ist keine Anmeldung möglich.</p>

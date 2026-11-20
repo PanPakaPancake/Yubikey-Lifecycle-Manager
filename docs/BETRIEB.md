@@ -259,6 +259,8 @@ Unter **Partner → Benutzer & Rollen** gibt es drei Anmeldearten:
 - **Lokal mit Passkey:** Das Konto existiert nur auf der Plattform. Nach dem Anlegen zeigt die Oberfläche einen Einmal-Link, der drei Tage gilt. Darüber registriert die Person ihren YubiKey als Passkey. Weitere Schlüssel fügt sie unter „Mein Konto“ hinzu.
 - **Notfallkonto:** Anmeldung mit Passwort (mindestens 14 Zeichen) und TOTP-Code aus einer Authenticator-App, ebenfalls per Einmal-Link eingerichtet. Nach fünf Fehlversuchen ist das Konto 15 Minuten gesperrt. Ein neuer Link setzt Passwort und TOTP zurück.
 
+**Notfallcodes:** Jeder Owner kann unter **Mein Konto → Notfallcodes** acht Einmal-Codes erzeugen und ausdrucken. Solange es keine gibt (oder nur noch zwei übrig sind), weist ein Hinweis oben auf jeder Seite darauf hin, auch direkt nach der ersten Anmeldung nach der Installation. Auf der Anmeldeseite meldet „Mit Notfallcode anmelden“ den Owner ohne Microsoft oder Passkey an. Jeder Code gilt einmal; gespeichert ist nur ein SHA-256-Hash. Neue Codes machen alle alten ungültig. Jede Nutzung steht als `auth.recovery_code_used` im Audit-Log und lässt sich unter **Benachrichtigungen** als Webhook oder Mail-Alarm („Anmeldung mit Notfallcode“) melden. Codes eines Kontos, das kein aktiver Owner mehr ist, funktionieren nicht.
+
 Passkeys sind an die Server-Adresse gebunden (`Ylm__PublicBaseUrl` bzw. die Adresse aus der Einrichtung) und funktionieren nur über HTTPS (Ausnahme: `localhost`). Wird die Adresse später geändert, müssen lokale Benutzer ihre Passkeys neu einrichten.
 
 Entra-SSO lässt sich unter **Globale Einstellungen → Anmeldung an der Plattform** abschalten, sobald ein aktiver Owner ein eingerichtetes lokales Konto hat.

@@ -14,6 +14,7 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
     public DbSet<InstallationSettings> Installation => Set<InstallationSettings>();
     public DbSet<PlatformUser> PlatformUsers => Set<PlatformUser>();
     public DbSet<UserPasskey> UserPasskeys => Set<UserPasskey>();
+    public DbSet<RecoveryCode> RecoveryCodes => Set<RecoveryCode>();
     public DbSet<CustomRole> CustomRoles => Set<CustomRole>();
     public DbSet<PlatformUserTenant> PlatformUserTenants => Set<PlatformUserTenant>();
     public DbSet<Tenant> Tenants => Set<Tenant>();
@@ -63,6 +64,13 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
         {
             e.ToTable("user_passkeys");
             e.HasIndex(x => x.CredentialId).IsUnique();
+        });
+
+        b.Entity<RecoveryCode>(e =>
+        {
+            e.ToTable("recovery_codes");
+            e.HasIndex(x => x.CodeHash).IsUnique();
+            e.HasOne(x => x.PlatformUser).WithMany().HasForeignKey(x => x.PlatformUserId).OnDelete(DeleteBehavior.Cascade);
         });
 
         b.Entity<CustomRole>(e =>

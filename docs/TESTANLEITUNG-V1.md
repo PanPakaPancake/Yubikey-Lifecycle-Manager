@@ -598,6 +598,15 @@ Voraussetzung: Mailserver ist im Reiter **Mail-Berichte** eingetragen (siehe 6.3
 
 ---
 
+## 6.4 Notfallcodes
+
+1. Als Owner anmelden. Oben erscheint der Hinweis „noch keine Notfallcodes“ → **Jetzt erzeugen und ausdrucken**.
+2. **Codes erzeugen** → acht Codes erscheinen → **Drucken** öffnet ein Druckblatt nur mit den Codes.
+3. Unter **Benachrichtigungen** einen Mail-Alarm für „Anmeldung mit Notfallcode“ anlegen.
+4. Abmelden → Anmeldeseite → **Mit Notfallcode anmelden** → einen Code eingeben.
+
+**Erwartet:** Anmeldung klappt, im Audit-Log steht `auth.recovery_code_used`, die Alarm-Mail kommt an. Derselbe Code ein zweites Mal wird abgelehnt. Unter **Mein Konto** steht „Noch 7 von 8 Codes gültig“.
+
 ## 7. Optionale Prüfung der Anmeldemethode (Abschlusstest)
 
 1. Für das **Owner-Konto** selbst einen YubiKey/Passkey registrieren (z. B. über `https://mysignins.microsoft.com/security-info`).
