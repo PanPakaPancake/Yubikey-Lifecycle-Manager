@@ -88,6 +88,19 @@ def do_update(version):
         lock.release()
 
 
+WINDOWS_PATH_RE = re.compile(r"^([A-Za-z]):[\\/](.*)$")
+
+
+def daemon_path(source):
+    """Pfad des Installationsordners, wie ihn der Docker-Daemon für Bind-Mounts versteht.
+    Docker Desktop meldet Ordner von Windows als C:\\Users\\...; im Linux-VM des Daemons liegen sie unter
+    /run/desktop/mnt/host/c/Users/... Diesen Pfad kann der Hilfscontainer auch als eigenes Arbeitsverzeichnis nutzen."""
+    m = WINDOWS_PATH_RE.match(source)
+    if not m:
+        return source
+    return "/run/desktop/mnt/host/" + m.group(1).lower() + "/" + m.group(2).replace("\\", "/").strip("/")
+
+
 def helper_name(project):
     return f"{project}-refresh"
 
@@ -108,6 +121,7 @@ def do_refresh(trigger):
         image = inspect(me, "{{.Config.Image}}")
         if not host_dir or not image:
             raise RuntimeError("Installationsordner bzw. eigenes Image nicht ermittelbar.")
+        host_dir = daemon_path(host_dir)
         # Gleiche Version behalten: Tag des laufenden Server-Images (sonst "latest" aus .env bzw. Standard).
         env_args = []
         server = subprocess.run(["docker", "ps", "-q", "--filter", f"label=com.docker.compose.project={project}",
