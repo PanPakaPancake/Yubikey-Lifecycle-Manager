@@ -93,6 +93,8 @@ def do_update(version):
         base = ["docker", "compose", "-p", project, "--project-directory", PROJECT_DIR]
         run(base + ["pull", SERVICE], env)
         run(base + ["up", "-d", "--no-build", "--no-deps", SERVICE], env)
+        log("Server aktualisiert. Weitere Container (Updater, Caddy, Datensicherung) auf dieselbe Version bringen …")
+        follow_up_refresh("Update")
         state["state"] = "done"
         log("Update abgeschlossen.")
     except Exception as e:  # noqa: BLE001
@@ -305,6 +307,24 @@ def do_hosting(body):
         lock.release()
 
 
+REFRESH_SCRIPT = ("set -e; docker compose pull --ignore-pull-failures; "
+                  "docker compose up -d --no-build; docker image prune -f >/dev/null; echo Sicherheitsupdates abgeschlossen.")
+
+
+def follow_up_refresh(trigger):
+    """Nach dem Server-Update die übrigen Container nachziehen. Der Hilfscontainer übernimmt die Version des
+    gerade gestarteten Servers und darf auch diesen Updater ersetzen. Ein Fehler hier lässt das Update selbst gelten."""
+    refresh = state["refresh"]
+    refresh.update({"lastAt": now_iso(), "result": "running", "trigger": trigger})
+    try:
+        run_helper("refresh", REFRESH_SCRIPT, {}, writable=False)
+        refresh["result"] = "done"
+    except Exception as e:  # noqa: BLE001
+        refresh["result"] = "failed"
+        log(f"Hinweis: Die übrigen Container ließen sich nicht aktualisieren ({e}). "
+            "Der Server ist aktuell; „Sicherheitsupdates der Container – Jetzt einspielen“ versucht es erneut.")
+
+
 def do_refresh(trigger):
     """Lädt alle Images der Installation neu (gleiche Version, aktuelle Sicherheitsupdates der Basis-Images)
     und erstellt geänderte Container neu. Läuft in einem eigenen Hilfscontainer: der darf auch diesen Updater
@@ -313,9 +333,7 @@ def do_refresh(trigger):
     refresh = state["refresh"]
     refresh.update({"lastAt": now_iso(), "result": "running", "trigger": trigger})
     try:
-        script = ("set -e; docker compose pull --ignore-pull-failures; "
-                  "docker compose up -d --no-build; docker image prune -f >/dev/null; echo Sicherheitsupdates abgeschlossen.")
-        run_helper("refresh", script, {}, writable=False)
+        run_helper("refresh", REFRESH_SCRIPT, {}, writable=False)
         refresh["result"] = "done"
         state["state"] = "done"
     except Exception as e:  # noqa: BLE001
