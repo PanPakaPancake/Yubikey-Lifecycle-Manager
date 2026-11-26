@@ -327,7 +327,7 @@ public sealed class RegistrationService(
     }
 
     /// <summary>Zurücksetzen: removes passkeys in Entra, resets FIDO2 on the key, back to stock.</summary>
-    public OperationJob StartReset(YubiKey key, PlatformUser actor, Guid agentId, bool toPartnerStock, JobStore jobs, IServiceScopeFactory scopes)
+    public OperationJob StartReset(YubiKey key, PlatformUser actor, Guid agentId, bool toPartnerStock, JobStore jobs, IServiceScopeFactory scopes, Guid? removalApprovalId = null)
     {
         var job = jobs.Add(new OperationJob { UserId = actor.Id, TenantId = key.TenantId, Kind = "reset", TotalSteps = 3, KeyId = key.Id });
         var keyId = key.Id;
@@ -335,12 +335,12 @@ public sealed class RegistrationService(
         {
             using var scope = scopes.CreateScope();
             var svc = scope.ServiceProvider.GetRequiredService<RegistrationService>();
-            await svc.RunResetAsync(job, keyId, actor.Id, agentId, toPartnerStock);
+            await svc.RunResetAsync(job, keyId, actor.Id, agentId, toPartnerStock, removalApprovalId);
         });
         return job;
     }
 
-    internal async Task RunResetAsync(OperationJob job, Guid keyId, Guid actorId, Guid agentId, bool toPartnerStock = false)
+    internal async Task RunResetAsync(OperationJob job, Guid keyId, Guid actorId, Guid agentId, bool toPartnerStock = false, Guid? removalApprovalId = null)
     {
         ConnectedAgent? agent = null;
         try
@@ -359,7 +359,15 @@ public sealed class RegistrationService(
             if (key.SerialNumber is null || info.SerialNumber != key.SerialNumber)
                 throw ApiException.Conflict("wrong_key", $"Es steckt Key {info.SerialNumber}, erwartet wird {key.SerialNumber}.");
             Step(job, agent, 2, "Passkeys in Entra werden entfernt");
+            // Vier-Augen (Breakglass): beim Start geprüft, verbraucht, sobald die Passkeys in Entra entfernt sind.
+            if (removalApprovalId is { } approvalId)
+                await ApprovalService.RequireRemovalAsync(db, key, actorId, RemovalAction.Reset, null, approvalId);
             await keys.RemoveEntraRegistrationsAsync(key, "Zurückgesetzt", actor);
+            if (removalApprovalId is { } usedId && await db.Approvals.FirstOrDefaultAsync(a => a.Id == usedId) is { } used)
+            {
+                ApprovalService.MarkRemovalUsed(used, actor, audit);
+                await db.SaveChangesAsync();
+            }
             Step(job, agent, 3, "Werksreset der FIDO2-Funktion", "Bitte den Key ab- und wieder anstecken und danach berühren.");
             var result = await agents.CallAsync(agent, (c, t) => c.ResetFido(new ResetRequest { ExpectedSerialNumber = key.SerialNumber }, t), TimeSpan.FromSeconds(150));
             if (!result.Success) throw ApiException.Conflict(result.ErrorCode ?? "reset_failed", "Werksreset fehlgeschlagen: " + result.Error);

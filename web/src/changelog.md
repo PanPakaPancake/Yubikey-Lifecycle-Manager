@@ -8,6 +8,9 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 -->
 
 ## 0.11.0 · 2026-11-26
+- Sicherheit: Aktive Breakglass-Keys lassen sich nicht mehr von einer Person allein sperren, zurücksetzen oder um ein Konto erleichtern. Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss den Antrag unter „Freigaben“ freigeben (gilt 24 Stunden, einmal). Standardmäßig für alle Tenants an; abschalten darf nur, wer „Geschützte Konten bearbeiten“ hat.
+- Sicherheit: Über die API lassen sich aktive Breakglass-Keys nicht sperren.
+- Neu: Notfallblatt für den versiegelten Umschlag. Beim Anlegen eines Breakglass-Keys und jederzeit an der Key-Ansicht lassen sich weitere Notfallkonten (z. B. Amazon, Registrar) mit Benutzername, Passwort, MFA-Methode und Beschreibung eintragen und ausdrucken. Die Angaben werden nirgends gespeichert, weder im Browser noch auf dem Server.
 - Neu: Der PIN-Brief wird jetzt per Baukasten gestaltet (Globale Einstellungen bzw. Tenant → „PIN-Brief gestalten“). Bausteine wie Überschrift, Text, Hinweiskasten, Anleitung oder Trennlinie lassen sich aufs Blatt ziehen, verschieben, halb breit nebeneinander stellen und mit Platzhaltern füllen. Jeder Baustein kann nur im Brief mit Initial-PIN oder nur mit dauerhafter PIN erscheinen. Mit Rückgängig und PDF-Vorschau.
 - Verbessert: Wird der PIN-Wechsel erzwungen, ist die PIN im Brief deutlich als Initial-PIN gekennzeichnet (oranger gestrichelter Rahmen, „Nur für die erste Anmeldung“).
 - Neu: Der PIN-Brief erklärt immer, wie man die PIN später selbst ändert (Windows, Mac, Yubico Authenticator).

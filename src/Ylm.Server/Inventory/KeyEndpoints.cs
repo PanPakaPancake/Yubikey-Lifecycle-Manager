@@ -15,10 +15,11 @@ public static class KeyEndpoints
     /// <param name="Custodian">Nur nötig, wenn der Key dadurch zum geteilten Key wird.</param>
     /// <param name="IgnoreModelMismatch">Bestätigt: der eingesteckte Key ist trotz anderem Modell der richtige.</param>
     public sealed record IdentifyRequest(Guid AgentId, string? Custodian, bool IgnoreModelMismatch = false);
-    public sealed record LockRequest(LockReason Reason, string? Note);
+    /// <param name="ApprovalId">Vier-Augen-Freigabe, nötig bei aktiven Breakglass-Keys.</param>
+    public sealed record LockRequest(LockReason Reason, string? Note, Guid? ApprovalId = null);
     /// <param name="ToPartnerStock">true: Key vom Tenant trennen und ins Partnerlager legen; false: bleibt im Tenant.</param>
     public sealed record RetireRequest(string? Note, bool ToPartnerStock = false);
-    public sealed record AgentRequest(Guid AgentId, bool ToPartnerStock = false);
+    public sealed record AgentRequest(Guid AgentId, bool ToPartnerStock = false, Guid? ApprovalId = null);
     public sealed record AssignRequest(Guid TenantId);
     public sealed record IntakeRequest(Guid AgentId, List<string>? Tags, Dictionary<string, string?>? CustomFields, string? Notes);
 
@@ -120,7 +121,12 @@ public static class KeyEndpoints
             await cu.RequireKeyAccessAsync(key.TenantId, Permission.ReadInventory);
             var history = await db.AuditEntries.AsNoTracking().Where(a => a.KeyId == id).OrderByDescending(a => a.Sequence).Take(200)
                 .Select(a => new { a.Sequence, a.Timestamp, a.ActorName, a.Action, a.Target, a.Details }).ToListAsync();
-            return Results.Ok(new { key = ToDto(key, includeAll: true), history });
+            var removal = new
+            {
+                Required = ApprovalService.RemovalNeedsApproval(key, key.Tenant),
+                Approvals = (await ApprovalService.OpenRemovalsAsync(db, key.Id)).Select(ApprovalService.ToDto),
+            };
+            return Results.Ok(new { key = ToDto(key, includeAll: true), history, removal });
         });
 
         g.MapPatch("/keys/{id:guid}", async (Guid id, UpdateKeyRequest body, CurrentUser cu, YlmDbContext db, KeyService keys, AuditService audit) =>
@@ -145,11 +151,17 @@ public static class KeyEndpoints
             return Results.Ok(ToDto(key));
         });
 
-        g.MapPost("/keys/{id:guid}/lock", async (Guid id, LockRequest body, CurrentUser cu, YlmDbContext db, KeyService keys) =>
+        g.MapPost("/keys/{id:guid}/lock", async (Guid id, LockRequest body, CurrentUser cu, YlmDbContext db, KeyService keys, AuditService audit) =>
         {
             var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.LockKeys);
+            var approval = await ApprovalService.RequireRemovalAsync(db, key, user.Id, RemovalAction.Lock, null, body.ApprovalId);
             await keys.LockAsync(key, body.Reason, body.Note, AuditService.User(user));
+            if (approval is not null)
+            {
+                ApprovalService.MarkRemovalUsed(approval, AuditService.User(user), audit);
+                await db.SaveChangesAsync();
+            }
             return Results.Ok(ToDto(key, true));
         });
 
@@ -187,12 +199,13 @@ public static class KeyEndpoints
 
         g.MapPost("/keys/{id:guid}/reset", async (Guid id, AgentRequest body, CurrentUser cu, YlmDbContext db, RegistrationService reg, JobStore jobs, IServiceScopeFactory scopes) =>
         {
-            var key = await db.Keys.FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.ResetKeys);
             KeyLifecycle.EnsureTransition(key.Status, KeyStatus.InStock);
+            var approval = await ApprovalService.RequireRemovalAsync(db, key, user.Id, RemovalAction.Reset, null, body.ApprovalId);
             var toPartner = body.ToPartnerStock && key.TenantId is not null;
             if (toPartner) await cu.RequireAsync(Permission.ManagePartnerStock);
-            var job = reg.StartReset(key, user, body.AgentId, toPartner, jobs, scopes);
+            var job = reg.StartReset(key, user, body.AgentId, toPartner, jobs, scopes, approval?.Id);
             return Results.Accepted($"/api/jobs/{job.Id}", job.ToDto());
         });
 
@@ -209,11 +222,17 @@ public static class KeyEndpoints
         });
 
         // Ein Konto von einem geteilten Key entfernen (Passkey in Entra löschen, die anderen Konten bleiben).
-        g.MapDelete("/keys/{id:guid}/registrations/{registrationId:guid}", async (Guid id, Guid registrationId, CurrentUser cu, YlmDbContext db, SharedKeyService shared) =>
+        g.MapDelete("/keys/{id:guid}/registrations/{registrationId:guid}", async (Guid id, Guid registrationId, Guid? approvalId, CurrentUser cu, YlmDbContext db, SharedKeyService shared, AuditService audit) =>
         {
             var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.LockKeys);
+            var approval = await ApprovalService.RequireRemovalAsync(db, key, user.Id, RemovalAction.RemoveAccount, registrationId, approvalId);
             await shared.RemoveAccountAsync(key, registrationId, AuditService.User(user));
+            if (approval is not null)
+            {
+                ApprovalService.MarkRemovalUsed(approval, AuditService.User(user), audit);
+                await db.SaveChangesAsync();
+            }
             await db.Entry(key).Reference(k => k.Tenant).LoadAsync();
             return Results.Ok(ToDto(key, true));
         });

@@ -145,6 +145,11 @@ public sealed class Tenant
     public DateTimeOffset? DataDeletionDueAt { get; set; }
     /// <summary>Vier-Augen-Freigabe für Breakglass-Registrierungen (planning 6.3, standardmäßig aus).</summary>
     public bool RequireBreakglassApproval { get; set; }
+    /// <summary>
+    /// Vier-Augen beim Entfernen: Sperren, Zurücksetzen und Konto entfernen bei aktiven Breakglass-Keys nur mit Freigabe eines
+    /// zweiten Admins. Standardmäßig an, damit niemand allein einen Notfallzugang löschen kann.
+    /// </summary>
+    public bool RequireBreakglassRemovalApproval { get; set; } = true;
     /// <summary>Konten mit Entra-Admin-Rolle schützen (TAP, Methoden entfernen, Registrierung nur mit „Geschützte Konten bearbeiten“).</summary>
     public bool ProtectAdmins { get; set; } = true;
     /// <summary>Mitglieder dieser Gruppen sind ebenfalls geschützt (z. B. Breakglass, Geschäftsführung).</summary>
@@ -408,13 +413,35 @@ public sealed class RegistrationBatchItem
 
 public enum ApprovalStatus { Pending = 0, Approved = 1, Rejected = 2, Used = 3, Cancelled = 4 }
 
+/// <summary>Wofür eine Vier-Augen-Freigabe gilt.</summary>
+public enum ApprovalKind
+{
+    /// <summary>Breakglass-Key registrieren.</summary>
+    Registration = 0,
+    /// <summary>Aktiven Breakglass-Key sperren, zurücksetzen oder ein Konto davon entfernen.</summary>
+    KeyRemoval = 1,
+}
+
+/// <summary>Entfernende Aktion an einem Breakglass-Key, die eine Freigabe braucht.</summary>
+public enum RemovalAction
+{
+    Lock = 0,
+    Reset = 1,
+    RemoveAccount = 2,
+}
+
 /// <summary>Vier-Augen-Freigabe (V2): ein zweiter Admin gibt eine Breakglass-Registrierung frei, bevor sie laufen darf.</summary>
 public sealed class RegistrationApproval
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public Guid TenantId { get; set; }
     public KeyUsage Usage { get; set; } = KeyUsage.Breakglass;
-    /// <summary>Konten, die auf den Key sollen (Entra-Objekt-IDs).</summary>
+    public ApprovalKind Kind { get; set; } = ApprovalKind.Registration;
+    /// <summary>Nur bei <see cref="ApprovalKind.KeyRemoval"/>: welche Aktion freigegeben wird.</summary>
+    public RemovalAction? RemovalAction { get; set; }
+    /// <summary>Nur bei <see cref="Data.RemovalAction.RemoveAccount"/>: die Registrierung, die entfernt werden darf.</summary>
+    public Guid? RegistrationId { get; set; }
+    /// <summary>Registrierung: die betroffenen Konten (Entra-Objekt-IDs). Entfernen: die Konten, die beim Antrag auf dem Key waren.</summary>
     public List<string> EntraUserIds { get; set; } = [];
     public List<string> UserPrincipalNames { get; set; } = [];
     public string? Custodian { get; set; }
@@ -430,6 +457,7 @@ public sealed class RegistrationApproval
     /// <summary>Eine Freigabe gilt begrenzt (Standard 24 Stunden) und nur für einen Lauf.</summary>
     public DateTimeOffset? ValidUntil { get; set; }
     public DateTimeOffset? UsedAt { get; set; }
+    /// <summary>Registrierung: der Key, auf den registriert wurde (nach Verwendung). Entfernen: der betroffene Key (ab Antrag).</summary>
     public Guid? KeyId { get; set; }
 }
 

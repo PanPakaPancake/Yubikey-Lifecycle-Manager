@@ -1,7 +1,8 @@
 import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
-import { api, fmtDate, lockReasons, usageLabels, type AgentInfo, type AuditEntry, type CustomField, type Job, type Registration, type YubiKey } from '../api';
-import { useCan } from '../auth';
+import { api, approvalLabels, fmtDate, lockReasons, removalLabels, usageLabels, type AgentInfo, type Approval, type AuditEntry, type CustomField, type Job, type Registration, type RemovalAction, type YubiKey } from '../api';
+import { useAuth, useCan } from '../auth';
+import { BreakglassSheetModal } from './BreakglassSheet';
 import { Badge, Card, ErrorBox, Field, Info, Modal, PageHeader, Spinner, StatusBadge, useAction, useApi, usePolling } from '../ui';
 import { CustomFieldInput } from './Keys';
 import { useTenant } from '../tenant';
@@ -15,14 +16,33 @@ const sourceLabels: Record<string, string> = {
 export default function KeyDetailPage() {
   const { id } = useParams();
   const can = useCan();
-  const { data, error, reload } = useApi<{ key: YubiKey; history: AuditEntry[] }>('/api/keys/' + id, [id]);
+  const { data, error, reload } = useApi<{ key: YubiKey; history: AuditEntry[]; removal?: { required: boolean; approvals: Approval[] } }>('/api/keys/' + id, [id]);
   const key = data?.key;
   const history = data?.history;
+  const removal = data?.removal;
+  const { me } = useAuth();
   // Partnerlager: nur globale Felder.
   const { data: fields } = useApi<CustomField[]>(key ? (key.tenantId ? `/api/tenants/${key.tenantId}/fields` : '/api/fields') : null, [key?.id, key?.tenantId]);
-  const [modal, setModal] = useState<'lock' | 'retire' | 'reset' | 'edit' | 'toPartner' | 'assign' | 'delete' | null>(null);
+  const [modal, setModal] = useState<'lock' | 'retire' | 'reset' | 'edit' | 'toPartner' | 'assign' | 'delete' | 'sheet' | null>(null);
+  // Vier-Augen bei Breakglass-Keys: genutzte Freigabe für Sperren/Zurücksetzen, offener Antrag im Dialog.
+  const [approvalId, setApprovalId] = useState<string>();
+  const [ask, setAsk] = useState<{ action: RemovalAction; registration?: Registration }>();
   const confirm = useConfirm();
   const toast = useToast();
+
+  const mine = (action: RemovalAction, registrationId?: string) => removal?.approvals.find((a) => a.requestedById === me.user?.id && a.removalAction === action
+    && (action !== 'RemoveAccount' || a.registrationId === registrationId));
+  /** Ohne nötige Freigabe direkt weiter; mit gültiger eigener Freigabe weiter mit deren Id; sonst beantragen bzw. Stand zeigen. */
+  const gate = (action: RemovalAction, proceed: (approvalId?: string) => void, registration?: Registration) => {
+    if (!removal?.required) return proceed();
+    const a = mine(action, registration?.id);
+    if (a && a.status === 'Approved' && !a.expired) return proceed(a.id);
+    setAsk({ action, registration });
+  };
+  const removeAccount = async (r: Registration, approval?: string) => {
+    if (!await confirm({ title: 'Konto entfernen?', message: `Der Passkey von ${r.userPrincipalName} wird in Entra gelöscht. Die anderen Konten auf dem Key bleiben.`, confirmLabel: 'Entfernen', danger: true })) return;
+    try { await api.del(`/api/keys/${key!.id}/registrations/${r.id}${approval ? '?approvalId=' + approval : ''}`); toast.ok('Konto entfernt.'); reload(); } catch (e) { toast.error((e as Error).message); }
+  };
 
   if (error) return <ErrorBox error={error} />;
   if (!key) return <Spinner label="Wird geladen …" />;
@@ -40,8 +60,9 @@ export default function KeyDetailPage() {
           {key.inPartnerStock && key.status === 'InStock' && can('ManagePartnerStock') && can('ManageInventory') && <button className="primary" onClick={() => setModal('assign')}>Einem Tenant zuweisen</button>}
           {!key.inPartnerStock && (key.status === 'InStock' || key.status === 'Retired') && can('ManagePartnerStock') && can('ManageInventory')
             && key.registrations.every((r) => r.removedAt) && <button onClick={() => setModal('toPartner')}>Ins Partnerlager</button>}
-          {can('LockKeys') && key.nextStates.includes('Locked') && <button className="danger" onClick={() => setModal('lock')}>Sperren</button>}
-          {can('ResetKeys') && key.nextStates.includes('InStock') && key.serialNumber && <button onClick={() => setModal('reset')}>Zurücksetzen …</button>}
+          {key.usage === 'Breakglass' && <button onClick={() => setModal('sheet')}>Notfallblatt drucken</button>}
+          {can('LockKeys') && key.nextStates.includes('Locked') && <button className="danger" onClick={() => gate('Lock', (a) => { setApprovalId(a); setModal('lock'); })}>Sperren</button>}
+          {can('ResetKeys') && key.nextStates.includes('InStock') && key.serialNumber && <button onClick={() => gate('Reset', (a) => { setApprovalId(a); setModal('reset'); })}>Zurücksetzen …</button>}
           {can('RetireKeys') && key.nextStates.includes('Retired') && <button className="danger" onClick={() => setModal('retire')}>Ausmustern …</button>}
           {can('ManageInventory') && (key.status === 'InStock' || key.status === 'Retired') && key.registrations.every((r) => r.removedAt) && <button className="danger" onClick={() => setModal('delete')}>Löschen …</button>}
         </>}
@@ -57,10 +78,18 @@ export default function KeyDetailPage() {
           {key.advisories.map((a) => <div key={a.id}><strong>{a.id}</strong>: {a.title} <a href={a.url} target="_blank" rel="noreferrer">Details</a></div>)}
         </Info>
       )}
-      <AccountsCard keyItem={key} active={active} onRemove={can('LockKeys') && key.usage !== 'Personal' ? async (r) => {
-        if (!await confirm({ title: 'Konto entfernen?', message: `Der Passkey von ${r.userPrincipalName} wird in Entra gelöscht. Die anderen Konten auf dem Key bleiben.`, confirmLabel: 'Entfernen', danger: true })) return;
-        try { await api.del(`/api/keys/${key.id}/registrations/${r.id}`); toast.ok('Konto entfernt.'); reload(); } catch (e) { toast.error((e as Error).message); }
-      } : undefined}>
+      {removal?.required && (
+        <Info tone="warn">
+          <strong>Vier-Augen-Schutz:</strong> Dieser Breakglass-Key lässt sich nur mit Freigabe eines zweiten Admins sperren, zurücksetzen oder um ein Konto erleichtern.
+          {removal.approvals.map((a) => (
+            <div key={a.id} className="small">
+              {removalLabels[a.removalAction ?? 'Lock']}{a.removalAction === 'RemoveAccount' ? ` (${a.userPrincipalNames.join(', ')})` : ''}: {approvalLabels[a.status]}, beantragt von {a.requestedByName}
+              {a.status === 'Approved' && <> · freigegeben von {a.decidedByName}, gültig bis {fmtDate(a.validUntil)}</>}
+            </div>
+          ))}
+        </Info>
+      )}
+      <AccountsCard keyItem={key} active={active} onRemove={can('LockKeys') && key.usage !== 'Personal' ? (r) => gate('RemoveAccount', (a) => removeAccount(r, a), r) : undefined}>
         {active.length === 0 && key.status === 'InStock' && key.tenantId && can('RegisterKeys') && <p className="actions"><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link><Link className="btn" to={`/register/shared?tenantId=${key.tenantId}`}>Als geteilten Key registrieren</Link></p>}
         {key.inPartnerStock && key.status === 'InStock' && <p className="muted small">Keys aus dem Partnerlager werden bei der Registrierung automatisch dem Tenant zugewiesen.</p>}
       </AccountsCard>
@@ -100,9 +129,12 @@ export default function KeyDetailPage() {
         </Card>
       )}
       {modal === 'delete' && <DeleteModal keyItem={key} onClose={() => setModal(null)} />}
-      {modal === 'lock' && <LockModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
+      {modal === 'lock' && <LockModal keyItem={key} approvalId={approvalId} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
       {modal === 'retire' && <RetireModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
-      {modal === 'reset' && <ResetModal keyItem={key} onClose={() => { setModal(null); reload(); }} />}
+      {modal === 'reset' && <ResetModal keyItem={key} approvalId={approvalId} onClose={() => { setModal(null); reload(); }} />}
+      {modal === 'sheet' && <BreakglassSheetModal context={{ tenantName: key.tenantName, serialNumber: key.serialNumber, custodian: key.custodian, accounts: active }} onClose={() => setModal(null)} />}
+      {ask && <RemovalApprovalModal keyItem={key} action={ask.action} registration={ask.registration} pending={mine(ask.action, ask.registration?.id)}
+        onClose={() => setAsk(undefined)} onDone={() => { setAsk(undefined); reload(); }} />}
       {modal === 'toPartner' && <ToPartnerModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
       {modal === 'assign' && <AssignModal keyItem={key} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
       {modal === 'edit' && <EditModal keyItem={key} fields={fields ?? []} onClose={() => setModal(null)} onDone={() => { reload(); setModal(null); }} />}
@@ -117,11 +149,45 @@ function formatField(f: CustomField, v?: string | null) {
   return v;
 }
 
-function LockModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClose: () => void; onDone: (k: YubiKey) => void }) {
+/** Vier-Augen-Antrag für eine entfernende Aktion an einem Breakglass-Key, oder Stand des offenen Antrags. */
+function RemovalApprovalModal({ keyItem, action, registration, pending, onClose, onDone }: {
+  keyItem: YubiKey; action: RemovalAction; registration?: Registration; pending?: Approval; onClose: () => void; onDone: () => void;
+}) {
+  const [reason, setReason] = useState('');
+  const { busy, error, run } = useAction();
+  const toast = useToast();
+  const what = action === 'RemoveAccount' ? `Konto ${registration?.userPrincipalName} entfernen` : removalLabels[action];
+  const submit = () => run(async () => {
+    await api.post(`/api/keys/${keyItem.id}/approvals`, { action, registrationId: registration?.id, reason });
+    toast.ok('Antrag gestellt. Ein zweiter Admin muss ihn unter „Freigaben“ freigeben.');
+    onDone();
+  });
+  const withdraw = () => run(async () => {
+    await api.post(`/api/approvals/${pending!.id}/cancel`);
+    toast.ok('Antrag zurückgezogen.');
+    onDone();
+  });
+  if (pending) return (
+    <Modal title="Wartet auf Freigabe" onClose={onClose} footer={<><button className="ghost" disabled={busy} onClick={withdraw}>Antrag zurückziehen</button><button className="primary" onClick={onClose}>OK</button></>}>
+      <p>Ihr Antrag „{what}“ wartet darauf, dass ein zweiter Admin mit dem Recht „Breakglass freigeben“ ihn unter <Link to="/approvals">Freigaben</Link> freigibt. Danach können Sie die Aktion 24 Stunden lang einmal ausführen.</p>
+      <p className="small muted">Beantragt {fmtDate(pending.requestedAt)} · Grund: {pending.reason}</p>
+      <ErrorBox error={error} />
+    </Modal>
+  );
+  return (
+    <Modal title="Vier-Augen-Freigabe nötig" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy || !reason.trim()} onClick={submit}>Freigabe beantragen</button></>}>
+      <p>Dies ist ein <strong>Breakglass-Key</strong> (Verwahrer: {keyItem.custodian ?? '–'}). „{what}“ löscht Notfallzugänge in Entra und braucht deshalb die Freigabe eines zweiten Admins.</p>
+      <Field label="Grund *" hint="z. B. Key verloren, Ticket 4711"><input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></Field>
+      <ErrorBox error={error} />
+    </Modal>
+  );
+}
+
+function LockModal({ keyItem, approvalId, onClose, onDone }: { keyItem: YubiKey; approvalId?: string; onClose: () => void; onDone: (k: YubiKey) => void }) {
   const [reason, setReason] = useState('Lost');
   const [note, setNote] = useState('');
   const { busy, error, run } = useAction();
-  const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/lock`, { reason, note: note || null })));
+  const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/lock`, { reason, note: note || null, approvalId })));
   return (
     <Modal title="Key sperren" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="danger" disabled={busy} onClick={go}>Sperren</button></>}>
       <Info tone="warn">Die Passkey-Registrierung wird sofort in Entra ID entfernt. Die Person kann sich mit diesem Key nicht mehr anmelden.</Info>
@@ -202,7 +268,7 @@ function RetireModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClose: 
   );
 }
 
-function ResetModal({ keyItem, onClose }: { keyItem: YubiKey; onClose: () => void }) {
+function ResetModal({ keyItem, approvalId, onClose }: { keyItem: YubiKey; approvalId?: string; onClose: () => void }) {
   const { data: agents, reload } = useApi<AgentInfo[]>('/api/agents');
   const online = agents?.filter((a) => a.online) ?? [];
   const [job, setJob] = useState<Job>();
@@ -210,7 +276,7 @@ function ResetModal({ keyItem, onClose }: { keyItem: YubiKey; onClose: () => voi
   usePolling(async () => { if (job) setJob(await api.get<Job>('/api/jobs/' + job.id)); }, 1000, job?.state === 'Running');
   const agent = online[0];
   const [toPartner, setToPartner] = useState(false);
-  const go = () => run(async () => setJob(await api.post<Job>(`/api/keys/${keyItem.id}/reset`, { agentId: agent!.id, toPartnerStock: toPartner })));
+  const go = () => run(async () => setJob(await api.post<Job>(`/api/keys/${keyItem.id}/reset`, { agentId: agent!.id, toPartnerStock: toPartner, approvalId })));
   return (
     <Modal title="Key zurücksetzen" onClose={onClose} footer={<>
       <button onClick={onClose}>{job?.state === 'Succeeded' ? 'Schließen' : 'Abbrechen'}</button>

@@ -13,8 +13,8 @@ using Ylm.Server.Data;
 namespace Ylm.Server.Data.Migrations
 {
     [DbContext(typeof(YlmDbContext))]
-    [Migration("20261126115332_LetterLayout")]
-    partial class LetterLayout
+    [Migration("20261126115105_BreakglassRemovalApproval")]
+    partial class BreakglassRemovalApproval
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -198,9 +198,6 @@ namespace Ylm.Server.Data.Migrations
                         .HasColumnType("text");
 
                     b.Property<string>("Footer")
-                        .HasColumnType("text");
-
-                    b.Property<string>("LetterLayout")
                         .HasColumnType("text");
 
                     b.Property<string>("LetterTexts")
@@ -673,9 +670,18 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<Guid?>("KeyId")
                         .HasColumnType("uuid");
 
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Reason")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid?>("RegistrationId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int?>("RemovalAction")
+                        .HasColumnType("integer");
 
                     b.Property<DateTimeOffset>("RequestedAt")
                         .HasColumnType("timestamp with time zone");
@@ -707,6 +713,8 @@ namespace Ylm.Server.Data.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("KeyId");
 
                     b.HasIndex("TenantId", "Status");
 
@@ -1119,6 +1127,11 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<bool>("RequireBreakglassApproval")
                         .HasColumnType("boolean");
+
+                    b.Property<bool>("RequireBreakglassRemovalApproval")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(true);
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");

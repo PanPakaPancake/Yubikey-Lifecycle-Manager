@@ -180,10 +180,13 @@ public static class PublicApiEndpoints
             var allowed = Allowed(p);
             var key = await db.Keys.Include(k => k.Registrations).Include(k => k.Tenant).FirstOrDefaultAsync(k => k.Id == id && k.TenantId != null && allowed.Contains(k.TenantId.Value))
                 ?? throw ApiException.NotFound("Key");
+            // Vier-Augen: über die API gibt es keinen zweiten Admin, aktive Breakglass-Keys nur in der Oberfläche.
+            if (ApprovalService.RemovalNeedsApproval(key, key.Tenant))
+                throw ApiException.Conflict("approval_required", "Breakglass-Keys lassen sich über die API nicht sperren. Bitte in der Oberfläche mit Vier-Augen-Freigabe sperren.");
             await keys.LockAsync(key, body.Reason, body.Note, ApiScopes.Actor(p));
             return TypedResults.Ok(Map(key));
         }).WithSummary("Key sperren")
-          .WithDescription("Wie „Sperren“ in der Oberfläche, z. B. wenn ein Ticket einen Verlust meldet: entfernt die Passkeys des Keys in Entra und setzt den Status auf gesperrt. reason: Lost, Defective, Stolen, Other. Lässt sich über die API nicht rückgängig machen.")
+          .WithDescription("Wie „Sperren“ in der Oberfläche, z. B. wenn ein Ticket einen Verlust meldet: entfernt die Passkeys des Keys in Entra und setzt den Status auf gesperrt. reason: Lost, Defective, Stolen, Other. Lässt sich über die API nicht rückgängig machen. Aktive Breakglass-Keys lehnt die API ab (409 approval_required), sie brauchen die Vier-Augen-Freigabe in der Oberfläche.")
           .RequireScope(ApiScopes.KeysLock);
 
         app.MapGroup("/api/v1").RequireAuthorization("ApiKey").WithGroupName(GroupName).WithTags("ToDo-Liste").MapTodoApi(ScopeAsync);

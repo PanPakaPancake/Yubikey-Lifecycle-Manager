@@ -119,6 +119,7 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const [include, setInclude] = useState<GroupRef[]>(tenant.targetIncludeGroups ?? []);
   const [exclude, setExclude] = useState<GroupRef[]>(tenant.targetExcludeGroups ?? []);
   const [fourEyes, setFourEyes] = useState(!!tenant.requireBreakglassApproval);
+  const [fourEyesRemoval, setFourEyesRemoval] = useState(tenant.requireBreakglassRemovalApproval ?? true);
   const [protectAdmins, setProtectAdmins] = useState(tenant.protectAdmins ?? true);
   const [protectedGroups, setProtectedGroups] = useState<GroupRef[]>(tenant.protectedGroups ?? []);
   const { busy, error, run } = useAction();
@@ -130,7 +131,7 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const used = [...include, ...exclude].map((g) => g.id);
 
   const save = () => run(async () => {
-    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude, requireBreakglassApproval: fourEyes,
+    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude, requireBreakglassApproval: fourEyes, requireBreakglassRemovalApproval: fourEyesRemoval,
       ...(protectionEditable ? { protectAdmins, protectedGroups } : {}) }));
     setSaved(true);
     toast.ok('Einstellungen gespeichert.');
@@ -155,7 +156,11 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
       <Field label="Sync-Intervall (Minuten)"><input type="number" min={5} max={1440} value={interval} disabled={!editable} onChange={(e) => { setInterval(Number(e.target.value)); changed(); }} /></Field>
       <label className="check" style={{ marginBottom: 12 }}>
         <input type="checkbox" checked={fourEyes} disabled={!editable} onChange={(e) => { setFourEyes(e.target.checked); changed(); }} />
-        <span>Vier-Augen-Freigabe für Breakglass-Keys<br /><span className="small muted">Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss jede Breakglass-Registrierung vorab freigeben (gilt 24 Stunden für einen Durchlauf).</span></span>
+        <span>Vier-Augen-Freigabe für Breakglass-Registrierungen<br /><span className="small muted">Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss jede Breakglass-Registrierung vorab freigeben (gilt 24 Stunden für einen Durchlauf).</span></span>
+      </label>
+      <label className="check" style={{ marginBottom: 12 }}>
+        <input type="checkbox" checked={fourEyesRemoval} disabled={!editable || (fourEyesRemoval && !can('ManageProtectedAccounts'))} onChange={(e) => { setFourEyesRemoval(e.target.checked); changed(); }} />
+        <span>Breakglass-Keys nur mit Vier-Augen-Freigabe sperren oder entfernen (empfohlen)<br /><span className="small muted">Sperren, Zurücksetzen und Konto entfernen bei einem aktiven Breakglass-Key braucht die Freigabe eines zweiten Admins. Über die API lassen sich Breakglass-Keys dann nicht sperren. Abschalten darf nur, wer „Geschützte Konten bearbeiten“ hat.</span></span>
       </label>
       <div className="field-group">
         <span className="field-label">Geschützte Konten</span>

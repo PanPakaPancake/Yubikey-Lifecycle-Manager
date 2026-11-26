@@ -330,6 +330,20 @@ button.primary.danger-fill { background: var(--error); border-color: var(--error
 .modal { animation: modal-in .18s ease-out; }
 .modal-backdrop { animation: fade-in .15s ease-out; }
 .modal.confirm { width: min(460px, 100%); }
+.modal.wide { width: min(1040px, 100%); }
+.bg-sheet-table { width: 100%; border-collapse: collapse; }
+.bg-sheet-table th { text-align: left; font-size: 12px; font-weight: 600; color: var(--muted); padding: 4px 6px; }
+.bg-sheet-table td { padding: 3px 4px; vertical-align: top; }
+.bg-sheet-table input { width: 100%; min-width: 0; }
+.bg-sheet-table td.row-actions { width: 1%; white-space: nowrap; }
+.bg-sheet-table input.secret { font-family: ui-monospace, Consolas, monospace; }
+.bg-sheet-table.masked input.secret { -webkit-text-security: disc; text-security: disc; }
+@media (max-width: 720px) {
+  .bg-sheet-table thead { display: none; }
+  .bg-sheet-table tr { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .bg-sheet-table td { padding: 0; }
+  .bg-sheet-table td.row-actions { grid-column: 1 / -1; }
+}
 .modal-backdrop.confirm-backdrop { z-index: 90; }
 .confirm-body { display: grid; grid-template-columns: 40px 1fr; gap: 14px; align-items: start; }
 .confirm-body h2 { margin-bottom: 6px; }
