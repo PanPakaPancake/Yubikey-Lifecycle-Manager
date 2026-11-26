@@ -238,9 +238,10 @@ if ($passphrase) {
 }
 if ($Mode -eq 'internal') {
     $ca = Join-Path $Dir 'ylm-root-ca.crt'
-    for ($i = 0; $i -lt 10 -and -not (Test-Path $ca); $i++) {
+    # Bei jedem Lauf frisch aus Caddy holen: eine alte Datei kann zu einer neu erzeugten CA nicht mehr passen.
+    for ($i = 0; $i -lt 10; $i++) {
         $pem = & docker compose exec -T caddy cat /data/caddy/pki/authorities/local/root.crt 2>$null
-        if ($LASTEXITCODE -eq 0 -and $pem) { [IO.File]::WriteAllText($ca, (($pem -join "`n") + "`n"), $Utf8) } else { Start-Sleep -Seconds 2 }
+        if ($LASTEXITCODE -eq 0 -and $pem) { [IO.File]::WriteAllText($ca, (($pem -join "`n") + "`n"), $Utf8); break } else { Start-Sleep -Seconds 2 }
     }
     if ((Test-Path $ca) -and $Domain -eq 'localhost') {
         # Auf dem eigenen PC: Stammzertifikat im Computer-Speicher eintragen (eine UAC-Abfrage), damit Browser und
