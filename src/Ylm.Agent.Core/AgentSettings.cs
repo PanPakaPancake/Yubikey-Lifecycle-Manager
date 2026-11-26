@@ -32,7 +32,8 @@ public sealed class PlainSecretProtector : ISecretProtector
     public string Unprotect(string value) => value;
 }
 
-public sealed class AgentSettingsStore(string path, ISecretProtector protector)
+/// <param name="secureFile">Wird vor dem Ersetzen mit der neuen Datei aufgerufen (Windows: Zugriff nur für SYSTEM und Administratoren).</param>
+public sealed class AgentSettingsStore(string path, ISecretProtector protector, Action<string>? secureFile = null)
 {
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web) { WriteIndented = true, Converters = { new JsonStringEnumConverter() } };
     private readonly Lock _lock = new();
@@ -69,6 +70,7 @@ public sealed class AgentSettingsStore(string path, ISecretProtector protector)
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             var tmp = path + ".tmp";
             File.WriteAllText(tmp, JsonSerializer.Serialize(settings, Json));
+            secureFile?.Invoke(tmp);
             File.Move(tmp, path, true);
         }
     }
