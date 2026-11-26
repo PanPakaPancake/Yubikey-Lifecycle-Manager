@@ -7,6 +7,9 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.11.1 · 2026-11-26
+- Verbessert: Kennt der Server die Kopplung eines Agents nicht mehr (z. B. nach dem Entkoppeln in der Weboberfläche), sagt das Tray-Symbol einmal Bescheid. Ein Klick auf die Meldung öffnet direkt das Koppeln-Fenster.
+
 ## 0.11.0 · 2026-11-26
 - Sicherheit: Aktive Breakglass-Keys lassen sich nicht mehr von einer Person allein sperren, zurücksetzen oder um ein Konto erleichtern. Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss den Antrag unter „Freigaben“ freigeben (gilt 24 Stunden, einmal). Standardmäßig für alle Tenants an; abschalten darf nur, wer „Geschützte Konten bearbeiten“ hat.
 - Sicherheit: Über die API lassen sich aktive Breakglass-Keys nicht sperren.

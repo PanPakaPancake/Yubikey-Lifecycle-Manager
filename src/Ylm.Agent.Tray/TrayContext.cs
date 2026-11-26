@@ -47,6 +47,8 @@ internal sealed class TrayContext : ApplicationContext
         _logs.Click += (_, _) => OpenLogs();
         _exit.Click += (_, _) => ExitThread();
         _openWeb.Click += (_, _) => { if (_status.ServerUrl is { } url) Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); };
+        _icon.BalloonTipClicked += (_, _) => { if (_balloonOpensPairing) { _balloonOpensPairing = false; ShowPairing(); } };
+        _icon.BalloonTipClosed += (_, _) => _balloonOpensPairing = false;
         _pair.Click += (_, _) => ShowPairing();
         _unpair.Click += async (_, _) =>
         {
@@ -107,7 +109,7 @@ internal sealed class TrayContext : ApplicationContext
             BackendConnectionState.Connected => ("Verbunden", p.Ok, true),
             BackendConnectionState.Connecting => ("Verbinde …", p.Warn, true),
             BackendConnectionState.Disconnected => ("Getrennt", p.Error, false),
-            BackendConnectionState.Unauthorized => ("Nicht angemeldet", p.Error, false),
+            BackendConnectionState.Unauthorized => ("Kopplung ungültig – neu koppeln", p.Error, false),
             _ => ("Nicht gekoppelt", p.Muted, false),
         };
     }
@@ -121,14 +123,27 @@ internal sealed class TrayContext : ApplicationContext
         _ => Palette.Dark.Error,
     };
 
+    private bool _balloonOpensPairing;
+
     private void OnMessage(TrayMessage m)
     {
         switch (m.Type)
         {
             case TrayMessageType.Status when m.Status is not null:
                 var previousKey = _status.Key?.SerialNumber;
+                var wasUnauthorized = _status.Connection == BackendConnectionState.Unauthorized;
                 _status = m.Status;
                 Render();
+                // Der Server kennt das Token nicht mehr (Agent entkoppelt, Server neu aufgesetzt): Ohne neue Kopplung
+                // gehen weder Verbindung noch Updates. Einmal darauf hinweisen, ein Klick öffnet das Koppeln-Fenster.
+                if (!wasUnauthorized && m.Status.Connection == BackendConnectionState.Unauthorized)
+                {
+                    _balloonOpensPairing = true;
+                    _icon.ShowBalloonTip(10000, "Agent neu koppeln",
+                        "Der Server kennt diesen Agent nicht mehr. Ohne neue Kopplung gibt es keine Verbindung und keine Updates. Hier klicken zum Koppeln.",
+                        ToolTipIcon.Warning);
+                    break;
+                }
                 if (_announceUpdate)
                 {
                     _announceUpdate = false;
