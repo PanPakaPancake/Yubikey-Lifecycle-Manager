@@ -36,7 +36,16 @@ public sealed record GraphDirectoryUser(
 /// <summary>Eine registrierte Anmeldemethode eines Benutzers (live aus /authentication/methods).</summary>
 /// <param name="Kind">Typ ohne Präfix/Suffix, z. B. „phone“, „microsoftAuthenticator“, „fido2“.</param>
 /// <param name="ReportName">Name wie im Bericht (methodsRegistered), z. B. „mobilePhone“.</param>
-public sealed record GraphAuthMethod(string Id, string Kind, string ReportName, string? DisplayName, string? Detail, DateTimeOffset? CreatedDateTime, string? Device = null);
+public sealed record GraphAuthMethod(string Id, string Kind, string ReportName, string? DisplayName, string? Detail, DateTimeOffset? CreatedDateTime, GraphDevice? Device = null);
+
+/// <summary>Entra-Geräteobjekt, an das eine Methode gebunden ist (Windows Hello, Authenticator, Platform Credential).</summary>
+/// <param name="Id">Objekt-ID des Geräts in Entra.</param>
+/// <param name="DeviceId">Geräte-ID (deviceId), die Windows/Intune anzeigt.</param>
+/// <param name="TrustType">„AzureAd“ (Entra-Join), „ServerAd“ (Hybrid-Join) oder „Workplace“ (registriert).</param>
+public sealed record GraphDevice(
+    string Id, string? DeviceId, string? DisplayName, string? OperatingSystem, string? OperatingSystemVersion,
+    string? Manufacturer, string? Model, string? TrustType, bool? IsCompliant, bool? IsManaged, bool? AccountEnabled,
+    DateTimeOffset? ApproximateLastSignInDateTime);
 
 /// <summary>Einstellungen der Methode „Befristeter Zugriffspass“ im Tenant.</summary>
 public sealed record GraphTapPolicy(bool Enabled, int DefaultLifetimeInMinutes, int MinimumLifetimeInMinutes, int MaximumLifetimeInMinutes, bool DefaultUsableOnce, bool IsUsableOnceEnforced, int TargetCount);

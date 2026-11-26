@@ -8,6 +8,8 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 -->
 
 ## 0.11.1 · 2026-11-26
+- Neu: Im Passkey-Rollout zeigt das Personenfenster bei Windows Hello, Authenticator-App und Platform Credential das zugehörige Gerät aus Entra: Name, Modell, Betriebssystem mit Version, Join-Art, Konformität und letzte Aktivität, dazu ein Link „in Entra öffnen“.
+- Behoben: Bei Windows Hello for Business fehlte das Gerät oft, weil Entra es nur bei der Einzelabfrage einer Methode mitliefert.
 - Verbessert: Kennt der Server die Kopplung eines Agents nicht mehr (z. B. nach dem Entkoppeln in der Weboberfläche), sagt das Tray-Symbol einmal Bescheid. Ein Klick auf die Meldung öffnet direkt das Koppeln-Fenster.
 - Behoben: Scheitert beim Koppeln der HTTPS-Verbindungsaufbau, nennt der Agent jetzt den eigentlichen Grund (z. B. nicht vertrauenswürdiges Stammzertifikat) statt pauschal „kein HTTPS“.
 - Behoben: Mit der internen Zertifizierungsstelle (https://localhost) scheiterte das Koppeln, weil deren Zertifikate keine Sperrliste haben. Fehlt die Sperrinformation, akzeptiert der Agent das Zertifikat jetzt wie ein Browser; gesperrte oder nicht vertrauenswürdige Zertifikate lehnt er weiterhin ab.

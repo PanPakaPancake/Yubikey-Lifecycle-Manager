@@ -64,16 +64,18 @@ public static class RolloutEndpoints
         g.MapGet("/users/{userId}/methods", async (Guid id, string userId, CurrentUser cu, YlmDbContext db, RolloutService rollout, CancellationToken ct) =>
         {
             await cu.RequireTenantAsync(id, Permission.ReadReports);
-            var methods = await rollout.ListMethodsAsync(await TenantAsync(db, id), userId, ct);
-            return Results.Ok(methods.Select(RolloutService.ToDto));
+            var tenant = await TenantAsync(db, id);
+            var methods = await rollout.ListMethodsAsync(tenant, userId, ct);
+            return Results.Ok(methods.Select(m => RolloutService.ToDto(m, tenant.EntraTenantId)));
         });
 
         g.MapDelete("/users/{userId}/methods/{kind}/{methodId}", async (Guid id, string userId, string kind, string methodId,
             CurrentUser cu, YlmDbContext db, RolloutService rollout, CancellationToken ct) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.RemoveAuthMethods);
-            var methods = await rollout.RemoveMethodAsync(await TenantAsync(db, id), userId, kind, methodId, user, ct);
-            return Results.Ok(methods.Select(RolloutService.ToDto));
+            var tenant = await TenantAsync(db, id);
+            var methods = await rollout.RemoveMethodAsync(tenant, userId, kind, methodId, user, ct);
+            return Results.Ok(methods.Select(m => RolloutService.ToDto(m, tenant.EntraTenantId)));
         });
 
         g.MapPost("/remove-methods", async (Guid id, BulkRemoveRequest body, CurrentUser cu, YlmDbContext db, RolloutService rollout, CancellationToken ct) =>

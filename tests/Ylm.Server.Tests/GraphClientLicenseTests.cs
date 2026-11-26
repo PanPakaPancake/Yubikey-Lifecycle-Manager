@@ -126,17 +126,27 @@ public sealed class GraphClientDeviceTests
         var handler = new StubHandler(req =>
         {
             var path = req.RequestUri!.AbsolutePath;
-            if (path.EndsWith("/windowsHelloForBusinessMethods"))
+            if (path.EndsWith("/windowsHelloForBusinessMethods/w1"))
+            {
+                Assert.Contains("expand=device", req.RequestUri.Query);
                 return deviceReadable
-                    ? Json(HttpStatusCode.OK, """{"value":[{"id":"w1","device":{"id":"d1","displayName":"LAPTOP-TIMO","operatingSystem":"Windows"}}]}""")
+                    ? Json(HttpStatusCode.OK, """{"id":"w1","displayName":"LAPTOP-TIMO","device":{"id":"d1","deviceId":"dev-1","displayName":"LAPTOP-TIMO","operatingSystem":"Windows","operatingSystemVersion":"10.0.26100.2314","manufacturer":"LENOVO","model":"ThinkPad T14","trustType":"AzureAd","isCompliant":true,"approximateLastSignInDateTime":"2026-11-25T08:00:00Z"}}""")
                     : Json(HttpStatusCode.Forbidden, """{"error":{"code":"Authorization_RequestDenied","message":"Insufficient privileges"}}""");
-            return Json(HttpStatusCode.OK, """{"value":[ {"@odata.type":"#microsoft.graph.windowsHelloForBusinessAuthenticationMethod","id":"w1","displayName":"LAPTOP-TIMO","keyStrength":"normal"}, {"@odata.type":"#microsoft.graph.fido2AuthenticationMethod","id":"f1","displayName":"Authenticator - iOS","model":"Microsoft Authenticator - iOS","aaGuid":"90a3ccdf-635c-4729-a248-9b709135078f"}, {"@odata.type":"#microsoft.graph.fido2AuthenticationMethod","id":"f2","displayName":"YubiKey","model":"YubiKey 5 NFC","aaGuid":"cb69481e-8ff7-4039-93ec-0a2729a154a8"}]}""");
+            }
+            if (path.EndsWith("/microsoftAuthenticatorMethods/a1"))
+                return Json(HttpStatusCode.OK, """{"id":"a1","displayName":"iPhone","device":{"id":"d2","displayName":"Timos iPhone","operatingSystem":"iOS","operatingSystemVersion":"18.1","model":"iPhone 15 Pro","trustType":"Workplace"}}""");
+            return Json(HttpStatusCode.OK, """{"value":[ {"@odata.type":"#microsoft.graph.windowsHelloForBusinessAuthenticationMethod","id":"w1","keyStrength":"normal"}, {"@odata.type":"#microsoft.graph.microsoftAuthenticatorAuthenticationMethod","id":"a1","displayName":"iPhone","deviceTag":"SoftwareTokenActivated","phoneAppVersion":"6.8.18"}, {"@odata.type":"#microsoft.graph.fido2AuthenticationMethod","id":"f1","displayName":"Authenticator - iOS","model":"Microsoft Authenticator - iOS","aaGuid":"90a3ccdf-635c-4729-a248-9b709135078f"}, {"@odata.type":"#microsoft.graph.fido2AuthenticationMethod","id":"f2","displayName":"YubiKey","model":"YubiKey 5 NFC","aaGuid":"cb69481e-8ff7-4039-93ec-0a2729a154a8"}]}""");
         });
         var graph = new GraphClient(new HttpClient(handler), _ => Task.FromResult("x.e30.x"), "https://graph.test");
 
         var methods = await graph.ListAuthenticationMethodsAsync("u1");
 
-        Assert.Equal(deviceReadable ? "LAPTOP-TIMO (Windows)" : null, methods.Single(m => m.Id == "w1").Device);
+        var hello = methods.Single(m => m.Id == "w1");
+        Assert.Equal(deviceReadable ? "ThinkPad T14" : null, hello.Device?.Model);
+        Assert.Equal(deviceReadable ? "10.0.26100.2314" : null, hello.Device?.OperatingSystemVersion);
+        Assert.Equal(deviceReadable ? "LAPTOP-TIMO" : null, hello.DisplayName); // Name kommt nur aus der Einzelabfrage
+        Assert.Equal("Timos iPhone", methods.Single(m => m.Id == "a1").Device?.DisplayName);
+        Assert.Null(methods.Single(m => m.Id == "f1").Device);
         Assert.Equal("passKeyDeviceBoundAuthenticator", methods.Single(m => m.Id == "f1").ReportName);
         Assert.Equal("passKeyDeviceBound", methods.Single(m => m.Id == "f2").ReportName);
         Assert.Equal(Ylm.Core.RolloutStage.SecurityKey, Ylm.Core.AuthMethodCatalog.StageOf(methods.Select(m => m.ReportName)));

@@ -112,17 +112,32 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
         return (u.UserPrincipalName, u.DisplayName);
     }
 
-    public static object ToDto(GraphAuthMethod m)
+    public static object ToDto(GraphAuthMethod m, Guid entraTenantId)
     {
         var info = AuthMethodCatalog.Get(m.ReportName);
         return new
         {
             m.Id, m.Kind, m.ReportName, Label = info.Label, Strength = info.Strength.ToString(), info.IsPasskey,
             m.DisplayName, m.Detail, m.CreatedDateTime, Removable = AuthMethodCatalog.IsRemovable(m.Kind, m.ReportName),
-            // Windows Hello for Business: Entra nennt im Anzeigenamen das Gerät, falls die Geräteabfrage nichts liefert.
-            Device = m.Device ?? (m.Kind is "windowsHelloForBusiness" or "platformCredential" ? m.DisplayName : null),
+            Device = DeviceDto(m, entraTenantId),
             info.IsSecurityKey,
         };
+    }
+
+    private static object? DeviceDto(GraphAuthMethod m, Guid entraTenantId)
+    {
+        if (m.Device is { } d)
+            return new
+            {
+                d.Id, d.DeviceId, Name = d.DisplayName, d.OperatingSystem, d.OperatingSystemVersion, d.Manufacturer, d.Model,
+                d.TrustType, d.IsCompliant, d.IsManaged, Enabled = d.AccountEnabled, LastSignIn = d.ApproximateLastSignInDateTime,
+                PortalUrl = $"https://portal.azure.com/#@{entraTenantId}/view/Microsoft_AAD_Devices/DeviceDetailsMenuBlade/~/Properties/objectId/{Uri.EscapeDataString(d.Id)}"
+                    + (d.DeviceId is { Length: > 0 } did ? $"/deviceId/{Uri.EscapeDataString(did)}" : ""),
+            };
+        // Windows Hello for Business: Entra nennt im Anzeigenamen das Gerät, falls die Geräteabfrage nichts liefert.
+        return m.Kind is "windowsHelloForBusiness" or "platformCredential" && !string.IsNullOrWhiteSpace(m.DisplayName)
+            ? new { Name = m.DisplayName }
+            : null;
     }
 
     public async Task<IReadOnlyList<GraphAuthMethod>> ListMethodsAsync(Tenant tenant, string userId, CancellationToken ct = default)
