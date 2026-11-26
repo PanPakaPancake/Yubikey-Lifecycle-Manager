@@ -96,6 +96,7 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.Property(x => x.TargetExcludeGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
             e.Property(x => x.ProtectedGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
             e.Property(x => x.ProtectAdmins).HasDefaultValue(true);
+            e.Property(x => x.RequireBreakglassRemovalApproval).HasDefaultValue(true);
         });
 
         b.Entity<YubiKey>(e =>
@@ -199,6 +200,7 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
         {
             e.ToTable("registration_approvals");
             e.HasIndex(x => new { x.TenantId, x.Status });
+            e.HasIndex(x => x.KeyId);
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 
