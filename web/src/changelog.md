@@ -7,7 +7,10 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
-## 0.10.2 · 2026-11-26
+## 0.11.0 · 2026-11-26
+- Sicherheit: Aktive Breakglass-Keys lassen sich nicht mehr von einer Person allein sperren, zurücksetzen oder um ein Konto erleichtern. Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss den Antrag unter „Freigaben“ freigeben (gilt 24 Stunden, einmal). Standardmäßig für alle Tenants an; abschalten darf nur, wer „Geschützte Konten bearbeiten“ hat.
+- Sicherheit: Über die API lassen sich aktive Breakglass-Keys nicht sperren.
+- Neu: Notfallblatt für den versiegelten Umschlag. Beim Anlegen eines Breakglass-Keys und jederzeit an der Key-Ansicht lassen sich weitere Notfallkonten (z. B. Amazon, Registrar) mit Benutzername, Passwort, MFA-Methode und Beschreibung eintragen und ausdrucken. Die Angaben werden nirgends gespeichert, weder im Browser noch auf dem Server.
 - Verbessert: Unter „Adresse und Zertifikat“ erklärt jede Betriebsart und jede Zertifikatsart, was sie macht und wann sie passt. Die aktuelle Einstellung ist markiert.
 
 ## 0.10.1 · 2026-11-25
