@@ -7,6 +7,9 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.10.2 · 2026-11-26
+- Verbessert: Unter „Adresse und Zertifikat“ erklärt jede Betriebsart und jede Zertifikatsart, was sie macht und wann sie passt. Die aktuelle Einstellung ist markiert.
+
 ## 0.10.1 · 2026-11-25
 - Behoben: Das Update per Klick bringt jetzt alle Container auf die neue Version, auch Updater, Caddy und Datensicherung. Bisher wurde nur der Server ausgetauscht.
 
