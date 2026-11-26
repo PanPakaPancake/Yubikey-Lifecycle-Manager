@@ -7,6 +7,12 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.11.1 · 2026-11-26
+- Verbessert: Kennt der Server die Kopplung eines Agents nicht mehr (z. B. nach dem Entkoppeln in der Weboberfläche), sagt das Tray-Symbol einmal Bescheid. Ein Klick auf die Meldung öffnet direkt das Koppeln-Fenster.
+- Behoben: Scheitert beim Koppeln der HTTPS-Verbindungsaufbau, nennt der Agent jetzt den eigentlichen Grund (z. B. nicht vertrauenswürdiges Stammzertifikat) statt pauschal „kein HTTPS“.
+- Behoben: Mit der internen Zertifizierungsstelle (https://localhost) scheiterte das Koppeln, weil deren Zertifikate keine Sperrliste haben. Fehlt die Sperrinformation, akzeptiert der Agent das Zertifikat jetzt wie ein Browser; gesperrte oder nicht vertrauenswürdige Zertifikate lehnt er weiterhin ab.
+- Verbessert: Das Installationsskript holt das Stammzertifikat der internen Zertifizierungsstelle bei jedem Lauf neu, damit es immer zum laufenden Server passt.
+
 ## 0.11.0 · 2026-11-26
 - Sicherheit: Aktive Breakglass-Keys lassen sich nicht mehr von einer Person allein sperren, zurücksetzen oder um ein Konto erleichtern. Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss den Antrag unter „Freigaben“ freigeben (gilt 24 Stunden, einmal). Standardmäßig für alle Tenants an; abschalten darf nur, wer „Geschützte Konten bearbeiten“ hat.
 - Sicherheit: Über die API lassen sich aktive Breakglass-Keys nicht sperren.

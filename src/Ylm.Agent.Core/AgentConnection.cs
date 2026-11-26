@@ -18,7 +18,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
     private readonly AgentSettingsStore _store;
     private readonly ILogger _logger;
     private readonly string _version;
-    private readonly Func<HttpMessageHandler>? _handlerFactory;
+    private readonly Func<HttpMessageHandler> _handlerFactory;
     private readonly Action<Microsoft.AspNetCore.Http.Connections.Client.HttpConnectionOptions>? _configureHttp;
     private HubConnection? _hub;
     private AgentSettings _settings;
@@ -42,7 +42,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         _store = store;
         _logger = logger;
         _version = version;
-        _handlerFactory = handlerFactory;
+        _handlerFactory = handlerFactory ?? AgentHttp.CreateHandler;
         _settings = store.Load();
         _status = new TrayStatus
         {
@@ -110,7 +110,8 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
             .WithUrl(serverUrl.TrimEnd('/') + AgentProtocol.HubPath, o =>
             {
                 o.AccessTokenProvider = () => Task.FromResult<string?>(token);
-                if (_handlerFactory is not null) o.HttpMessageHandlerFactory = _ => _handlerFactory();
+                o.HttpMessageHandlerFactory = _ => _handlerFactory();
+                o.WebSocketConfiguration = ws => ws.RemoteCertificateValidationCallback = (_, _, chain, errors) => AgentHttp.IsAcceptable(errors, chain?.ChainStatus);
                 _configureHttp?.Invoke(o);
             })
             .WithAutomaticReconnect(new ForeverRetryPolicy())
@@ -283,7 +284,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         if (Interlocked.Exchange(ref _moving, 1) == 1) return;
         try
         {
-            using var http = _handlerFactory is null ? new HttpClient() : new HttpClient(_handlerFactory());
+            using var http = new HttpClient(_handlerFactory());
             http.Timeout = TimeSpan.FromSeconds(15);
             using var res = await http.GetAsync(new Uri(new Uri(next), "/healthz"));
             if (!res.IsSuccessStatusCode)
@@ -315,7 +316,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         PairingResponse pairing;
         try
         {
-            using var http = _handlerFactory is null ? new HttpClient() : new HttpClient(_handlerFactory());
+            using var http = new HttpClient(_handlerFactory());
             http.Timeout = TimeSpan.FromSeconds(30);
             var res = await http.PostAsJsonAsync(new Uri(uri, "/api/agent/pair"), new PairingRequest(code, Environment.MachineName, _version), ct);
             if (!res.IsSuccessStatusCode)
@@ -368,18 +369,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
     {
         for (var e = ex; e is not null; e = e.InnerException)
         {
-            if (e is System.Security.Authentication.AuthenticationException auth)
-            {
-                var certificate = auth.Message.Contains("certificate", StringComparison.OrdinalIgnoreCase)
-                                  || auth.Message.Contains("Zertifikat", StringComparison.OrdinalIgnoreCase);
-                if (certificate)
-                    return "Das HTTPS-Zertifikat des Servers ist auf diesem PC nicht vertrauenswürdig. Bei der internen Zertifizierungsstelle " +
-                           "das Stammzertifikat (ylm-root-ca.crt) als vertrauenswürdige Stammzertifizierungsstelle installieren.";
-                return uri.Port == 8080
-                    ? "Unter dieser Adresse antwortet kein HTTPS: Port 8080 ist der interne HTTP-Port. Bitte die Adresse aus dem Browser verwenden, " +
-                      "meist ohne Port (z. B. https://localhost)."
-                    : "Unter dieser Adresse antwortet kein HTTPS. Bitte die Adresse aus dem Browser verwenden.";
-            }
+            if (e is System.Security.Authentication.AuthenticationException auth) return TlsHint(auth, uri);
             if (e is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionRefused })
                 return $"Unter {uri.GetLeftPart(UriPartial.Authority)} läuft kein Server (Verbindung abgelehnt). Bitte die Adresse aus dem Browser verwenden.";
             if (e is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.HostNotFound or System.Net.Sockets.SocketError.NoData })
@@ -388,11 +378,50 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         return null;
     }
 
+    private const string UntrustedHint = "Das HTTPS-Zertifikat des Servers ist auf diesem PC nicht vertrauenswürdig. Bei der internen Zertifizierungsstelle " +
+                                         "das Stammzertifikat (ylm-root-ca.crt) unter „Lokaler Computer“ als vertrauenswürdige Stammzertifizierungsstelle " +
+                                         "installieren (der Agent läuft als Dienst und sieht die Zertifikate des angemeldeten Benutzers nicht).";
+
+    // Windows meldet Fehler im TLS-Handshake (SChannel) als innere Win32Exception mit SECURITY_STATUS-Code, die äußere
+    // AuthenticationException sagt dann nur "Authentication failed, see inner exception".
+    private static string TlsHint(System.Security.Authentication.AuthenticationException auth, Uri uri)
+    {
+        var status = auth.InnerException is System.ComponentModel.Win32Exception w ? (uint)w.NativeErrorCode : 0u;
+        var text = string.Join(" ", Chain(auth).Select(e => e.Message));
+        if (status is 0x80090325 or 0x800B0109 or 0x800B010A || text.Contains("UntrustedRoot", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("PartialChain", StringComparison.OrdinalIgnoreCase))
+            return UntrustedHint;
+        if (status is 0x80092012 or 0x80092013 || text.Contains("Revocation", StringComparison.OrdinalIgnoreCase))
+            return "Die Sperrprüfung für das HTTPS-Zertifikat des Servers ist gescheitert. Bitte den Agent aktualisieren; " +
+                   "ab Version 0.11.1 genügt ein Zertifikat ohne Sperrinformation (z. B. der internen Zertifizierungsstelle).";
+        if (status == 0x80090322 || text.Contains("RemoteCertificateNameMismatch", StringComparison.OrdinalIgnoreCase))
+            return $"Das HTTPS-Zertifikat des Servers gilt nicht für den Namen {uri.Host}. Bitte genau die Adresse aus dem Browser verwenden.";
+        if (status is 0x80090328 or 0x800B0101 || text.Contains("NotTimeValid", StringComparison.OrdinalIgnoreCase))
+            return "Das HTTPS-Zertifikat des Servers ist abgelaufen oder noch nicht gültig. Bitte Uhrzeit dieses PCs und das Zertifikat des Servers prüfen.";
+        if (text.Contains("certificate", StringComparison.OrdinalIgnoreCase) || text.Contains("Zertifikat", StringComparison.OrdinalIgnoreCase))
+            return UntrustedHint;
+        if (text.Contains("frame", StringComparison.OrdinalIgnoreCase))
+            return uri.Port == 8080
+                ? "Unter dieser Adresse antwortet kein HTTPS: Port 8080 ist der interne HTTP-Port. Bitte die Adresse aus dem Browser verwenden, " +
+                  "meist ohne Port (z. B. https://localhost)."
+                : "Unter dieser Adresse antwortet kein HTTPS. Bitte die Adresse aus dem Browser verwenden.";
+        return "Der HTTPS-Verbindungsaufbau (TLS) zum Server ist gescheitert. Bitte genau die Adresse aus dem Browser verwenden; " +
+               "Details stehen in Klammern und im Agent-Protokoll.";
+    }
+
+    private static IEnumerable<Exception> Chain(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException) yield return e;
+    }
+
     internal static string Describe(Exception ex)
     {
-        var inner = ex;
-        while (inner.InnerException is not null && inner is HttpRequestException or AggregateException) inner = inner.InnerException;
-        return $"({inner.Message} [{inner.GetType().Name}, 0x{inner.HResult:X8}])";
+        var inner = Chain(ex).Last();
+        // Win32Exception trägt den eigentlichen Code (z. B. SChannel 0x80090326) in NativeErrorCode, HResult ist nur E_FAIL.
+        var code = inner is System.ComponentModel.Win32Exception w ? w.NativeErrorCode : inner.HResult;
+        var outer = Chain(ex).FirstOrDefault(e => e is System.Security.Authentication.AuthenticationException);
+        var prefix = outer is not null && !ReferenceEquals(outer, inner) ? "TLS: " : "";
+        return $"({prefix}{inner.Message} [{inner.GetType().Name}, 0x{code:X8}])";
     }
 
     public async Task UnpairAsync()
