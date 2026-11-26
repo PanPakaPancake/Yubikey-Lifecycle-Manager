@@ -161,7 +161,7 @@ public sealed partial class AgentUpdater(
                 return _state.LastResult!;
             }
 
-            using var http = new HttpClient { BaseAddress = new Uri(settings.ServerUrl), Timeout = TimeSpan.FromMinutes(10) };
+            using var http = new HttpClient(AgentHttp.CreateHandler()) { BaseAddress = new Uri(settings.ServerUrl), Timeout = TimeSpan.FromMinutes(10) };
             http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
             using var res = await http.GetAsync("/api/agent/update?info=1&current=" + Uri.EscapeDataString(currentVersion), ct);
             AgentUpdateInfo? info;

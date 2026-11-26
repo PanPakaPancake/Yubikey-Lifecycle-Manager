@@ -18,7 +18,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
     private readonly AgentSettingsStore _store;
     private readonly ILogger _logger;
     private readonly string _version;
-    private readonly Func<HttpMessageHandler>? _handlerFactory;
+    private readonly Func<HttpMessageHandler> _handlerFactory;
     private readonly Action<Microsoft.AspNetCore.Http.Connections.Client.HttpConnectionOptions>? _configureHttp;
     private HubConnection? _hub;
     private AgentSettings _settings;
@@ -42,7 +42,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         _store = store;
         _logger = logger;
         _version = version;
-        _handlerFactory = handlerFactory;
+        _handlerFactory = handlerFactory ?? AgentHttp.CreateHandler;
         _settings = store.Load();
         _status = new TrayStatus
         {
@@ -110,7 +110,8 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
             .WithUrl(serverUrl.TrimEnd('/') + AgentProtocol.HubPath, o =>
             {
                 o.AccessTokenProvider = () => Task.FromResult<string?>(token);
-                if (_handlerFactory is not null) o.HttpMessageHandlerFactory = _ => _handlerFactory();
+                o.HttpMessageHandlerFactory = _ => _handlerFactory();
+                o.WebSocketConfiguration = ws => ws.RemoteCertificateValidationCallback = (_, _, chain, errors) => AgentHttp.IsAcceptable(errors, chain?.ChainStatus);
                 _configureHttp?.Invoke(o);
             })
             .WithAutomaticReconnect(new ForeverRetryPolicy())
@@ -283,7 +284,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         if (Interlocked.Exchange(ref _moving, 1) == 1) return;
         try
         {
-            using var http = _handlerFactory is null ? new HttpClient() : new HttpClient(_handlerFactory());
+            using var http = new HttpClient(_handlerFactory());
             http.Timeout = TimeSpan.FromSeconds(15);
             using var res = await http.GetAsync(new Uri(new Uri(next), "/healthz"));
             if (!res.IsSuccessStatusCode)
@@ -315,7 +316,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         PairingResponse pairing;
         try
         {
-            using var http = _handlerFactory is null ? new HttpClient() : new HttpClient(_handlerFactory());
+            using var http = new HttpClient(_handlerFactory());
             http.Timeout = TimeSpan.FromSeconds(30);
             var res = await http.PostAsJsonAsync(new Uri(uri, "/api/agent/pair"), new PairingRequest(code, Environment.MachineName, _version), ct);
             if (!res.IsSuccessStatusCode)
@@ -390,6 +391,9 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         if (status is 0x80090325 or 0x800B0109 or 0x800B010A || text.Contains("UntrustedRoot", StringComparison.OrdinalIgnoreCase)
             || text.Contains("PartialChain", StringComparison.OrdinalIgnoreCase))
             return UntrustedHint;
+        if (status is 0x80092012 or 0x80092013 || text.Contains("Revocation", StringComparison.OrdinalIgnoreCase))
+            return "Die Sperrprüfung für das HTTPS-Zertifikat des Servers ist gescheitert. Bitte den Agent aktualisieren; " +
+                   "ab Version 0.11.1 genügt ein Zertifikat ohne Sperrinformation (z. B. der internen Zertifizierungsstelle).";
         if (status == 0x80090322 || text.Contains("RemoteCertificateNameMismatch", StringComparison.OrdinalIgnoreCase))
             return $"Das HTTPS-Zertifikat des Servers gilt nicht für den Namen {uri.Host}. Bitte genau die Adresse aus dem Browser verwenden.";
         if (status is 0x80090328 or 0x800B0101 || text.Contains("NotTimeValid", StringComparison.OrdinalIgnoreCase))

@@ -70,4 +70,19 @@ public sealed class PairingHintTests
     [Fact]
     public void Wrong_name_mentions_the_host() =>
         Assert.Contains("ylm.firma.local", AgentConnection.ConnectionHint(Schannel(0x80090322, "The target principal name is incorrect."), new Uri("https://ylm.firma.local"))!);
+
+    private static System.Security.Cryptography.X509Certificates.X509ChainStatus Status(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags f) => new() { Status = f };
+
+    [Fact]
+    public void Missing_revocation_info_is_accepted_but_revoked_or_untrusted_is_not()
+    {
+        const System.Net.Security.SslPolicyErrors chainErr = System.Net.Security.SslPolicyErrors.RemoteCertificateChainErrors;
+        var F = (System.Security.Cryptography.X509Certificates.X509ChainStatusFlags f) => new[] { Status(f) };
+        Assert.True(AgentHttp.IsAcceptable(System.Net.Security.SslPolicyErrors.None, null));
+        Assert.True(AgentHttp.IsAcceptable(chainErr, [Status(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.RevocationStatusUnknown), Status(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.OfflineRevocation)]));
+        Assert.False(AgentHttp.IsAcceptable(chainErr, F(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.Revoked)));
+        Assert.False(AgentHttp.IsAcceptable(chainErr, [Status(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.RevocationStatusUnknown), Status(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.UntrustedRoot)]));
+        Assert.False(AgentHttp.IsAcceptable(System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch, F(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.NoError)));
+        Assert.False(AgentHttp.IsAcceptable(chainErr, []));
+    }
 }
