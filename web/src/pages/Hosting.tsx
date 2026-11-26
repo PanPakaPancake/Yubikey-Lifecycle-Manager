@@ -18,6 +18,29 @@ type HostingInfo = {
 };
 
 const modeLabels: Record<Mode, string> = { Https: 'HTTPS (mitgeliefert)', Proxy: 'Eigener Reverse Proxy / ZTNA', Local: 'Nur auf diesem PC' };
+/** Erklärung je Betriebsart: wer HTTPS macht, wann sie passt. */
+const modeHelp: Record<Mode, { what: string; when: string }> = {
+  Https: {
+    what: 'Die Plattform kümmert sich selbst um HTTPS: Der mitgelieferte Webserver (Caddy) nimmt die Verbindungen an, verschlüsselt sie und besorgt bzw. erneuert das Zertifikat.',
+    when: 'Passt fast immer, auf dem eigenen PC (https://localhost) wie auf einem Server im Firmennetz. Empfohlen.',
+  },
+  Proxy: {
+    what: 'Vor der Plattform steht schon etwas, das HTTPS übernimmt, z. B. nginx, Traefik, IIS, ein Cloudflare-Tunnel oder ein ZTNA-Connector (Entra Private Access, Zscaler). Das Zertifikat liegt dort; die Plattform spricht intern nur http und bekommt die Anfragen weitergeleitet.',
+    when: 'Nur wählen, wenn ein solcher Proxy bereits eingerichtet ist. Ohne ihn ist die Plattform danach nicht erreichbar.',
+  },
+  Local: {
+    what: 'Kein HTTPS: Die Plattform läuft unverschlüsselt unter http://localhost und ist nur auf diesem PC erreichbar.',
+    when: 'Nur zum Ausprobieren. Besser ist „HTTPS (mitgeliefert)“ mit dem Namen localhost.',
+  },
+};
+/** Erklärung je Zertifikatsart. */
+const tlsHelp: Record<Tls, string> = {
+  Internal: 'Caddy stellt das Zertifikat selbst aus und erneuert es automatisch. Damit Browser und Agent nicht warnen, muss das Stammzertifikat einmal auf den Admin-PCs als vertrauenswürdig eingetragen werden (GPO/Intune, auf dem eigenen PC per Installationsskript). Ideal für localhost und interne Server.',
+  Own: 'Sie laden ein vorhandenes Zertifikat hoch, z. B. ein Wildcard-Zertifikat (*.firma.de) oder eines aus der Firmen-PKI. Vor Ablauf tauschen Sie es hier oder automatisch per API.',
+  LetsEncrypt: 'Kostenloses, überall vertrautes Zertifikat, automatisch erneuert. Voraussetzung: Der Name zeigt öffentlich auf diesen Server und Port 80 ist aus dem Internet erreichbar.',
+  LetsEncryptDns: 'Wie Let\'s Encrypt, aber die Prüfung läuft über einen DNS-Eintrag statt über Port 80. Funktioniert deshalb auch für interne Server und andere Ports. Braucht ein API-Token Ihres DNS-Anbieters.',
+};
+
 const tlsLabels: Record<Tls, string> = {
   Internal: 'Interne Zertifizierungsstelle (selbstsigniert)',
   Own: 'Eigenes Zertifikat (z. B. Wildcard, Firmen-PKI)',
@@ -145,12 +168,22 @@ function HostingForm({ info, onCancel, onApplied }: { info: HostingInfo; onCance
 
   return (
     <div className="mt">
-      <div className="segmented" role="group" aria-label="Betriebsart" style={{ marginBottom: 12 }}>
-        {(Object.keys(modeLabels) as Mode[]).map((m) => <button key={m} type="button" className={f.mode === m ? 'on' : ''} onClick={() => set({ mode: m })}>{modeLabels[m]}</button>)}
+      <p className="small muted" style={{ marginTop: 0 }}>Wer kümmert sich um HTTPS? Nichts ändert sich, bevor Sie auf „Übernehmen“ klicken.</p>
+      <div role="radiogroup" aria-label="Betriebsart" style={{ marginBottom: 12 }}>
+        {(Object.keys(modeLabels) as Mode[]).map((m) => (
+          <label key={m} className={`choice${f.mode === m ? ' selected' : ''}`}>
+            <input type="radio" name="hosting-mode" checked={f.mode === m} onChange={() => set({ mode: m })} />
+            <span>
+              <strong>{modeLabels[m]}</strong>{cur.mode === m && <> <Badge tone="ok">aktuell</Badge></>}
+              <div className="small">{modeHelp[m].what}</div>
+              <div className="small muted">{modeHelp[m].when}</div>
+            </span>
+          </label>
+        ))}
       </div>
 
       {f.mode === 'Https' && <>
-        <p className="small muted">Der mitgelieferte Caddy übernimmt HTTPS vor der Plattform. Für den eigenen PC: Name <code>localhost</code> mit interner Zertifizierungsstelle.</p>
+        <p className="small muted">Für den eigenen PC: DNS-Name <code>localhost</code> und Zertifikat „Interne Zertifizierungsstelle“.</p>
         <div className="grid-2">
           <Field label="DNS-Name" hint="Unter diesem Namen erreichen Browser und Agents die Plattform, z. B. ylm.firma.de.">
             <input value={f.domain ?? ''} onChange={(e) => set({ domain: e.target.value.trim() })} placeholder="ylm.firma.de" />
@@ -170,13 +203,17 @@ function HostingForm({ info, onCancel, onApplied }: { info: HostingInfo; onCance
             Alte Adresse <code>{oldDomain}</code> weiter beantworten (empfohlen: Agents ziehen darüber automatisch um, Lesezeichen funktionieren weiter)</label>
         )}
 
-        <Field label="Zertifikat">
-          <select value={f.tls} onChange={(e) => set({ tls: e.target.value as Tls })}>
-            {(Object.keys(tlsLabels) as Tls[]).map((t) => <option key={t} value={t}>{tlsLabels[t]}</option>)}
-          </select>
-        </Field>
-        {f.tls === 'Internal' && <p className="small muted">Caddy stellt sich das Zertifikat selbst aus und erneuert es automatisch. Das Stammzertifikat verteilen Sie einmal per GPO/Intune auf die Admin-PCs, sonst warnt der Browser.
-          {f.domain === 'localhost' && ' Auf dem eigenen PC trägt das Installationsskript es beim nächsten Lauf selbst ein. Bis dahin verbindet sich der Agent weiter über die alte Adresse.'}</p>}
+        <div className="field-label" style={{ marginTop: 12, marginBottom: 6 }}>Zertifikat</div>
+        <div role="radiogroup" aria-label="Zertifikat">
+          {(Object.keys(tlsLabels) as Tls[]).map((t) => (
+            <label key={t} className={`choice${f.tls === t ? ' selected' : ''}`}>
+              <input type="radio" name="hosting-tls" checked={f.tls === t} onChange={() => set({ tls: t })} />
+              <span><strong>{tlsLabels[t]}</strong>{cur.mode === 'Https' && cur.tls === t && <> <Badge tone="ok">aktuell</Badge></>}
+                <div className="small muted">{tlsHelp[t]}</div></span>
+            </label>
+          ))}
+        </div>
+        {f.tls === 'Internal' && f.domain === 'localhost' && <p className="small muted">Auf dem eigenen PC trägt das Installationsskript das Stammzertifikat beim nächsten Lauf selbst ein. Bis dahin verbindet sich der Agent weiter über die alte Adresse.</p>}
         {(f.tls === 'LetsEncrypt' || f.tls === 'LetsEncryptDns') && (
           <Field label="E-Mail für Let's Encrypt (optional)" hint="Für Hinweise zum Ablauf, falls die automatische Erneuerung klemmt.">
             <input type="email" value={f.acmeEmail ?? ''} onChange={(e) => set({ acmeEmail: e.target.value })} placeholder="it@firma.de" />
@@ -214,20 +251,18 @@ function HostingForm({ info, onCancel, onApplied }: { info: HostingInfo; onCance
       </>}
 
       {f.mode === 'Proxy' && <>
-        <p className="small muted">HTTPS übernimmt Ihr Reverse Proxy oder ZTNA-Connector (Zertifikat dort). Er leitet an den Port dieses Servers weiter.</p>
         <div className="grid-2">
-          <Field label="Adresse für Benutzer" hint="Mit https://, so wie der Proxy sie veröffentlicht.">
+          <Field label="Adresse für Benutzer" hint="Die https-Adresse, unter der der Proxy die Plattform veröffentlicht. Diese Adresse öffnen Browser und Agents.">
             <input value={f.publicUrl ?? ''} onChange={(e) => set({ publicUrl: e.target.value.trim() })} placeholder="https://ylm.firma.de" />
           </Field>
-          <Field label="Lauscht auf (IP)" hint="127.0.0.1 = Proxy auf diesem Server, sonst die interne IP dieses Servers.">
+          <Field label="Lauscht auf (IP)" hint="Wo die Plattform Anfragen vom Proxy annimmt: 127.0.0.1, wenn der Proxy auf diesem Server läuft, sonst die interne IP dieses Servers (der Proxy muss sie erreichen).">
             <input value={f.bindAddress ?? ''} onChange={(e) => set({ bindAddress: e.target.value.trim() })} placeholder="127.0.0.1" />
           </Field>
-          <Field label="Port"><input type="number" min={1} max={65535} value={f.port} onChange={(e) => set({ port: Number(e.target.value) })} /></Field>
+          <Field label="Port" hint="An diesen Port leitet der Proxy weiter (Standard 8080)."><input type="number" min={1} max={65535} value={f.port} onChange={(e) => set({ port: Number(e.target.value) })} /></Field>
         </div>
       </>}
 
       {f.mode === 'Local' && <>
-        <Info tone="warn">Ohne HTTPS, nur auf diesem PC erreichbar. Besser: „HTTPS (mitgeliefert)“ mit dem Namen localhost.</Info>
         <Field label="Port"><input type="number" min={1} max={65535} value={f.port} onChange={(e) => set({ port: Number(e.target.value) })} /></Field>
       </>}
 
