@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router';
-import { api, approvalLabels, fmtDate, type Approval, type ApprovalStatus } from '../api';
+import { api, approvalLabels, fmtDate, removalLabels, type Approval, type ApprovalStatus } from '../api';
 import { useAuth, useCan } from '../auth';
 import { Badge, Empty, ErrorBox, Field, Info, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { useToast } from '../feedback';
@@ -8,7 +8,12 @@ import { useTenant } from '../tenant';
 
 const tone: Record<ApprovalStatus, 'warn' | 'ok' | 'error' | 'neutral' | 'info'> = { Pending: 'warn', Approved: 'ok', Rejected: 'error', Used: 'info', Cancelled: 'neutral' };
 
-/** Vier-Augen-Freigaben für Breakglass-Registrierungen (V2). */
+/** Vier-Augen-Freigaben für Breakglass-Keys: Registrierung (V2) und Sperren/Zurücksetzen/Konto entfernen. */
+
+/** Was beantragt wurde, als kurzer Text. */
+export function approvalWhat(a: Approval) {
+  return a.kind === 'KeyRemoval' ? `${removalLabels[a.removalAction ?? 'Lock']}` : 'Registrieren';
+}
 export default function ApprovalsPage() {
   const { tenantId, tenant } = useTenant();
   const can = useCan();
@@ -24,16 +29,17 @@ export default function ApprovalsPage() {
       <PageHeader title="Freigaben" subtitle={<>Vier-Augen-Freigabe für Breakglass-Keys{tenant ? ` · ${tenant.displayName}` : ', alle Tenants'}. Einschalten unter <Link to="/tenant">Tenant-Einstellungen</Link>.</>} />
       <ErrorBox error={error} />
       {loading && !data && <Spinner />}
-      {data && data.length === 0 && <Empty>Keine Freigaben. Anträge entstehen im Wizard „Geteilter Key“, wenn ein Breakglass-Key registriert wird.</Empty>}
+      {data && data.length === 0 && <Empty>Keine Freigaben. Anträge entstehen im Wizard „Geteilter Key“, wenn ein Breakglass-Key registriert wird, und an der Key-Ansicht, wenn ein Breakglass-Key gesperrt, zurückgesetzt oder um ein Konto erleichtert werden soll.</Empty>}
       {data && data.length > 0 && (
         <div className="card table-wrap" style={{ padding: 0 }}>
           <table>
-            <thead><tr><th>Konten</th>{!tenantId && <th>Tenant</th>}<th>Verwahrer · Grund</th><th>Beantragt</th><th>Status</th><th /></tr></thead>
+            <thead><tr><th>Aktion</th><th>Konten</th>{!tenantId && <th>Tenant</th>}<th>Verwahrer · Grund</th><th>Beantragt</th><th>Status</th><th /></tr></thead>
             <tbody>
               {data.map(({ approval: a, tenantName }) => {
                 const own = a.requestedById === me.user?.id;
                 return (
                   <tr key={a.id}>
+                    <td><Badge tone={a.kind === 'KeyRemoval' ? 'error' : 'info'}>{approvalWhat(a)}</Badge></td>
                     <td>{a.userPrincipalNames.map((u) => <div key={u}>{u}</div>)}</td>
                     {!tenantId && <td>{tenantName}</td>}
                     <td>{a.custodian}<div className="small muted">{a.reason}</div></td>
@@ -71,13 +77,15 @@ function DecisionModal({ approval, approve, onClose, onDone }: { approval: Appro
   const toast = useToast();
   const go = () => run(async () => {
     await api.post(`/api/approvals/${approval.id}/${approve ? 'approve' : 'reject'}`, { note });
-    toast.ok(approve ? 'Freigegeben. Der Antragsteller kann die Registrierung jetzt 24 Stunden lang ausführen.' : 'Abgelehnt.');
+    toast.ok(approve ? `Freigegeben. Der Antragsteller kann ${approval.kind === 'KeyRemoval' ? 'die Aktion' : 'die Registrierung'} jetzt 24 Stunden lang einmal ausführen.` : 'Abgelehnt.');
     onDone();
   });
   return (
-    <Modal title={approve ? 'Breakglass-Registrierung freigeben' : 'Antrag ablehnen'} onClose={onClose}
+    <Modal title={approve ? (approval.kind === 'KeyRemoval' ? `Breakglass-Key: ${approvalWhat(approval)} freigeben` : 'Breakglass-Registrierung freigeben') : 'Antrag ablehnen'} onClose={onClose}
       footer={<><button onClick={onClose}>Abbrechen</button><button className={approve ? 'primary' : 'danger'} disabled={busy || (!approve && !note.trim())} onClick={go}>{approve ? 'Freigeben' : 'Ablehnen'}</button></>}>
-      <p>{approval.requestedByName} möchte einen Breakglass-Key für <strong>{approval.userPrincipalNames.join(', ')}</strong> registrieren. Verwahrer: {approval.custodian}.</p>
+      {approval.kind === 'KeyRemoval'
+        ? <p>{approval.requestedByName} möchte den Breakglass-Key {approval.removalAction === 'RemoveAccount' ? <>um das Konto <strong>{approval.userPrincipalNames.join(', ')}</strong> erleichtern</> : <>{approval.removalAction === 'Reset' ? 'zurücksetzen' : 'sperren'}. Betroffen: <strong>{approval.userPrincipalNames.join(', ')}</strong></>}. Die Passkeys werden danach in Entra gelöscht; der Notfallzugang funktioniert dann nicht mehr. Verwahrer: {approval.custodian ?? '–'}.</p>
+        : <p>{approval.requestedByName} möchte einen Breakglass-Key für <strong>{approval.userPrincipalNames.join(', ')}</strong> registrieren. Verwahrer: {approval.custodian}.</p>}
       <p className="small muted">Grund: {approval.reason}</p>
       <Field label={approve ? 'Notiz (optional)' : 'Grund der Ablehnung *'}><input value={note} onChange={(e) => setNote(e.target.value)} /></Field>
       <ErrorBox error={error} />

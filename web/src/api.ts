@@ -88,6 +88,7 @@ export interface Tenant {
   lastSyncAt?: string; lastSyncSucceeded?: boolean; lastSyncMessage?: string; targetUserCount?: number; lastCheckAt?: string;
   checks: TenantCheck[]; offboardedAt?: string; dataDeletionDueAt?: string;
   requireBreakglassApproval: boolean;
+  requireBreakglassRemovalApproval: boolean;
   protectAdmins?: boolean;
   protectedGroups?: GroupRef[];
 }
@@ -193,8 +194,10 @@ export const usageLabels: Record<KeyUsage, string> = { Personal: 'Persönlich', 
 
 export type ApprovalStatus = 'Pending' | 'Approved' | 'Rejected' | 'Used' | 'Cancelled';
 export const approvalLabels: Record<ApprovalStatus, string> = { Pending: 'Wartet auf Freigabe', Approved: 'Freigegeben', Rejected: 'Abgelehnt', Used: 'Verwendet', Cancelled: 'Zurückgezogen' };
+export type RemovalAction = 'Lock' | 'Reset' | 'RemoveAccount';
+export const removalLabels: Record<RemovalAction, string> = { Lock: 'Sperren', Reset: 'Zurücksetzen', RemoveAccount: 'Konto entfernen' };
 export interface Approval {
-  id: string; tenantId: string; usage: KeyUsage; entraUserIds: string[]; userPrincipalNames: string[]; custodian?: string | null; reason: string; status: ApprovalStatus;
+  id: string; tenantId: string; usage: KeyUsage; kind: 'Registration' | 'KeyRemoval'; removalAction?: RemovalAction | null; registrationId?: string | null; entraUserIds: string[]; userPrincipalNames: string[]; custodian?: string | null; reason: string; status: ApprovalStatus;
   requestedById: string; requestedByName: string; requestedAt: string; decidedByName?: string | null; decidedAt?: string | null; decisionNote?: string | null;
   validUntil?: string | null; usedAt?: string | null; keyId?: string | null; expired: boolean;
 }

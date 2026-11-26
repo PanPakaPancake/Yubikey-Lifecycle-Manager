@@ -7,6 +7,7 @@ import { RegisterModes } from '../register';
 import { ChooseTenant, useTenant } from '../tenant';
 import { useToast } from '../feedback';
 import { JobProgress } from './KeyDetail';
+import { BreakglassSheetModal } from './BreakglassSheet';
 import { KeyStep, ProfileStep, type EntraUser, type Violation } from './Wizard';
 
 interface SharedPreview {
@@ -34,6 +35,7 @@ export default function SharedWizardPage() {
   const [agentId, setAgentId] = useState('');
   const [profileId, setProfileId] = useState('');
   const [preview, setPreview] = useState<SharedPreview>();
+  const [sheet, setSheet] = useState(false);
   const [overrides, setOverrides] = useState<string[]>([]);
   const [performReset, setPerformReset] = useState(false);
   const [currentPin, setCurrentPin] = useState('');
@@ -184,9 +186,13 @@ export default function SharedWizardPage() {
           {job.pinLetterId && <p>Laden Sie den PIN-Brief für den Verwahrer jetzt herunter. Die PIN wird nicht gespeichert; der Brief ist 30 Minuten abrufbar.</p>}
           <div className="actions">
             {job.pinLetterId && <button className="primary" onClick={() => download('/api/pin-letters/' + job.pinLetterId)}>PIN-Brief (PDF)</button>}
+            {usage === 'Breakglass' && <button onClick={() => setSheet(true)}>Notfallblatt drucken</button>}
             {job.keyId && <Link className="btn" to={'/keys/' + job.keyId}>Key ansehen</Link>}
             <button onClick={restart}>Nächsten geteilten Key</button>
           </div>
+          {usage === 'Breakglass' && <p className="small muted">Mit dem Notfallblatt notieren Sie weitere Notfallkonten (z. B. Amazon, Registrar) für den versiegelten Umschlag. Es wird nicht gespeichert und lässt sich später an der Key-Ansicht erneut erstellen.</p>}
+          {sheet && <BreakglassSheetModal context={{ tenantName: tenant?.displayName, serialNumber: preview?.key.serialNumber, custodian,
+            accounts: accounts.map((a) => ({ userPrincipalName: a.userPrincipalName, userDisplayName: a.displayName })) }} onClose={() => setSheet(false)} />}
         </Card>
       )}
     </>
