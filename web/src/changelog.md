@@ -7,6 +7,9 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.10.1 · 2026-11-25
+- Behoben: Das Update per Klick bringt jetzt alle Container auf die neue Version, auch Updater, Caddy und Datensicherung. Bisher wurde nur der Server ausgetauscht.
+
 ## 0.10.0 · 2026-11-20
 - Neu: Adresse und Zertifikat in der Oberfläche ändern (Globale Einstellungen → Adresse und Zertifikat): DNS-Name, weitere Namen, Ports, Betriebsart. Vorher wird geprüft, bei Fehlern bleibt der alte Stand.
 - Neu: Zertifikate: interne Zertifizierungsstelle, eigenes Zertifikat hochladen (auch Wildcard), Let's Encrypt und Let's Encrypt per DNS (Cloudflare, Hetzner, IONOS, netcup, Azure DNS, Route 53, DigitalOcean), auch für interne Server und andere Ports.
