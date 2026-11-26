@@ -18,7 +18,7 @@ public static class TenantEndpoints
     public sealed record ConsentRequest(string? TenantHint);
     public sealed record FixRequest(List<string> CheckIds);
     public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes, bool? RequireBreakglassApproval = null,
-        bool? ProtectAdmins = null, List<GroupRef>? ProtectedGroups = null);
+        bool? ProtectAdmins = null, List<GroupRef>? ProtectedGroups = null, bool? RequireBreakglassRemovalApproval = null);
     public sealed record OffboardRequest(bool Confirm);
 
     private sealed record ConsentState(Guid UserId, DateTimeOffset ExpiresAt, string Nonce);
@@ -45,6 +45,7 @@ public static class TenantEndpoints
         t.OffboardedAt,
         t.DataDeletionDueAt,
         t.RequireBreakglassApproval,
+        t.RequireBreakglassRemovalApproval,
         t.ProtectAdmins,
         t.ProtectedGroups,
     };
@@ -162,6 +163,13 @@ public static class TenantEndpoints
                 t.SyncIntervalMinutes = interval;
             }
             if (body.RequireBreakglassApproval is { } four) t.RequireBreakglassApproval = four;
+            if (body.RequireBreakglassRemovalApproval is { } removal && removal != t.RequireBreakglassRemovalApproval)
+            {
+                // Abschalten schwächt den Schutz der Notfallzugänge, daher nur mit dem Recht für geschützte Konten (Owner).
+                if (!removal && !CurrentUser.Has(user, Permission.ManageProtectedAccounts))
+                    throw ApiException.Forbidden("Den Vier-Augen-Schutz für Breakglass-Keys abschalten darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat.");
+                t.RequireBreakglassRemovalApproval = removal;
+            }
             var protectedGroups = body.ProtectedGroups is null ? null : NormalizeGroups(body.ProtectedGroups);
             var protectionChanged = (body.ProtectAdmins is { } pa && pa != t.ProtectAdmins)
                 || (protectedGroups is not null && !protectedGroups.Select(x => x.Id).Order().SequenceEqual(t.ProtectedGroups.Select(x => x.Id).Order()));

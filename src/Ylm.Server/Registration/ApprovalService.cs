@@ -18,10 +18,20 @@ public static class ApprovalService
 
     public sealed record CreateApprovalRequest(List<string> EntraUserIds, string? Custodian, string Reason);
     public sealed record DecisionRequest(string? Note);
+    /// <param name="RegistrationId">Nur bei RemoveAccount: welches Konto vom Key entfernt werden soll.</param>
+    public sealed record CreateRemovalApprovalRequest(RemovalAction Action, Guid? RegistrationId, string Reason);
+
+    public static string Label(RemovalAction action) => action switch
+    {
+        RemovalAction.Lock => "Sperren",
+        RemovalAction.Reset => "Zurücksetzen",
+        RemovalAction.RemoveAccount => "Konto entfernen",
+        _ => action.ToString(),
+    };
 
     public static object ToDto(RegistrationApproval a) => new
     {
-        a.Id, a.TenantId, Usage = a.Usage.ToString(), a.EntraUserIds, a.UserPrincipalNames, a.Custodian, a.Reason, Status = a.Status.ToString(),
+        a.Id, a.TenantId, Usage = a.Usage.ToString(), Kind = a.Kind.ToString(), RemovalAction = a.RemovalAction?.ToString(), a.RegistrationId, a.EntraUserIds, a.UserPrincipalNames, a.Custodian, a.Reason, Status = a.Status.ToString(),
         a.RequestedById, a.RequestedByName, a.RequestedAt, a.DecidedByName, a.DecidedAt, a.DecisionNote, a.ValidUntil, a.UsedAt, a.KeyId,
         Expired = a.Status == ApprovalStatus.Approved && a.ValidUntil < DateTimeOffset.UtcNow,
     };
@@ -31,7 +41,7 @@ public static class ApprovalService
     {
         var now = DateTimeOffset.UtcNow;
         return await db.Approvals.AsNoTracking()
-            .Where(a => a.TenantId == tenantId && a.RequestedById == actorId && a.Status == ApprovalStatus.Approved && a.ValidUntil > now)
+            .Where(a => a.TenantId == tenantId && a.Kind == ApprovalKind.Registration && a.RequestedById == actorId && a.Status == ApprovalStatus.Approved && a.ValidUntil > now)
             .OrderByDescending(a => a.DecidedAt).ToListAsync(ct);
     }
 
@@ -39,7 +49,7 @@ public static class ApprovalService
     {
         if (approvalId is null)
             throw ApiException.Conflict("approval_required", "Für Breakglass-Keys verlangt dieser Tenant eine Vier-Augen-Freigabe. Bitte zuerst eine Freigabe beantragen.");
-        var a = await db.Approvals.FirstOrDefaultAsync(x => x.Id == approvalId && x.TenantId == tenantId, ct) ?? throw ApiException.NotFound("Freigabe");
+        var a = await db.Approvals.FirstOrDefaultAsync(x => x.Id == approvalId && x.TenantId == tenantId && x.Kind == ApprovalKind.Registration, ct) ?? throw ApiException.NotFound("Freigabe");
         if (a.RequestedById != actorId) throw ApiException.Conflict("approval_not_yours", "Diese Freigabe wurde von einem anderen Admin beantragt.");
         if (a.Status != ApprovalStatus.Approved) throw ApiException.Conflict("approval_not_approved", "Die Freigabe ist nicht (mehr) erteilt.");
         if (a.ValidUntil <= DateTimeOffset.UtcNow) throw ApiException.Conflict("approval_expired", "Die Freigabe ist abgelaufen. Bitte neu beantragen.");
@@ -47,6 +57,48 @@ public static class ApprovalService
         var extra = entraUserIds.Where(id => !allowed.Contains(id)).ToList();
         if (extra.Count > 0) throw ApiException.Conflict("approval_mismatch", "Die Freigabe gilt nicht für alle gewählten Konten. Bitte nur freigegebene Konten registrieren oder neu beantragen.");
         return a;
+    }
+
+    /// <summary>
+    /// Ein aktiver Breakglass-Key darf nicht von einer Person allein gesperrt, zurückgesetzt oder um ein Konto erleichtert werden,
+    /// solange der Tenant das verlangt (Standard). Persönliche und geteilte Keys sind nicht betroffen.
+    /// </summary>
+    public static bool RemovalNeedsApproval(YubiKey key, Tenant? tenant) =>
+        key.Usage == KeyUsage.Breakglass && tenant is { RequireBreakglassRemovalApproval: true } && key.Registrations.Any(r => r.RemovedAt == null);
+
+    /// <summary>Prüft die Freigabe für eine entfernende Aktion; null, wenn keine nötig ist. Wird nach Erfolg mit <see cref="MarkRemovalUsed"/> verbraucht.</summary>
+    public static async Task<RegistrationApproval?> RequireRemovalAsync(YlmDbContext db, YubiKey key, Guid actorId, RemovalAction action, Guid? registrationId, Guid? approvalId, CancellationToken ct = default)
+    {
+        if (key.TenantId is not { } tenantId) return null;
+        var tenant = await db.Tenants.AsNoTracking().FirstAsync(t => t.Id == tenantId, ct);
+        if (!RemovalNeedsApproval(key, tenant)) return null;
+        if (approvalId is null)
+            throw ApiException.Conflict("approval_required", $"Breakglass-Key: „{Label(action)}“ braucht eine Vier-Augen-Freigabe. Bitte zuerst eine Freigabe beantragen; ein zweiter Admin muss sie erteilen.");
+        var a = await db.Approvals.FirstOrDefaultAsync(x => x.Id == approvalId && x.TenantId == tenantId && x.Kind == ApprovalKind.KeyRemoval && x.KeyId == key.Id, ct)
+            ?? throw ApiException.NotFound("Freigabe");
+        if (a.RequestedById != actorId) throw ApiException.Conflict("approval_not_yours", "Diese Freigabe wurde von einem anderen Admin beantragt.");
+        if (a.Status != ApprovalStatus.Approved) throw ApiException.Conflict("approval_not_approved", "Die Freigabe ist nicht (mehr) erteilt.");
+        if (a.ValidUntil <= DateTimeOffset.UtcNow) throw ApiException.Conflict("approval_expired", "Die Freigabe ist abgelaufen. Bitte neu beantragen.");
+        if (a.RemovalAction != action || (action == RemovalAction.RemoveAccount && a.RegistrationId != registrationId))
+            throw ApiException.Conflict("approval_mismatch", $"Die Freigabe gilt für „{Label(a.RemovalAction ?? action)}“, nicht für diese Aktion.");
+        return a;
+    }
+
+    public static void MarkRemovalUsed(RegistrationApproval a, AuditActor actor, AuditService audit)
+    {
+        a.Status = ApprovalStatus.Used;
+        a.UsedAt = DateTimeOffset.UtcNow;
+        audit.Add(actor, AuditActions.ApprovalUsed, a.TenantId, a.KeyId, string.Join(", ", a.UserPrincipalNames), new { approval = a.Id, action = a.RemovalAction?.ToString() });
+    }
+
+    /// <summary>Freigaben zum Entfernen für einen Key, die noch offen oder nutzbar sind (für die Key-Ansicht).</summary>
+    public static async Task<List<RegistrationApproval>> OpenRemovalsAsync(YlmDbContext db, Guid keyId, CancellationToken ct = default)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return await db.Approvals.AsNoTracking()
+            .Where(a => a.KeyId == keyId && a.Kind == ApprovalKind.KeyRemoval
+                && (a.Status == ApprovalStatus.Pending || (a.Status == ApprovalStatus.Approved && a.ValidUntil > now)))
+            .OrderByDescending(a => a.RequestedAt).ToListAsync(ct);
     }
 
     public static void MarkUsed(RegistrationApproval a, Guid keyId, AuditActor actor, AuditService audit)
@@ -96,6 +148,36 @@ public static class ApprovalService
             return Results.Ok(ToDto(a));
         });
 
+        // Freigabe zum Sperren, Zurücksetzen oder Konto-Entfernen eines aktiven Breakglass-Keys beantragen.
+        g.MapPost("/keys/{keyId:guid}/approvals", async (Guid keyId, CreateRemovalApprovalRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
+        {
+            var key = await db.Keys.Include(k => k.Registrations).Include(k => k.Tenant).FirstOrDefaultAsync(k => k.Id == keyId) ?? throw ApiException.NotFound("Key");
+            if (!Enum.IsDefined(body.Action)) throw ApiException.BadRequest("invalid", "Unbekannte Aktion.");
+            var permission = body.Action == RemovalAction.Reset ? Permission.ResetKeys : Permission.LockKeys;
+            var user = await cu.RequireKeyAccessAsync(key.TenantId, permission);
+            if (!RemovalNeedsApproval(key, key.Tenant))
+                throw ApiException.Conflict("approval_not_needed", "Für diesen Key ist keine Vier-Augen-Freigabe nötig.");
+            if (string.IsNullOrWhiteSpace(body.Reason)) throw ApiException.BadRequest("reason_required", "Bitte einen Grund angeben.");
+            var active = key.Registrations.Where(r => r.RemovedAt == null).ToList();
+            if (body.Action == RemovalAction.RemoveAccount)
+            {
+                var reg = active.FirstOrDefault(r => r.Id == body.RegistrationId) ?? throw ApiException.NotFound("Registrierung");
+                active = [reg];
+            }
+            var a = new RegistrationApproval
+            {
+                TenantId = key.TenantId!.Value, Kind = ApprovalKind.KeyRemoval, RemovalAction = body.Action, KeyId = key.Id,
+                RegistrationId = body.Action == RemovalAction.RemoveAccount ? body.RegistrationId : null,
+                EntraUserIds = active.Select(r => r.EntraUserId).ToList(), UserPrincipalNames = active.Select(r => r.UserPrincipalName).ToList(),
+                Custodian = key.Custodian, Reason = body.Reason.Trim(), RequestedById = user.Id, RequestedByName = user.DisplayName,
+            };
+            db.Approvals.Add(a);
+            audit.Add(AuditService.User(user), AuditActions.ApprovalRequested, a.TenantId, key.Id, string.Join(", ", a.UserPrincipalNames),
+                new { approval = a.Id, action = body.Action.ToString(), serial = key.SerialNumber, a.Reason });
+            await db.SaveChangesAsync();
+            return Results.Ok(ToDto(a));
+        });
+
         g.MapPost("/approvals/{id:guid}/approve", (Guid id, DecisionRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
             DecideAsync(id, true, body, cu, db, audit));
         g.MapPost("/approvals/{id:guid}/reject", (Guid id, DecisionRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
@@ -104,7 +186,7 @@ public static class ApprovalService
         g.MapPost("/approvals/{id:guid}/cancel", async (Guid id, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
             var a = await db.Approvals.FirstOrDefaultAsync(x => x.Id == id) ?? throw ApiException.NotFound("Freigabe");
-            var user = await cu.RequireTenantAsync(a.TenantId, Permission.RegisterKeys);
+            var user = await cu.RequireTenantAsync(a.TenantId, a.Kind == ApprovalKind.Registration ? Permission.RegisterKeys : Permission.ReadInventory);
             if (a.RequestedById != user.Id) throw ApiException.Forbidden("Nur der Antragsteller kann den Antrag zurückziehen.");
             if (a.Status is not (ApprovalStatus.Pending or ApprovalStatus.Approved)) throw ApiException.Conflict("closed", "Der Antrag ist bereits abgeschlossen.");
             a.Status = ApprovalStatus.Cancelled;
