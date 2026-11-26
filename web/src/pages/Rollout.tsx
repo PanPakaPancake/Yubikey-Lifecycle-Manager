@@ -19,7 +19,9 @@ export interface RolloutUser {
 }
 interface MethodInfo { name: string; label: string; strength: 'None' | 'Mfa' | 'PhishingResistant'; isPasskey: boolean }
 export interface RolloutData { generatedAt: string; fromReport: boolean; hasSignInData: boolean; targetDefined: boolean; methods: MethodInfo[]; users: RolloutUser[] }
-interface LiveMethod { id: string; kind: string; reportName: string; label: string; strength: MethodInfo['strength']; isPasskey: boolean; displayName?: string | null; detail?: string | null; createdDateTime?: string | null; removable: boolean; device?: string | null; isSecurityKey?: boolean }
+interface LiveMethod { id: string; kind: string; reportName: string; label: string; strength: MethodInfo['strength']; isPasskey: boolean; displayName?: string | null; detail?: string | null; createdDateTime?: string | null; removable: boolean; device?: MethodDevice | null; isSecurityKey?: boolean }
+/** Entra-Gerät hinter einer Methode. Ohne Geräteabfrage ist nur der Name bekannt. */
+interface MethodDevice { id?: string; deviceId?: string | null; name?: string | null; operatingSystem?: string | null; operatingSystemVersion?: string | null; manufacturer?: string | null; model?: string | null; trustType?: string | null; isCompliant?: boolean | null; isManaged?: boolean | null; enabled?: boolean | null; lastSignIn?: string | null; portalUrl?: string | null }
 interface TapPolicy { enabled: boolean; defaultLifetimeInMinutes: number; minimumLifetimeInMinutes: number; maximumLifetimeInMinutes: number; defaultUsableOnce: boolean; isUsableOnceEnforced: boolean; targetCount: number }
 interface TapResult { userId: string; upn: string; displayName?: string | null; pass?: string | null; startDateTime?: string | null; lifetimeInMinutes?: number | null; isUsableOnce?: boolean | null; error?: string | null }
 interface RemovalResult { userId: string; upn: string; removed: number; removedLabels: string[]; skipped?: string | null; error?: string | null }
@@ -404,7 +406,7 @@ function UserDialog({ tenantId, user, data, onClose, onChanged, onTap }: { tenan
               <span className="ro-live-icon"><Icon name={m.isSecurityKey ? 'key' : m.isPasskey && m.kind === 'fido2' && m.reportName.toLowerCase().includes('authenticator') ? 'phone' : m.isPasskey ? 'key' : m.kind === 'phone' ? 'phone' : m.kind === 'temporaryAccessPass' ? 'ticket' : m.strength === 'PhishingResistant' ? 'monitor' : m.kind === 'password' ? 'scroll' : 'shield'} size={18} /></span>
               <div>
                 <strong>{m.label}</strong>
-                {m.device && <div className="ro-device"><Icon name="monitor" size={14} />{m.device}</div>}
+                {m.device && <DeviceInfo device={m.device} />}
                 <div className="small muted">{methodDetails(m).join(' · ') || ' '}</div>
               </div>
               {m.removable && can('RemoveAuthMethods')
@@ -419,9 +421,36 @@ function UserDialog({ tenantId, user, data, onClose, onChanged, onTap }: { tenan
   );
 }
 
+const trustLabels: Record<string, string> = { AzureAd: 'Entra-Join', ServerAd: 'Hybrid-Join', Workplace: 'registriert' };
+
+/** Gerät einer Methode: Name, Modell, Betriebssystem, Join-Art, Konformität, letzte Anmeldung, Link ins Azure-Portal. */
+function DeviceInfo({ device: d }: { device: MethodDevice }) {
+  const mobile = /ios|ipad|android/i.test(d.operatingSystem ?? '');
+  const hardware = [d.manufacturer, d.model].filter(Boolean).join(' ');
+  const os = [d.operatingSystem, d.operatingSystemVersion].filter(Boolean).join(' ');
+  const facts = [
+    hardware && !(d.name ?? '').toLowerCase().includes(hardware.toLowerCase()) ? hardware : null,
+    os || null,
+    d.trustType ? trustLabels[d.trustType] ?? d.trustType : null,
+    d.isCompliant === true ? 'konform' : d.isCompliant === false && d.isManaged ? 'nicht konform' : null,
+    d.enabled === false ? 'deaktiviert' : null,
+    d.lastSignIn ? 'zuletzt aktiv ' + fmtDate(d.lastSignIn, false) : null,
+  ].filter((x): x is string => !!x);
+  return (
+    <div className="ro-device-box">
+      <div className="ro-device">
+        <Icon name={mobile ? 'phone' : 'monitor'} size={14} />{d.name || hardware || 'Gerät'}
+        {d.portalUrl && <a className="ro-device-link small" href={d.portalUrl} target="_blank" rel="noreferrer noopener" title="Gerät im Azure-Portal öffnen">in Entra öffnen</a>}
+      </div>
+      {facts.length > 0 && <div className={'small muted' + (d.enabled === false || (d.isCompliant === false && d.isManaged) ? ' ro-device-warn' : '')}>{facts.join(' · ')}</div>}
+    </div>
+  );
+}
+
 /** Zusatzangaben ohne Dopplungen (z. B. „Authenticator - iOS“ steckt schon in „Microsoft Authenticator - iOS“). */
 function methodDetails(m: LiveMethod) {
-  const name = m.device ? null : m.displayName;
+  const deviceName = m.device?.name?.toLowerCase();
+  const name = deviceName && m.displayName && deviceName.includes(m.displayName.toLowerCase()) ? null : m.displayName;
   const parts = [name, m.detail].filter((x): x is string => !!x);
   const unique = parts.filter((p, i) => !parts.some((q, j) => j !== i && q.length > p.length && q.toLowerCase().includes(p.toLowerCase())) && parts.indexOf(p) === i);
   return [...unique, m.createdDateTime ? 'seit ' + fmtDate(m.createdDateTime, false) : null].filter((x): x is string => !!x);

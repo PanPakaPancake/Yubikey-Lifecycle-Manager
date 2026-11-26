@@ -7,6 +7,10 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.11.1 · 2026-11-26
+- Neu: Im Passkey-Rollout zeigt das Personenfenster bei Windows Hello, Authenticator-App und Platform Credential das zugehörige Gerät aus Entra: Name, Modell, Betriebssystem mit Version, Join-Art, Konformität und letzte Aktivität, dazu ein Link „in Entra öffnen“.
+- Behoben: Bei Windows Hello for Business fehlte das Gerät oft, weil Entra es nur bei der Einzelabfrage einer Methode mitliefert.
+
 ## 0.11.0 · 2026-11-26
 - Sicherheit: Aktive Breakglass-Keys lassen sich nicht mehr von einer Person allein sperren, zurücksetzen oder um ein Konto erleichtern. Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss den Antrag unter „Freigaben“ freigeben (gilt 24 Stunden, einmal). Standardmäßig für alle Tenants an; abschalten darf nur, wer „Geschützte Konten bearbeiten“ hat.
 - Sicherheit: Über die API lassen sich aktive Breakglass-Keys nicht sperren.

@@ -587,7 +587,7 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
             "phone" => Str(m, "phoneNumber"),
             "email" => Str(m, "emailAddress"),
             "fido2" => Str(m, "model"),
-            "microsoftAuthenticator" => Str(m, "deviceTag") is { } tag && tag != "SoftwareTokenActivated" ? tag : Str(m, "phoneAppVersion"),
+            "microsoftAuthenticator" => Str(m, "deviceTag") is { } tag && tag != "SoftwareTokenActivated" ? tag : Str(m, "phoneAppVersion") is { } v ? "App " + v : null,
             "windowsHelloForBusiness" => Str(m, "keyStrength") == "weak" ? "schwacher Schlüssel" : null,
             "temporaryAccessPass" => Bool(m, "isUsable") ? "gültig" : Str(m, "methodUsabilityReason") ?? "nicht nutzbar",
             "platformCredential" => Str(m, "platform"),
@@ -600,8 +600,23 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
     }
 
     /// <summary>Typen, bei denen Entra das Gerät verknüpft (Navigation „device“), mit ihrem Pfad.</summary>
-    private static readonly (string Kind, string Segment)[] DeviceBound =
-        [("windowsHelloForBusiness", "windowsHelloForBusinessMethods"), ("platformCredential", "platformCredentialMethods")];
+    private static readonly Dictionary<string, string> DeviceBound = new()
+    {
+        ["windowsHelloForBusiness"] = "windowsHelloForBusinessMethods",
+        ["platformCredential"] = "platformCredentialMethods",
+        ["microsoftAuthenticator"] = "microsoftAuthenticatorMethods",
+    };
+
+    public static GraphDevice? ParseDevice(JsonElement m)
+    {
+        if (!m.TryGetProperty("device", out var d) || d.ValueKind != JsonValueKind.Object || Str(d, "id") is not { } id) return null;
+        return new GraphDevice(id, Str(d, "deviceId"), Str(d, "displayName"), Str(d, "operatingSystem"), Str(d, "operatingSystemVersion"),
+            Str(d, "manufacturer"), Str(d, "model"), Str(d, "trustType"), NullableBool(d, "isCompliant"), NullableBool(d, "isManaged"),
+            NullableBool(d, "accountEnabled"), Date(d, "approximateLastSignInDateTime"));
+    }
+
+    private static bool? NullableBool(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null;
 
     public async Task<IReadOnlyList<GraphAuthMethod>> ListAuthenticationMethodsAsync(string userId, CancellationToken ct = default)
     {
@@ -609,27 +624,23 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
         using (var doc = await SendAsync(HttpMethod.Get, $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/methods", ct))
             methods = doc!.RootElement.GetProperty("value").EnumerateArray().Select(ParseAuthMethod).ToList();
 
-        // Windows Hello und Platform Credential: Gerät nachladen. Fehlt dafür eine Berechtigung, bleibt es beim Anzeigenamen.
-        foreach (var (kind, segment) in DeviceBound)
+        // Das Gerät liefert Entra nur bei der Einzelabfrage einer Methode mit $expand=device (nicht in Listen).
+        // Fehlt dafür eine Berechtigung oder ist das Gerät gelöscht, bleibt es beim Anzeigenamen.
+        var detailed = await Task.WhenAll(methods.Select(async m =>
         {
-            if (!methods.Any(m => m.Kind == kind)) continue;
+            if (!DeviceBound.TryGetValue(m.Kind, out var segment) || string.IsNullOrEmpty(m.Id)) return m;
             try
             {
                 using var doc = await SendAsync(HttpMethod.Get,
-                    $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/{segment}?$expand=device($select=id,displayName,operatingSystem)", ct);
-                var devices = new Dictionary<string, string>();
-                foreach (var m in doc!.RootElement.GetProperty("value").EnumerateArray())
-                {
-                    if (Str(m, "id") is not { } id || !m.TryGetProperty("device", out var d) || d.ValueKind != JsonValueKind.Object) continue;
-                    var name = Str(d, "displayName");
-                    var os = Str(d, "operatingSystem");
-                    if (!string.IsNullOrWhiteSpace(name)) devices[id] = string.IsNullOrWhiteSpace(os) ? name : $"{name} ({os})";
-                }
-                methods = methods.Select(m => m.Kind == kind && devices.TryGetValue(m.Id, out var dev) ? m with { Device = dev } : m).ToList();
+                    $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/{segment}/{Uri.EscapeDataString(m.Id)}?$expand=device",
+                    ct, allowNotFound: true);
+                if (doc is null) return m;
+                var e = doc.RootElement;
+                return m with { Device = ParseDevice(e), DisplayName = m.DisplayName ?? Str(e, "displayName") };
             }
-            catch (GraphException) { /* Gerät ist nur eine Zusatzinfo */ }
-        }
-        return methods;
+            catch (GraphException) { return m; /* Gerät ist nur eine Zusatzinfo */ }
+        }));
+        return detailed;
     }
 
     public async Task DeleteAuthenticationMethodAsync(string userId, string kind, string methodId, CancellationToken ct = default)

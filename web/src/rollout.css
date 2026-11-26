@@ -143,3 +143,6 @@
 }
 .ro-device { display: inline-flex; align-items: center; gap: 5px; font-size: .86rem; font-weight: 600; color: var(--ink); margin: 1px 0; }
 .ro-device .icon { color: var(--muted); }
+.ro-device-box { margin: 1px 0 2px; }
+.ro-device-link { margin-left: 8px; font-weight: 500; }
+.ro-device-box .ro-device-warn { color: var(--warn); }
