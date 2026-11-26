@@ -108,10 +108,14 @@ internal static class Theme
 
 /// <summary>Erscheinungsbild eines Dokuments (Whitelabeling).</summary>
 public sealed record PdfBrand(string? CompanyName, XColor Accent, byte[]? Logo, string? Contact, string? Footer,
-    IReadOnlyDictionary<string, string>? LetterTenant = null, IReadOnlyDictionary<string, string>? LetterPartner = null)
+    IReadOnlyDictionary<string, string>? LetterTenant = null, IReadOnlyDictionary<string, string>? LetterPartner = null,
+    LetterLayout? Layout = null)
 {
     public static readonly PdfBrand Default = new(null, Theme.DefaultAccent, null, null, null);
 
     /// <summary>Wirksamer Brieftext (Tenant, dann Partner, dann Standard), noch mit Platzhaltern.</summary>
     public string Letter(string key) => LetterTemplate.Resolve(key, LetterTenant, LetterPartner);
+
+    /// <summary>Wirksamer Briefaufbau: gespeicherter Aufbau, sonst aus den früheren Einzeltexten, sonst Standard.</summary>
+    public LetterLayout EffectiveLayout() => Layout ?? LetterBlocks.FromLegacy(LetterTenant, LetterPartner);
 }

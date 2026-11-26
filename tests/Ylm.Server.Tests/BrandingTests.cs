@@ -42,35 +42,92 @@ public sealed class BrandingTests : IAsyncLifetime
         return JsonDocument.Parse(text).RootElement.Clone();
     }
 
+    private static object Layout(params object[] blocks) => new { version = 1, blocks };
+
     [Fact]
-    public async Task Letter_texts_are_saved_per_level_and_previewed()
+    public async Task Letter_layout_is_saved_per_level_and_previewed()
     {
         var info = await Json(await _owner.GetAsync("/api/branding/letter"));
-        Assert.Contains(info.GetProperty("fields").EnumerateArray(), f => f.GetProperty("key").GetString() == "title");
+        Assert.Contains(info.GetProperty("types").EnumerateArray(), t => t.GetProperty("type").GetString() == "pin");
         Assert.Contains(info.GetProperty("variables").EnumerateArray(), v => v.GetProperty("name").GetString() == "Vorname");
+        Assert.Equal(JsonValueKind.Null, info.GetProperty("layout").ValueKind);
+        Assert.Contains(info.GetProperty("inherited").GetProperty("blocks").EnumerateArray(), b => b.GetProperty("type").GetString() == "pinChange");
 
-        // Partner: unbekannte Felder und unveränderte Standardtexte werden nicht gespeichert.
+        // Partner: unbekannte Eigenschaften fallen weg, halbe Breite nur, wo erlaubt.
         var saved = await Json(await _owner.PutAsJsonAsync("/api/branding/letter", new
         {
-            texts = new Dictionary<string, string?> { ["title"] = "Willkommen, {{Vorname}}", ["unbekannt"] = "x", ["guideTitle"] = Pdf.LetterTemplate.Default("guideTitle"), ["intro"] = "  " },
+            layout = Layout(
+                new { id = "t", type = "heading", props = new Dictionary<string, string> { ["text"] = "Willkommen, {{Vorname}}", ["unbekannt"] = "x" } },
+                new { id = "p", type = "pin", width = "half" },
+                new { id = "c", type = "callout", width = "half", show = "forced", props = new Dictionary<string, string> { ["tone"] = "warn" } },
+                new { id = "s", type = "steps", width = "half" }),
         }));
-        var partnerTexts = saved.GetProperty("texts");
-        Assert.Equal("Willkommen, {{Vorname}}", partnerTexts.GetProperty("title").GetString());
-        Assert.False(partnerTexts.TryGetProperty("unbekannt", out _));
-        Assert.False(partnerTexts.TryGetProperty("guideTitle", out _));
-        Assert.False(partnerTexts.TryGetProperty("intro", out _));
+        var blocks = saved.GetProperty("layout").GetProperty("blocks");
+        Assert.Equal(4, blocks.GetArrayLength());
+        Assert.Equal("Willkommen, {{Vorname}}", blocks[0].GetProperty("props").GetProperty("text").GetString());
+        Assert.False(blocks[0].GetProperty("props").TryGetProperty("unbekannt", out _));
+        Assert.Equal("half", blocks[1].GetProperty("width").GetString());
+        Assert.Equal("forced", blocks[2].GetProperty("show").GetString());
+        Assert.Equal("full", blocks[3].GetProperty("width").GetString());
 
-        await Json(await _owner.PutAsJsonAsync($"/api/branding/letter?tenantId={_tenant}", new { texts = new Dictionary<string, string?> { ["hints"] = "Nur ein Hinweis" } }));
+        // Tenant erbt den Aufbau des Partners, bis er einen eigenen speichert; null setzt zurück.
         var t = await Json(await _owner.GetAsync($"/api/branding/letter?tenantId={_tenant}"));
-        Assert.Equal("Nur ein Hinweis", t.GetProperty("tenant").GetProperty("hints").GetString());
-        Assert.Equal("Willkommen, {{Vorname}}", t.GetProperty("partner").GetProperty("title").GetString());
+        Assert.Equal(JsonValueKind.Null, t.GetProperty("layout").ValueKind);
+        Assert.Equal(4, t.GetProperty("inherited").GetProperty("blocks").GetArrayLength());
+        await Json(await _owner.PutAsJsonAsync($"/api/branding/letter?tenantId={_tenant}", new { layout = Layout(new { type = "pin" }) }));
+        t = await Json(await _owner.GetAsync($"/api/branding/letter?tenantId={_tenant}"));
+        Assert.Equal(1, t.GetProperty("layout").GetProperty("blocks").GetArrayLength());
+        await Json(await _owner.PutAsJsonAsync($"/api/branding/letter?tenantId={_tenant}", new { layout = (object?)null }));
+        t = await Json(await _owner.GetAsync($"/api/branding/letter?tenantId={_tenant}"));
+        Assert.Equal(JsonValueKind.Null, t.GetProperty("layout").ValueKind);
 
-        var res = await _owner.PostAsJsonAsync($"/api/branding/letter/preview.pdf?tenantId={_tenant}", new { texts = new Dictionary<string, string?> { ["closing"] = "-" }, pinChangeForced = false });
+        // Ungültige Aufbauten
+        foreach (var bad in new[]
+        {
+            Layout(new { type = "heading" }),
+            Layout(new { type = "pin" }, new { type = "pin" }),
+            Layout(new { type = "pin" }, new { type = "unbekannt" }),
+            Layout(new { type = "pin", show = "own" }),
+        })
+            Assert.Equal(HttpStatusCode.BadRequest, (await _owner.PutAsJsonAsync("/api/branding/letter", new { layout = bad })).StatusCode);
+
+        var res = await _owner.PostAsJsonAsync($"/api/branding/letter/preview.pdf?tenantId={_tenant}", new { layout = (object?)null, pinChangeForced = false });
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         Assert.Equal("%PDF", Encoding.ASCII.GetString((await res.Content.ReadAsByteArrayAsync())[..4]));
 
         var auditor = await _app.LoginAsync("auditor@home.example", PlatformRole.Auditor);
-        Assert.Equal(HttpStatusCode.Forbidden, (await auditor.PutAsJsonAsync("/api/branding/letter", new { texts = new Dictionary<string, string?>() })).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await auditor.PutAsJsonAsync("/api/branding/letter", new { layout = Layout(new { type = "pin" }) })).StatusCode);
+    }
+
+    [Fact]
+    public async Task Earlier_letter_texts_become_blocks()
+    {
+        await _app.WithDbAsync(async db =>
+        {
+            db.Brandings.Add(new Branding { LetterTexts = """{"title":"Alter Titel","closing":"-"}""" });
+            db.Brandings.Add(new Branding { TenantId = _tenant, LetterTexts = """{"hints":"Nur ein Hinweis"}""" });
+            await db.SaveChangesAsync();
+        });
+        var p = await Json(await _owner.GetAsync("/api/branding/letter"));
+        var blocks = p.GetProperty("layout").GetProperty("blocks").EnumerateArray().ToList();
+        Assert.Equal("Alter Titel", blocks.First(b => b.GetProperty("type").GetString() == "heading").GetProperty("props").GetProperty("text").GetString());
+        Assert.DoesNotContain(blocks, b => b.GetProperty("id").GetString() == "gruss");
+
+        var t = await Json(await _owner.GetAsync($"/api/branding/letter?tenantId={_tenant}"));
+        var tb = t.GetProperty("layout").GetProperty("blocks").EnumerateArray().ToList();
+        Assert.Equal("Nur ein Hinweis", tb.First(b => b.GetProperty("type").GetString() == "hints").GetProperty("props").GetProperty("items").GetString());
+        Assert.Equal("Alter Titel", tb.First(b => b.GetProperty("type").GetString() == "heading").GetProperty("props").GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public async Task Long_letters_continue_on_a_second_page()
+    {
+        var blocks = new List<object> { new { type = "pin" } };
+        for (var i = 0; i < 12; i++) blocks.Add(new { type = "steps" });
+        var res = await _owner.PostAsJsonAsync("/api/branding/letter/preview.pdf", new { layout = Layout([.. blocks]), pinChangeForced = true });
+        Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+        using var doc = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(await res.Content.ReadAsByteArrayAsync()), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+        Assert.True(doc.PageCount >= 3);
     }
 
     /// <summary>Legt Muster-PIN-Briefe ab, wenn YLM_SAMPLE_DIR gesetzt ist (CI lädt sie als Artefakt hoch, zum Ansehen im PR).</summary>
@@ -78,9 +135,12 @@ public sealed class BrandingTests : IAsyncLifetime
     public async Task Sample_letters_render()
     {
         var dir = Environment.GetEnvironmentVariable("YLM_SAMPLE_DIR");
-        foreach (var forced in new[] { true, false })
+        // Mit Firmenname, Logo und Kontakt: so wird der Brief am längsten und muss trotzdem auf eine Seite passen.
+        await Json(await _owner.PutAsJsonAsync("/api/branding", new { companyName = "Muster IT GmbH", contact = "IT-Service · 0800 123 456" }));
+        await Json(await _owner.PutAsync("/api/branding/logo", new ByteArrayContent(Png)));
+        foreach (var forced in new[] { false, true })
         {
-            var res = await _owner.PostAsJsonAsync("/api/branding/letter/preview.pdf", new { texts = new Dictionary<string, string?>(), pinChangeForced = forced });
+            var res = await _owner.PostAsJsonAsync("/api/branding/letter/preview.pdf", new { layout = (object?)null, pinChangeForced = forced });
             Assert.Equal(HttpStatusCode.OK, res.StatusCode);
             var pdf = await res.Content.ReadAsByteArrayAsync();
             Assert.Equal("%PDF", Encoding.ASCII.GetString(pdf[..4]));
@@ -89,6 +149,8 @@ public sealed class BrandingTests : IAsyncLifetime
                 Directory.CreateDirectory(dir);
                 await File.WriteAllBytesAsync(Path.Combine(dir, forced ? "PIN-Brief-PIN-Wechsel-erzwungen.pdf" : "PIN-Brief-PIN-selbst-aendern.pdf"), pdf);
             }
+            using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
+                Assert.Equal(1, doc.PageCount); // der Standardbrief passt auf eine Seite
         }
     }
 

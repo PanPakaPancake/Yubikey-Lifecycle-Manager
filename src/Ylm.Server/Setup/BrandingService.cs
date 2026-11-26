@@ -34,7 +34,41 @@ public sealed partial class BrandingService(YlmDbContext db)
             Pick(b => b.Contact),
             Pick(b => b.Footer),
             ParseLetter(tenant?.LetterTexts),
-            ParseLetter(partner?.LetterTexts));
+            ParseLetter(partner?.LetterTexts),
+            OwnLayout(tenant, partner) ?? OwnLayout(partner, null));
+    }
+
+    /// <summary>
+    /// Eigener Briefaufbau einer Ebene: gespeicherter Aufbau, sonst aus früheren Einzeltexten (bei Tenants über denen des Partners), sonst null (= übernehmen).
+    /// </summary>
+    public static LetterLayout? OwnLayout(Branding? row, Branding? partner)
+    {
+        if (row is null) return null;
+        if (LetterLayout.FromJson(row.LetterLayout) is { Blocks.Count: > 0 } layout) return layout;
+        var texts = ParseLetter(row.LetterTexts);
+        return texts is { Count: > 0 } ? LetterBlocks.FromLegacy(texts, ParseLetter(partner?.LetterTexts)) : null;
+    }
+
+    /// <summary>Eigener und geerbter Aufbau für den Brief-Editor (geerbt: beim Tenant der des Partners, beim Partner der Standard).</summary>
+    public async Task<(LetterLayout? Own, LetterLayout Inherited)> LayoutsAsync(Guid? tenantId, CancellationToken ct = default)
+    {
+        var partner = await GetAsync(null, ct);
+        var partnerOwn = OwnLayout(partner, null);
+        if (tenantId is null) return (partnerOwn, LetterBlocks.Default());
+        var tenant = await GetAsync(tenantId, ct);
+        return (OwnLayout(tenant, partner), partnerOwn ?? LetterBlocks.Default());
+    }
+
+    /// <summary>Briefaufbau speichern; null setzt auf den geerbten Aufbau zurück. Frühere Einzeltexte entfallen damit.</summary>
+    public async Task<Branding> SaveLayoutAsync(Guid? tenantId, LetterLayout? layout, CancellationToken ct = default)
+    {
+        var clean = layout is null ? null : LetterBlocks.Validate(layout);
+        var row = await RowAsync(tenantId, ct);
+        row.LetterLayout = clean?.ToJson();
+        row.LetterTexts = null;
+        row.UpdatedAt = DateTimeOffset.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return row;
     }
 
     public static Dictionary<string, string>? ParseLetter(string? json)
@@ -42,18 +76,6 @@ public sealed partial class BrandingService(YlmDbContext db)
         if (string.IsNullOrWhiteSpace(json)) return null;
         try { return System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, string>>(json); }
         catch (System.Text.Json.JsonException) { return null; }
-    }
-
-    /// <summary>Eigene Brieftexte speichern; nur bekannte Felder, Standardtexte und leere Felder werden nicht gespeichert.</summary>
-    public async Task<Branding> SaveLetterAsync(Guid? tenantId, IReadOnlyDictionary<string, string?>? texts, CancellationToken ct = default)
-    {
-        // Partner: Standardtext nicht speichern. Tenant: auch den Standardtext behalten, er kann bewusst den Partnertext ersetzen.
-        var clean = LetterTemplate.Clean(texts, dropDefaults: tenantId is null);
-        var row = await RowAsync(tenantId, ct);
-        row.LetterTexts = clean.Count == 0 ? null : System.Text.Json.JsonSerializer.Serialize(clean);
-        row.UpdatedAt = DateTimeOffset.UtcNow;
-        await db.SaveChangesAsync(ct);
-        return row;
     }
 
     public async Task<Branding> SaveAsync(Guid? tenantId, BrandingValues v, CancellationToken ct = default)
