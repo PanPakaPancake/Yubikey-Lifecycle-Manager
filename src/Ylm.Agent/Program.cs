@@ -17,8 +17,11 @@ var dataDir = builder.Configuration["Agent:DataDirectory"]
 Directory.CreateDirectory(dataDir);
 builder.Logging.AddProvider(new FileLoggerProvider(Path.Combine(dataDir, "logs")));
 
-builder.Services.AddSingleton<ISecretProtector>(_ => OperatingSystem.IsWindows() ? new DpapiSecretProtector() : new PlainSecretProtector());
-builder.Services.AddSingleton(sp => new AgentSettingsStore(Path.Combine(dataDir, "agent.json"), sp.GetRequiredService<ISecretProtector>()));
+builder.Services.AddSingleton<ISecretProtector>(sp => OperatingSystem.IsWindows()
+    ? new DpapiSecretProtector(sp.GetRequiredService<ILogger<DpapiSecretProtector>>())
+    : new PlainSecretProtector());
+builder.Services.AddSingleton(sp => new AgentSettingsStore(Path.Combine(dataDir, "agent.json"), sp.GetRequiredService<ISecretProtector>(),
+    OperatingSystem.IsWindows() ? DpapiSecretProtector.RestrictToSystemAndAdmins : null));
 if (simulate) builder.Services.AddSingleton<IKeyDevice, SimulatedKeyDevice>();
 else builder.Services.AddSingleton<IKeyDevice, YubiKeyHardware>();
 var agentVersion = typeof(Program).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";

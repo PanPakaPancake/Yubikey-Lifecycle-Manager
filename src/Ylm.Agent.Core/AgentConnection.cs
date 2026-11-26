@@ -328,7 +328,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Kopplung fehlgeschlagen (Anfrage an {Url})", serverUrl);
-            return (false, "Server nicht erreichbar: " + Describe(ex));
+            return (false, (ConnectionHint(ex, uri) ?? "Server nicht erreichbar.") + " " + Describe(ex));
         }
 
         // Ab hier hat der Server den Code verbraucht. Scheitert das Speichern auf diesem PC, soll das auch so dastehen
@@ -360,11 +360,39 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
     }
 
     /// <summary>Meldung mit Ausnahmetyp und Code, damit auch „Unknown error (0x…)“ zuzuordnen ist.</summary>
+    /// <summary>
+    /// Verständlicher Hinweis für die häufigen Fehler beim Koppeln, z. B. https:// auf dem HTTP-Port 8080
+    /// (vorher nur „Cannot determine the frame size or a corrupted frame was received“).
+    /// </summary>
+    internal static string? ConnectionHint(Exception ex, Uri uri)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+        {
+            if (e is System.Security.Authentication.AuthenticationException auth)
+            {
+                var certificate = auth.Message.Contains("certificate", StringComparison.OrdinalIgnoreCase)
+                                  || auth.Message.Contains("Zertifikat", StringComparison.OrdinalIgnoreCase);
+                if (certificate)
+                    return "Das HTTPS-Zertifikat des Servers ist auf diesem PC nicht vertrauenswürdig. Bei der internen Zertifizierungsstelle " +
+                           "das Stammzertifikat (ylm-root-ca.crt) als vertrauenswürdige Stammzertifizierungsstelle installieren.";
+                return uri.Port == 8080
+                    ? "Unter dieser Adresse antwortet kein HTTPS: Port 8080 ist der interne HTTP-Port. Bitte die Adresse aus dem Browser verwenden, " +
+                      "meist ohne Port (z. B. https://localhost)."
+                    : "Unter dieser Adresse antwortet kein HTTPS. Bitte die Adresse aus dem Browser verwenden.";
+            }
+            if (e is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.ConnectionRefused })
+                return $"Unter {uri.GetLeftPart(UriPartial.Authority)} läuft kein Server (Verbindung abgelehnt). Bitte die Adresse aus dem Browser verwenden.";
+            if (e is System.Net.Sockets.SocketException { SocketErrorCode: System.Net.Sockets.SocketError.HostNotFound or System.Net.Sockets.SocketError.NoData })
+                return $"Der Servername {uri.Host} ist unbekannt. Bitte die Adresse prüfen.";
+        }
+        return null;
+    }
+
     internal static string Describe(Exception ex)
     {
         var inner = ex;
         while (inner.InnerException is not null && inner is HttpRequestException or AggregateException) inner = inner.InnerException;
-        return $"{inner.Message} [{inner.GetType().Name}, 0x{inner.HResult:X8}]";
+        return $"({inner.Message} [{inner.GetType().Name}, 0x{inner.HResult:X8}])";
     }
 
     public async Task UnpairAsync()

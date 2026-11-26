@@ -11,6 +11,10 @@
     <PackageReference Include="Yubico.YubiKey" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Ylm.Core.Tests" />
+  </ItemGroup>
+
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
