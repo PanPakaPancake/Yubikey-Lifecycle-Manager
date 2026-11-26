@@ -42,4 +42,32 @@ public sealed class PairingHintTests
         var text = AgentConnection.Describe(new HttpRequestException("x", new System.Security.Cryptography.CryptographicException("Unknown error (0x1770)") { HResult = unchecked((int)0x80071770) }));
         Assert.Contains("CryptographicException, 0x80071770", text);
     }
+
+    private static HttpRequestException Schannel(uint status, string message) =>
+        new("The SSL connection could not be established, see inner exception.",
+            new AuthenticationException("Authentication failed, see inner exception.",
+                new System.ComponentModel.Win32Exception(unchecked((int)status), message)));
+
+    [Fact]
+    public void Schannel_untrusted_root_points_to_the_machine_store()
+    {
+        var hint = AgentConnection.ConnectionHint(Schannel(0x80090325, "The certificate chain was issued by an authority that is not trusted."), new Uri("https://localhost"))!;
+        Assert.Contains("ylm-root-ca.crt", hint);
+        Assert.Contains("Lokaler Computer", hint);
+    }
+
+    [Fact]
+    public void Schannel_handshake_failure_does_not_claim_missing_https()
+    {
+        var ex = Schannel(0x80090326, "The message received was unexpected or badly formatted.");
+        var hint = AgentConnection.ConnectionHint(ex, new Uri("https://localhost"))!;
+        Assert.DoesNotContain("kein HTTPS", hint);
+        var text = AgentConnection.Describe(ex);
+        Assert.Contains("badly formatted", text);
+        Assert.Contains("Win32Exception, 0x80090326", text);
+    }
+
+    [Fact]
+    public void Wrong_name_mentions_the_host() =>
+        Assert.Contains("ylm.firma.local", AgentConnection.ConnectionHint(Schannel(0x80090322, "The target principal name is incorrect."), new Uri("https://ylm.firma.local"))!);
 }
