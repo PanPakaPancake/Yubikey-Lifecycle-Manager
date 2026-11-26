@@ -576,5 +576,7 @@ public sealed class Branding
     public string? Footer { get; set; }
     /// <summary>Eigene Texte des PIN-Briefs als JSON (Schlüssel aus <see cref="Pdf.LetterTemplate.Fields"/>); fehlende übernehmen die Vorgabe.</summary>
     public string? LetterTexts { get; set; }
+    /// <summary>Aufbau des PIN-Briefs aus dem Brief-Editor als JSON (<see cref="Pdf.LetterLayout"/>); leer heißt: übernehmen (Tenant → Partner → Standard).</summary>
+    public string? LetterLayout { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }

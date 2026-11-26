@@ -3,8 +3,8 @@ using System.Text.RegularExpressions;
 namespace Ylm.Server.Pdf;
 
 /// <summary>
-/// Texte des PIN-Briefs mit Platzhaltern wie {{Name}}. Partner und Tenant können jeden Text einzeln überschreiben,
-/// leere Felder übernehmen die Vorgabe (Tenant → Partner → Standardtext).
+/// Platzhalter wie {{Name}} für den PIN-Brief. <see cref="Fields"/> sind die Einzeltexte des früheren Brief-Editors;
+/// gespeicherte Werte werden beim Lesen in Bausteine übernommen (<see cref="LetterBlocks.FromLegacy"/>).
 /// </summary>
 public static partial class LetterTemplate
 {
@@ -53,8 +53,6 @@ public static partial class LetterTemplate
         new("KontaktMitDoppelpunkt", "„: Kontakt“, leer ohne Kontakt", ": IT-Service · 0800 123 456"),
     ];
 
-    public const int MaxLength = 1500;
-
     /// <summary>Ein einzelnes „-“ heißt: diesen Teil weglassen (leer heißt dagegen: Vorgabe übernehmen).</summary>
     public static bool IsOmitted(string text) => text.Trim() == "-";
 
@@ -71,21 +69,6 @@ public static partial class LetterTemplate
     /// <summary>Setzt die Werte für {{Platzhalter}} ein; unbekannte Platzhalter bleiben sichtbar stehen.</summary>
     public static string Render(string template, IReadOnlyDictionary<string, string?> values) =>
         PlaceholderRegex().Replace(template, m => values.TryGetValue(m.Groups[1].Value, out var v) ? v ?? "" : m.Value);
-
-    /// <summary>Nur bekannte Felder, ohne leere Werte, mit Längenbegrenzung.</summary>
-    public static Dictionary<string, string> Clean(IReadOnlyDictionary<string, string?>? input, bool dropDefaults = true)
-    {
-        var known = Fields.Select(f => f.Key).ToHashSet();
-        var result = new Dictionary<string, string>();
-        foreach (var (k, v) in input ?? new Dictionary<string, string?>())
-        {
-            if (!known.Contains(k) || string.IsNullOrWhiteSpace(v)) continue;
-            var text = v.Replace("\r\n", "\n").Trim();
-            if (text.Length > MaxLength) throw new Infrastructure.ApiException(400, "too_long", $"Der Text „{Fields.First(f => f.Key == k).Label}“ ist zu lang (höchstens {MaxLength} Zeichen).");
-            if (!dropDefaults || text != Default(k)) result[k] = text;
-        }
-        return result;
-    }
 
     [GeneratedRegex(@"\{\{\s*([A-Za-zÄÖÜäöüß]+)\s*\}\}")]
     private static partial Regex PlaceholderRegex();
