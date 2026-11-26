@@ -115,17 +115,33 @@ public static class BrandingEndpoints
         });
 
         // ----- Brief-Editor: PIN-Brief aus Bausteinen mit Platzhaltern -----
-        g.MapGet("/letter", async (Guid? tenantId, CurrentUser cu, BrandingService branding) =>
+        g.MapGet("/letter", async (Guid? tenantId, CurrentUser cu, BrandingService branding, YlmDbContext db, HttpRequest request, Microsoft.Extensions.Options.IOptions<YlmOptions> options) =>
         {
             if (tenantId is { } t) await cu.RequireTenantAsync(t, Permission.ReadInventory);
             else await cu.RequireAsync(Permission.ReadInventory);
             var (own, inherited) = await branding.LayoutsAsync(tenantId);
+            var brand = await branding.ResolveAsync(tenantId);
+            var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? "Tenant" : "Muster-Tenant";
+            var infoUrl = PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, options.Value, request), tenantId);
+            Dictionary<string, string?> sample;
+            using (Theme.Use(brand))
+                sample = PinLetterPdf.Values(new PinLetterData(brand.CompanyName ?? "", tenantName, "Erika Mustermann", "erika.mustermann@example.com",
+                    "482913", "YubiKey 5 NFC", 12345678, true, DateTime.Now));
             return Results.Ok(new
             {
                 Types = LetterBlocks.Types,
                 Variables = LetterTemplate.Variables,
                 Layout = own,
                 Inherited = inherited,
+                // Für die Darstellung im Editor: Beispielwerte und Erscheinungsbild wie im PDF.
+                Sample = sample,
+                Brand = new
+                {
+                    brand.CompanyName,
+                    Accent = $"#{brand.Accent.R:x2}{brand.Accent.G:x2}{brand.Accent.B:x2}",
+                    HasLogo = brand.Logo is { Length: > 0 },
+                },
+                InfoUrl = infoUrl?.Split('?')[0],
             });
         });
 

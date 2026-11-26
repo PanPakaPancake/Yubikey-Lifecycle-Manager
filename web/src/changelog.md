@@ -7,6 +7,13 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.11.0 · 2026-11-26
+- Neu: Der PIN-Brief wird jetzt per Baukasten gestaltet (Globale Einstellungen bzw. Tenant → „PIN-Brief gestalten“). Bausteine wie Überschrift, Text, Hinweiskasten, Anleitung oder Trennlinie lassen sich aufs Blatt ziehen, verschieben, halb breit nebeneinander stellen und mit Platzhaltern füllen. Jeder Baustein kann nur im Brief mit Initial-PIN oder nur mit dauerhafter PIN erscheinen. Mit Rückgängig und PDF-Vorschau.
+- Verbessert: Wird der PIN-Wechsel erzwungen, ist die PIN im Brief deutlich als Initial-PIN gekennzeichnet (oranger gestrichelter Rahmen, „Nur für die erste Anmeldung“).
+- Neu: Der PIN-Brief erklärt immer, wie man die PIN später selbst ändert (Windows, Mac, Yubico Authenticator).
+- Behoben: Im PIN-Brief lief der Text „Sicherheitsschlüssel“ in der Abbildung aus dem Rahmen. Lange Texte vergrößern die Karten jetzt, statt überzulaufen; zu lange Briefe gehen auf einer zweiten Seite weiter.
+- Hinweis: Bisher angepasste Brieftexte werden automatisch in die Bausteine übernommen.
+
 ## 0.10.1 · 2026-11-25
 - Behoben: Das Update per Klick bringt jetzt alle Container auf die neue Version, auch Updater, Caddy und Datensicherung. Bisher wurde nur der Server ausgetauscht.
 
