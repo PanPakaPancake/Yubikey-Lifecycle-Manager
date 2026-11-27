@@ -27,10 +27,11 @@ public sealed record Dashboard(
     int OpenTodos = 0,
     int PendingApprovals = 0,
     bool TargetAllUsers = false,
-    IReadOnlyList<AdvisoryCount>? Advisories = null);
+    IReadOnlyList<AdvisoryCount>? Advisories = null,
+    IReadOnlyList<ReminderCount>? Reminders = null);
 
 /// <summary>Dashboard per tenant and for the whole organization (planning 7).</summary>
-public sealed class DashboardService(YlmDbContext db)
+public sealed class DashboardService(YlmDbContext db, ReminderService reminders)
 {
     public async Task<Dashboard> BuildAsync(IReadOnlyList<Guid> tenantIds, DateTimeOffset? from = null, CancellationToken ct = default)
     {
@@ -71,6 +72,9 @@ public sealed class DashboardService(YlmDbContext db)
             .Select(a => new AdvisoryCount(a.Id, a.Title, a.Severity, a.AffectsFido, current.Count(k => k.Advisories.Contains(a))))
             .Where(a => a.Keys > 0).ToList();
 
+        // Nur eingeschaltete Erinnerungen; null, wenn kein Tenant sie nutzt (dann zeigt die Übersicht nichts dazu).
+        var reminderCounts = tenants.Any(t => t.AnyReminderEnabled) ? (await reminders.BuildAsync(tenantIds, ct: ct)).Counts : null;
+
         var forceUnsupported = activeKeys.Count(k => FirmwareVersion.TryParse(k.FirmwareVersion, out var v) && v < FirmwareVersion.ForcePinChangeMinimum);
 
         return new Dashboard(
@@ -99,6 +103,7 @@ public sealed class DashboardService(YlmDbContext db)
             pendingApprovals,
             // No include groups anywhere: the target audience is every enabled member account.
             tenants.Count > 0 && tenants.All(t => t.TargetIncludeGroups.Count == 0),
-            advisoryCounts);
+            advisoryCounts,
+            reminderCounts);
     }
 }
