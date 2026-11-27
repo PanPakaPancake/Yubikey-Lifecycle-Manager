@@ -541,6 +541,24 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Interface_language_is_stored_per_user()
+    {
+        var before = await Json(await _owner.GetAsync("/api/me"));
+        Assert.Equal(JsonValueKind.Null, before.GetProperty("language").ValueKind);
+
+        (await _owner.PutAsJsonAsync("/api/me/language", new { language = "en" })).EnsureSuccessStatusCode();
+        Assert.Equal("en", (await Json(await _owner.GetAsync("/api/me"))).GetProperty("language").GetString());
+
+        Assert.Equal(HttpStatusCode.BadRequest, (await _owner.PutAsJsonAsync("/api/me/language", new { language = "fr" })).StatusCode);
+        Assert.Equal("en", (await Json(await _owner.GetAsync("/api/me"))).GetProperty("language").GetString());
+
+        (await _owner.PutAsJsonAsync("/api/me/language", new { language = (string?)null })).EnsureSuccessStatusCode();
+        Assert.Equal(JsonValueKind.Null, (await Json(await _owner.GetAsync("/api/me"))).GetProperty("language").ValueKind);
+
+        Assert.Equal(HttpStatusCode.Unauthorized, (await _app.Client().PutAsJsonAsync("/api/me/language", new { language = "de" })).StatusCode);
+    }
+
+    [Fact]
     public async Task Audit_chain_detects_tampering_and_csrf_header_is_required()
     {
         var tenantId = await OnboardTenantAsync();
