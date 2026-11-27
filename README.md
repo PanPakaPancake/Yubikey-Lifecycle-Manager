@@ -41,6 +41,7 @@ Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images
 - [Projektplanung](docs/PLANUNG.md)
 - [Betrieb und Installation](docs/BETRIEB.md)
 - [Testanleitung V1 (Praxistest mit Tenant und YubiKey)](docs/TESTANLEITUNG-V1.md)
+- [Signierung des Agents (SignPath)](docs/SIGNIERUNG.md)
 
 ## Projektstruktur
 
@@ -76,6 +77,21 @@ Automatisch getestet sind die Fachlogik und der komplette Ablauf im Backend mit 
 - MSI-Installation, Windows-Dienst und Tray-App auf Windows (das MSI wird in der CI gebaut, aber nicht installiert)
 
 Die Liste der YubiKey-AAGUIDs (`src/Ylm.Core/YubicoAaguids.cs`) sollte vor dem produktiven Einsatz mit der von Yubico veröffentlichten Liste abgeglichen werden.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org)
+
+Signiert werden nur die Dateien des Windows-Agents aus den [Releases](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/releases): `YlmAgent.exe`, `YlmTray.exe` und `YubikeyLifecycleManager-Agent.msi`. Sie entstehen ausschließlich in GitHub Actions aus dem Quellcode dieses Repositorys (`.github/workflows/release.yml`); jede Signierung wird von Hand freigegeben. Einrichtung und Ablauf: [Signierung](docs/SIGNIERUNG.md).
+
+Rollen:
+
+- Committers and reviewers: [PanPakaPancake](https://github.com/PanPakaPancake)
+- Approvers: [PanPakaPancake](https://github.com/PanPakaPancake)
+
+Änderungen von außen kommen nur per Pull Request und werden vor dem Merge geprüft. Für GitHub und SignPath ist Mehr-Faktor-Anmeldung Pflicht.
+
+Datenschutz: This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Der Agent spricht nur mit dem Server, mit dem er gekoppelt wurde. Der Server spricht mit den Microsoft-Entra-Tenants, Mail-Servern, Webhooks und Ticketsystemen, die der Betreiber einrichtet, und fragt täglich bei der GitHub-API nach neuen Versionen (abschaltbar mit `Ylm__UpdateCheckEnabled=false`, siehe [Betrieb](docs/BETRIEB.md)).
 
 ## Lizenzen von Abhängigkeiten
 

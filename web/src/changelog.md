@@ -7,6 +7,11 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.12.2 · 2026-11-27
+- Neu: Der Agent wird künftig kostenlos über die SignPath Foundation signiert (Open-Source-Programm) statt über Azure. Bis die Signierung eingerichtet ist, bleibt das MSI wie bisher unsigniert.
+- Sicherheit: Ein signierter Agent prüft bei Updates zusätzlich, dass das MSI wirklich der Agent-Installer ist. Nötig, weil die SignPath Foundation viele Projekte unter demselben Namen signiert.
+- Verbessert: Das README hat eine „Code signing policy“ mit Rollen und Datenschutzaussage.
+
 ## 0.12.1 · 2026-11-27
 - Neu: „Passkeys erklärt“ hat in der Endbenutzer-Ansicht einen Abschnitt „Warum Sie Ihren Key nicht verleihen“. Ein Vergleich mit dem Haustürschlüssel und ein Beispielprotokoll zeigen, dass alles unter dem eigenen Namen läuft; dazu, wie Vertretung richtig geht. Direkt verlinkbar mit /passkey#verleihen.
 - Verbessert: Die Hinweisliste im PIN-Brief sagt jetzt standardmäßig „Key und PIN nie verleihen oder weitergeben“. Angepasste Hinweislisten bleiben unverändert.
