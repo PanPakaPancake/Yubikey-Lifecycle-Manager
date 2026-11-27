@@ -554,11 +554,11 @@ curl -X POST https://<plattform>/api/v1/todos -H "X-Api-Key: ylm_…" -H "Conten
 3. In den **Tenant-Einstellungen** eines Tenants nur den Firmennamen ändern. Erwartung: alle anderen Werte kommen weiter vom Partner.
 4. Einen Key registrieren bzw. den Bericht (PDF) und die Key-Zuweisungen (PDF) dieses Tenants herunterladen: das Tenant-Erscheinungsbild wird verwendet. Über alle Tenants gilt das des Partners.
 
-### 5.18 Passkey-Rollout (MFA-Stand, TAP, andere Methoden entfernen)
+### 5.18 Rollout Übersicht (MFA-Stand, TAP, andere Methoden entfernen)
 
 Voraussetzung: Tenant gewählt. Rolle Owner oder Operator (TAP erzeugen und Methoden entfernen); Auditor sieht nur die Übersicht. Am besten mit einer Testperson, deren Methoden man gefahrlos ändern kann.
 
-1. Links unter **Kunde** auf **Passkey-Rollout** klicken. Erwartung: Kopf mit „x von y Personen sind am Ziel“, Ringdiagramm und vier Stufen **Keine MFA**, **Nur klassische MFA**, **Anderer Passkey**, **Sicherheitsschlüssel**. Unter dem Titel steht, ob die Daten aus dem Entra-Registrierungsbericht kommen (Entra ID P1) oder pro Benutzer abgefragt wurden.
+1. Links unter **Kunde** auf **Rollout Übersicht** klicken. Erwartung: Kopf mit „x von y Personen sind am Ziel“, Ringdiagramm und vier Stufen **Keine MFA**, **Nur klassische MFA**, **Anderer Passkey**, **Sicherheitsschlüssel**. Unter dem Titel steht, ob die Daten aus dem Entra-Registrierungsbericht kommen (Entra ID P1) oder pro Benutzer abgefragt wurden.
 2. Stufe **Keine MFA** anklicken: die Liste zeigt nur diese Personen. Schalter **Nur Zielgruppe**, **Gäste**, **Deaktivierte Konten** ändern Zahlen und Liste.
 3. In **Andere Methoden im Einsatz** z. B. „SMS / Anruf (Mobil)“ anklicken: die Liste filtert auf Personen mit SMS.
 4. Eine Person anklicken. Erwartung: Methoden live aus Entra mit **Entfernen** (nicht bei Kennwort und Passkeys auf Sicherheitsschlüsseln). Bei der Testperson eine Methode entfernen, im Entra Admin Center prüfen, dass sie weg ist. Audit-Log: `authmethod.removed` mit gekürzter Telefonnummer.

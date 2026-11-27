@@ -55,10 +55,10 @@ public static class RolloutEndpoints
                 u.UserType == "Guest" ? "Gast" : "Mitglied", u.AccountEnabled ? "ja" : "nein", u.IsAdmin ? "ja" : "nein",
                 u.InTarget ? "ja" : "nein", u.PlatformKeys, u.LastSignIn?.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
             }).ToList();
-            var name = $"passkey-rollout-{DateTime.Today:yyyy-MM-dd}";
+            var name = $"rollout-uebersicht-{DateTime.Today:yyyy-MM-dd}";
             return format == "csv"
                 ? Results.File(Csv.Write(header, table.Select(r => (IReadOnlyList<string?>)r.Select(v => v?.ToString()).ToList())), "text/csv; charset=utf-8", name + ".csv")
-                : Results.File(Xlsx.Write("Passkey-Rollout", header, table), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
+                : Results.File(Xlsx.Write("Rollout Übersicht", header, table), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
         });
 
         g.MapGet("/users/{userId}/methods", async (Guid id, string userId, CurrentUser cu, YlmDbContext db, RolloutService rollout, CancellationToken ct) =>

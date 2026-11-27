@@ -49,7 +49,7 @@ const PageSize = 150;
 
 export default function RolloutPage() {
   const { tenant } = useTenant();
-  if (!tenant) return <><PageHeader title="Passkey-Rollout" subtitle="Wer hat schon einen Passkey, wer nur klassische MFA, wer noch gar nichts." /><ChooseTenant purpose="Für den Rollout-Überblick" /></>;
+  if (!tenant) return <><PageHeader title="Rollout Übersicht" subtitle="Wer hat schon einen Passkey, wer nur klassische MFA, wer noch gar nichts." /><ChooseTenant purpose="Für den Rollout-Überblick" /></>;
   return <Rollout key={tenant.id} tenantId={tenant.id} tenantName={tenant.displayName} />;
 }
 
@@ -137,7 +137,7 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
 
   return (
     <div className="ro">
-      <PageHeader title="Passkey-Rollout"
+      <PageHeader title="Rollout Übersicht"
         subtitle={data ? <>Stand {fmtDate(data.generatedAt)} · {data.fromReport ? 'aus dem Entra-Registrierungsbericht' : 'pro Benutzer abgefragt (ohne Entra ID P1)'}</> : undefined}
         actions={<>
           <button type="button" onClick={refresh} disabled={refreshing || loading}><Icon name="refresh" size={16} className={refreshing ? 'spin' : undefined} />Aktualisieren</button>

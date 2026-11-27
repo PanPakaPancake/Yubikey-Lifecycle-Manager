@@ -329,7 +329,7 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Kopplung fehlgeschlagen (Anfrage an {Url})", serverUrl);
-            return (false, (ConnectionHint(ex, uri) ?? "Server nicht erreichbar.") + " " + Describe(ex));
+            return (false, (ConnectionHint(ex, uri) ?? FallbackMessage(ex)) + " " + Describe(ex));
         }
 
         // Ab hier hat der Server den Code verbraucht. Scheitert das Speichern auf diesem PC, soll das auch so dastehen
@@ -365,6 +365,15 @@ public sealed class AgentConnection : IAsyncDisposable, IOperationPrompts
     /// Verständlicher Hinweis für die häufigen Fehler beim Koppeln, z. B. https:// auf dem HTTP-Port 8080
     /// (vorher nur „Cannot determine the frame size or a corrupted frame was received“).
     /// </summary>
+    /// <summary>„Server nicht erreichbar“ nur bei echten Netzwerkfehlern, sonst führt die Meldung in die falsche Richtung.</summary>
+    internal static string FallbackMessage(Exception ex)
+    {
+        for (var e = ex; e is not null; e = e.InnerException)
+            if (e is HttpRequestException or System.Net.Sockets.SocketException or TaskCanceledException or TimeoutException)
+                return "Server nicht erreichbar.";
+        return "Kopplung auf diesem PC fehlgeschlagen.";
+    }
+
     internal static string? ConnectionHint(Exception ex, Uri uri)
     {
         for (var e = ex; e is not null; e = e.InnerException)
