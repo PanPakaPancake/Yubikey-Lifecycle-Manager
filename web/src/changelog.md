@@ -7,6 +7,9 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.12.1 · 2026-11-27
+- Neu: Beim CSV-Import für Wareneingang und Partnerlager gibt es „Beispiel-CSV herunterladen“. Die Datei zeigt genau das erwartete Format (Semikolon, UTF-8, Excel-tauglich) mit allen Spalten, inklusive der Zusatzfelder des gewählten Lagers, und drei Beispielzeilen mit gültigen Werten.
+
 ## 0.12.0 · 2026-11-27
 - Neu: Der PIN-Brief kann jetzt mehrere Seiten haben. Im Brief-Editor legt „Seite hinzufügen“ unter dem Blatt eine neue Seite an, alternativ zieht man den Baustein „Neue Seite“ an die gewünschte Stelle. Der Umbruch zwischen zwei Seiten lässt sich wie ein Baustein verschieben oder mit „Seite entfernen“ wieder auflösen. Höchstens 6 Seiten.
 - Verbessert: Im PDF steht auf jeder Seite „Seite x von y“. Seiten ohne Inhalt (z. B. weil alle Bausteine nur in der anderen Variante erscheinen) fallen weg.

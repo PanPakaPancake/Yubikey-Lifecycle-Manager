@@ -248,6 +248,11 @@ public static class KeyEndpoints
             ImportAsync(tenantId, req, cu, db, keys, audit));
         g.MapPost("/partner/keys/import", (HttpRequest req, CurrentUser cu, YlmDbContext db, KeyService keys, AuditService audit) =>
             ImportAsync(null, req, cu, db, keys, audit));
+        // Beispiel-CSV im exakt erwarteten Format, inklusive der Zusatzfelder des Ziels.
+        g.MapGet("/tenants/{tenantId:guid}/keys/import/sample.csv", (Guid tenantId, CurrentUser cu, KeyService keys) =>
+            ImportSampleAsync(tenantId, cu, keys));
+        g.MapGet("/partner/keys/import/sample.csv", (CurrentUser cu, KeyService keys) =>
+            ImportSampleAsync(null, cu, keys));
 
         g.MapPost("/tenants/{tenantId:guid}/sync", async (Guid tenantId, CurrentUser cu, SyncService sync) =>
         {
@@ -305,12 +310,12 @@ public static class KeyEndpoints
         if (rows.Count < 2) throw ApiException.BadRequest("empty", "Die Datei enthält keine Datenzeilen.");
         var header = rows[0].Select(h => h.Trim()).ToArray();
         int Col(params string[] names) => Array.FindIndex(header, h => names.Any(n => h.Equals(n, StringComparison.OrdinalIgnoreCase)));
-        var cSerial = Col("Seriennummer", "Serial", "SerialNumber");
-        if (cSerial < 0) throw ApiException.BadRequest("no_serial_column", "Die Spalte „Seriennummer“ fehlt.");
-        var cModel = Col("Modell", "Model");
-        var cFw = Col("Firmware", "FirmwareVersion");
-        var cTags = Col("Tags");
-        var cNotes = Col("Notiz", "Notes", "Notizen");
+        var cSerial = Col(ImportColumns.Serial);
+        if (cSerial < 0) throw ApiException.BadRequest("no_serial_column", $"Die Spalte „{ImportColumns.Serial[0]}“ fehlt.");
+        var cModel = Col(ImportColumns.Model);
+        var cFw = Col(ImportColumns.Firmware);
+        var cTags = Col(ImportColumns.Tags);
+        var cNotes = Col(ImportColumns.Notes);
         var specs = await keys.FieldSpecsAsync(tenantId);
         var fieldCols = specs.Select(s => (s.Key, Index: Col(s.Key, s.Label))).Where(x => x.Index >= 0).ToList();
         var known = await db.Keys.Where(k => k.SerialNumber != null && k.Status != KeyStatus.Retired).Select(k => k.SerialNumber!.Value).ToListAsync();
@@ -336,7 +341,7 @@ public static class KeyEndpoints
                 FirmwareVersion = fw,
                 Source = KeySource.Import,
                 Status = KeyStatus.InStock,
-                Tags = Tags.Normalize(Get(cTags)?.Split([',', '|'], StringSplitOptions.RemoveEmptyEntries)).ToList(),
+                Tags = Tags.Normalize(Get(cTags)?.Split(ImportColumns.TagSeparators, StringSplitOptions.RemoveEmptyEntries)).ToList(),
                 Notes = Get(cNotes),
                 CustomFields = fields.Where(f => f.Value is not null).ToDictionary(f => f.Key, f => f.Value),
             };
@@ -350,4 +355,45 @@ public static class KeyEndpoints
         }
         return Results.Ok(new { created, skipped, errors });
     }
+
+    /// <summary>Spaltenköpfe des CSV-Imports. Der erste Name ist der, den die Beispiel-CSV schreibt.</summary>
+    internal static class ImportColumns
+    {
+        public static readonly string[] Serial = ["Seriennummer", "Serial", "SerialNumber"];
+        public static readonly string[] Model = ["Modell", "Model"];
+        public static readonly string[] Firmware = ["Firmware", "FirmwareVersion"];
+        public static readonly string[] Tags = ["Tags"];
+        public static readonly string[] Notes = ["Notiz", "Notes", "Notizen"];
+        public static readonly char[] TagSeparators = [',', '|'];
+    }
+
+    /// <summary>
+    /// Beispiel-CSV für den Import: gleiche Spalten, Trennzeichen (Semikolon) und Kodierung (UTF-8 mit BOM),
+    /// die <see cref="ImportAsync"/> erwartet, plus die aktiven Zusatzfelder des Ziels mit gültigen Beispielwerten.
+    /// </summary>
+    private static async Task<IResult> ImportSampleAsync(Guid? tenantId, CurrentUser cu, KeyService keys)
+    {
+        await cu.RequireKeyAccessAsync(tenantId, Permission.ManageInventory);
+        var specs = await keys.FieldSpecsAsync(tenantId);
+        string[] header = [ImportColumns.Serial[0], ImportColumns.Model[0], ImportColumns.Firmware[0], ImportColumns.Tags[0], ImportColumns.Notes[0], .. specs.Select(s => s.Label)];
+        var rows = new List<IReadOnlyList<string?>>
+        {
+            Row(["12345671", "YubiKey 5C NFC", "5.7.1", "neu,Charge 11/2026", "Beispielzeile, vor dem Import ersetzen"], 0),
+            Row(["12345672", "YubiKey 5 NFC", "5.4.3", "Charge 11/2026", ""], 1),
+            Row(["12345673", "", "", "", ""], 2),
+        };
+        return Results.File(Csv.Write(header, rows), "text/csv; charset=utf-8", "beispiel-wareneingang.csv");
+
+        IReadOnlyList<string?> Row(string[] baseValues, int index) =>
+            [.. baseValues, .. specs.Select(s => s.Required || index == 0 ? SampleValue(s, index) : null)];
+    }
+
+    private static string SampleValue(CustomFieldSpec spec, int index) => spec.Type switch
+    {
+        CustomFieldType.Number => (index + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+        CustomFieldType.Date => "2026-01-1" + (index + 1),
+        CustomFieldType.Boolean => index % 2 == 0 ? "true" : "false",
+        CustomFieldType.Select => spec.Options.Count > 0 ? spec.Options[index % spec.Options.Count] : "",
+        _ => "Beispiel " + (index + 1),
+    };
 }

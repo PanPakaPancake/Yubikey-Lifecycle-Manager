@@ -211,8 +211,12 @@ function ImportModal({ defaultTarget, onClose, onDone }: { defaultTarget: string
       <button onClick={onClose}>Schließen</button>
       <button className="primary" disabled={!tenantId || !file || busy} onClick={go}>Importieren</button>
     </>}>
-      <p className="muted">Spalten mit Semikolon getrennt: <code>Seriennummer</code> (Pflicht), <code>Modell</code>, <code>Firmware</code>, <code>Tags</code> (mit Komma getrennt), <code>Notiz</code> sowie Zusatzfelder (Schlüssel oder Bezeichnung als Spaltenkopf). Importierte Keys landen im Lager.</p>
+      <p className="muted">Spalten mit Semikolon getrennt, Kodierung UTF-8: <code>Seriennummer</code> (Pflicht), <code>Modell</code>, <code>Firmware</code>, <code>Tags</code> (mit Komma getrennt), <code>Notiz</code> sowie Zusatzfelder (Schlüssel oder Bezeichnung als Spaltenkopf). Importierte Keys landen im Lager.</p>
       <Field label="Ziel"><TargetSelect value={tenantId} onChange={setTenantId} /></Field>
+      <p className="muted">
+        <button type="button" className="link" disabled={!tenantId} onClick={() => download(targetUrl(tenantId, 'import/sample.csv'))}>Beispiel-CSV herunterladen</button>
+        {' '}· enthält alle Spalten inklusive der Zusatzfelder des gewählten Ziels und drei Beispielzeilen. Die Beispielzeilen vor dem Import durch echte Keys ersetzen.
+      </p>
       <Field label="Datei"><input type="file" accept=".csv,text/csv" onChange={(e) => setFile(e.target.files?.[0])} /></Field>
       <ErrorBox error={error} />
       {result && (
