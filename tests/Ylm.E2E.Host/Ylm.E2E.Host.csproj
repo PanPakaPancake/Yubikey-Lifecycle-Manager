@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Testserver für die Ende-zu-Ende-Tests (tests/e2e, Playwright) und den Windows-Smoke-Test des Agents.
+    Startet den echten Server (gleiche Program.cs, Datenbank, Web-Oberfläche, SignalR) auf Kestrel, ersetzt aber
+    Microsoft Entra/Graph durch eine Simulation mit Beispieldaten und erlaubt die Entwicklungs-Anmeldung.
+    Nur für Tests: niemals produktiv betreiben.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Ylm.Server\Ylm.Server.csproj" />
+    <ProjectReference Include="..\..\src\Ylm.Agent.Core\Ylm.Agent.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Dieselbe Graph-Simulation wie in den Server-Tests. -->
+    <Compile Include="..\Ylm.Server.Tests\FakeGraph.cs" Link="Shared\FakeGraph.cs" />
+    <Compile Include="..\Ylm.Server.Tests\Fakes.cs" Link="Shared\Fakes.cs" />
+  </ItemGroup>
+
+</Project>

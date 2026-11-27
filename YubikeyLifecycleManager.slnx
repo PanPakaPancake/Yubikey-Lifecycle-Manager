@@ -9,6 +9,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Ylm.Core.Tests/Ylm.Core.Tests.csproj" />
+    <Project Path="tests/Ylm.E2E.Host/Ylm.E2E.Host.csproj" />
     <Project Path="tests/Ylm.Server.Tests/Ylm.Server.Tests.csproj" />
   </Folder>
 </Solution>
