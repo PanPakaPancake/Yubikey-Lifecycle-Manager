@@ -12,6 +12,7 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 - Sicherheit: Webhooks gehen nicht mehr an link-lokale Adressen wie 169.254.169.254 (Cloud-Metadaten), auch nicht über einen Hostnamen, der dorthin zeigt.
 - Sicherheit: Ein Kopplungscode für den Agent gilt auch bei zwei gleichzeitigen Versuchen garantiert nur einmal.
 - Sicherheit: Die Weboberfläche sendet eine strenge Content-Security-Policy (nur eigene Skripte). Das Druckfenster der Notfallcodes kommt dafür ohne eingebettetes Skript aus.
+- Sicherheit: Koppeln, Entkoppeln und das Ändern der automatischen Updates im Agent verlangen jetzt die Bestätigung als Administrator per UAC. Bisher reichte ein Administratorkonto ohne erhöhte Rechte, damit hätte Schadsoftware im Benutzerkonto den Agent still an einen fremden Server koppeln können. Standardbenutzer können mit Administrator-Anmeldedaten bestätigen.
 - Sicherheit: Der Updater prüft die Hosting-Einstellungen strenger, bevor er sie in die .env schreibt (keine geschweiften Klammern, nur bekannte TLS-Formen, kein Zeilenumbruch am Ende).
 
 ## 0.13.0 · 2026-11-27

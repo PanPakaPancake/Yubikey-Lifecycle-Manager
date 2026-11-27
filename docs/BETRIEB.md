@@ -316,7 +316,7 @@ Beim Offboarding entfernt die Plattform ihre Daten nach der Aufbewahrungsfrist. 
    - Dienst `YubikeyLifecycleManagerAgent` (LocalSystem, Autostart). Adminrechte sind nötig, weil Windows den direkten FIDO-Zugriff (PIN setzen, Reset) sonst sperrt.
    - Tray-App `YlmTray.exe` startet bei jeder Anmeldung.
 2. In der Web-Oberfläche unter „Agent“ einen Kopplungscode erzeugen.
-3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben. Koppeln und Entkoppeln dürfen nur Mitglieder der lokalen Gruppe „Administratoren“ (ohne erhöhte Rechte reicht), weil der Agent-Dienst als SYSTEM Updates vom gekoppelten Server installiert.
+3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben. Koppeln, Entkoppeln und das Ändern der automatischen Updates verlangen Administratorrechte: Windows fragt per UAC nach (Standardbenutzer geben dort die Anmeldedaten eines Administrators ein). Grund: Der Agent-Dienst installiert als SYSTEM Updates vom gekoppelten Server. Ohne diese Abfrage könnte Schadsoftware im Benutzerkonto den Agent unbemerkt an einen fremden Server hängen.
 
 Protokolle: `C:\ProgramData\YubikeyLifecycleManager\Agent\logs`. Update: neueres MSI installieren.
 

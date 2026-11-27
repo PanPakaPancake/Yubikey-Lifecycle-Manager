@@ -321,7 +321,7 @@ Tray → Rechtsklick → **Einstellungen …**
 | „Mit Windows starten“ abwählen, abmelden, wieder anmelden | Kein Tray-Symbol. Start über das Startmenü („Yubikey Lifecycle Manager“) geht weiterhin. Wieder anhaken, abmelden/anmelden: Symbol ist da. Gespeichert unter `HKCU\Software\YubikeyLifecycleManager\Tray`, Wert `AutoStart`. |
 | „Hinweise anzeigen …“ abwählen, Dienst stoppen (`Stop-Service YubikeyLifecycleManagerAgent`), Key einstecken | Keine Sprechblase. Danach `Start-Service …` und wieder anhaken. |
 | „Updates automatisch installieren“ als Administrator abwählen | Meldung „Automatische Updates sind ausgeschaltet.“ Plattform → Globale Einstellungen → Version und Updates → „Alle Agents“: dein PC zeigt Auto-Update **aus**, unter **Agent** steht die Plakette „Auto-Update aus“. Wieder anhaken. |
-| Als Standardbenutzer (ohne Adminrechte) anmelden und Einstellungen öffnen | Der Update-Schalter ist ausgegraut mit „Nur Administratoren dieses PCs können das ändern.“ (überspringen, wenn kein zweites Konto da ist) |
+| Update-Schalter in den Einstellungen umlegen, ebenso „Koppeln …“ und „Kopplung lösen“ im Tray-Menü | Jedes Mal erscheint die UAC-Abfrage. Nach „Ja“ wird die Aktion ausgeführt, nach „Nein“ meldet die Tray-App „Abgebrochen“ und es ändert sich nichts. Als Standardbenutzer fragt UAC nach Administrator-Anmeldedaten. |
 | Plattform: **Agent-Updates** auf „Immer automatisch“, dann im Tray „Jetzt nach Updates suchen“ | Schalter im Tray ist angehakt und gesperrt: „Vom Server vorgegeben …“. Danach Vorgabe wieder auf Standard. |
 | „Jetzt nach Updates suchen“ ohne neue Version | „Aktuell (Version 0.5.x).“ Im Agent-Log eine Zeile `Update: Aktuell …` |
 

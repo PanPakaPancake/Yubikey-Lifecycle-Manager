@@ -97,7 +97,7 @@ public sealed class TrayPipeServer(AgentConnection connection, AgentUpdater upda
                     case TrayMessageType.SetAutoUpdate when msg.Enabled is { } enabled:
                         var (changed, message) = IsAdministrator(pipe)
                             ? await updater.SetAutoUpdateAsync(enabled)
-                            : (false, "Nur Administratoren dieses PCs können automatische Updates ändern.");
+                            : (false, "Automatische Updates ändern verlangt Administratorrechte auf diesem PC (Bestätigung per UAC).");
                         await SendAsync(new TrayMessage { Type = TrayMessageType.CommandResult, Text = message, IsError = !changed });
                         break;
                     case TrayMessageType.CheckForUpdate:
@@ -124,11 +124,13 @@ public sealed class TrayPipeServer(AgentConnection connection, AgentUpdater upda
     }
 
     internal const string AdminOnlyMessage =
-        "Koppeln und Entkoppeln dürfen nur Administratoren dieses PCs. Bitte mit einem Konto aus der Gruppe „Administratoren“ anmelden oder die IT bitten.";
+        "Koppeln und Entkoppeln verlangen Administratorrechte auf diesem PC (Bestätigung per UAC). Bitte die Tray-App aktualisieren oder die IT bitten.";
 
     /// <summary>
-    /// Gehört der Benutzer am anderen Ende der Pipe zu den lokalen Administratoren? Zählt auch ohne erhöhte Rechte (UAC):
-    /// Dann steht die Administratoren-Gruppe im Token als "deny only".
+    /// Läuft der Prozess am anderen Ende der Pipe mit erhöhten Administratorrechten? Ein Administrator ohne UAC-Bestätigung
+    /// zählt bewusst nicht: Sonst könnte Schadcode im Benutzerkontext den Agent still an einen fremden Server koppeln,
+    /// der ein präpariertes MSI als Update ausliefert (UAC-Umgehung bis SYSTEM). Die Tray-App startet sich für solche Aktionen
+    /// daher erhöht neu (siehe Elevation in Ylm.Agent.Tray).
     /// Bewusst ohne <see cref="NamedPipeServerStream.RunAsClient"/>: Die Tray-App verbindet sich nur mit Identification,
     /// und Code, der danach auf dem Dienst-Thread lief, sah noch den Identifikations-Token des Benutzers. Registry, Zertifikatsspeicher,
     /// DPAPI und Logdateien schlugen dann fehl (0x80071770 beim Speichern, TLS-Fehler, "Requested registry access is not allowed"
@@ -172,8 +174,7 @@ public sealed class TrayPipeServer(AgentConnection connection, AgentUpdater upda
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     internal static bool IsAdministrator(WindowsIdentity identity)
     {
-        const string admins = "S-1-5-32-544";
-        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator)
-               || identity.Claims.Any(c => c.Type == System.Security.Claims.ClaimTypes.DenyOnlySid && c.Value == admins);
+        // Nur ein erhöhtes Token enthält die Administratoren-Gruppe als aktive Gruppe; ohne UAC steht sie dort als "deny only".
+        return new WindowsPrincipal(identity).IsInRole(WindowsBuiltInRole.Administrator);
     }
 }

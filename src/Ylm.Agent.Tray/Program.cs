@@ -14,6 +14,13 @@ internal static class Program
             Screenshots.Run(args[1]);
             return;
         }
+        // Erhöhte Instanz für eine einzelne Aktion (Koppeln, Entkoppeln, Auto-Update), ohne Tray-Symbol und ohne Einzelinstanz-Sperre.
+        if (args.Length >= 2 && args[0] == Elevation.Arg)
+        {
+            Theme.Load();
+            Application.Run(new ElevatedActionContext(args[1], args.Length >= 3 ? args[2] : null));
+            return;
+        }
         using var mutex = new Mutex(true, @"Local\YubikeyLifecycleManager.Tray", out var first);
         if (!first) return; // one tray per user session
         Theme.Load();

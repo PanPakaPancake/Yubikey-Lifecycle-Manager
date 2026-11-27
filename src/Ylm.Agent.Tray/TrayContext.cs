@@ -50,8 +50,9 @@ internal sealed class TrayContext : ApplicationContext
         _pair.Click += (_, _) => ShowPairing();
         _unpair.Click += async (_, _) =>
         {
-            if (MessageBox.Show("Die Kopplung dieses PCs mit dem Server lösen?", "YubiKey LC Manager", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
-                await _pipe.SendAsync(new TrayMessage { Type = TrayMessageType.Unpair });
+            if (MessageBox.Show("Die Kopplung dieses PCs mit dem Server lösen?", "YubiKey LC Manager", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (Elevation.IsElevated()) await _pipe.SendAsync(new TrayMessage { Type = TrayMessageType.Unpair });
+            else if (!Elevation.Run("unpair", out var error)) Warn(error);
         };
         StyleMenu();
         Theme.Changed += OnThemeChanged;
@@ -217,6 +218,13 @@ internal sealed class TrayContext : ApplicationContext
         _settingsForm = new SettingsForm();
         _settingsForm.AutoUpdateChanged += async enabled =>
         {
+            if (!Elevation.IsElevated())
+            {
+                // Die erhöhte Instanz ändert die Einstellung, der neue Stand kommt über den Status zurück.
+                if (!Elevation.Run("auto-update", out var error, enabled ? "on" : "off")) _settingsForm?.ShowResult(error ?? "", true);
+                _settingsForm?.Render(_status, _pipeConnected);
+                return;
+            }
             if (!await _pipe.SendAsync(new TrayMessage { Type = TrayMessageType.SetAutoUpdate, Enabled = enabled }))
                 _settingsForm?.ShowResult("Der Agent-Dienst ist nicht erreichbar.", true);
         };
@@ -239,8 +247,16 @@ internal sealed class TrayContext : ApplicationContext
         _statusForm.Activate();
     }
 
+    private void Warn(string? text) => _icon.ShowBalloonTip(5000, "YubiKey LC Manager", string.IsNullOrEmpty(text) ? " " : text, ToolTipIcon.Warning);
+
     private void ShowPairing()
     {
+        if (!Elevation.IsElevated())
+        {
+            // Koppeln nur mit Administratorrechten: Das Fenster öffnet die erhöhte Instanz nach der UAC-Abfrage.
+            if (!Elevation.Run("pair", out var error)) Warn(error);
+            return;
+        }
         if (_pairForm is { IsDisposed: false }) { _pairForm.Activate(); return; }
         _pairForm = new PairForm(_status.ServerUrl);
         _pairForm.PairRequested += async (url, code) =>
