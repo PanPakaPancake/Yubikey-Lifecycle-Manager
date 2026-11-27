@@ -137,7 +137,7 @@ public sealed class ReminderService(YlmDbContext db, AuditService audit)
                     var active = k.Regs.Where(r => r.RemovedAt == null).ToList();
                     foreach (var r in active.Where(r => r.UserAccountEnabled == false))
                         result.Add(F(ReminderKind.Leaver, $"{k.Id}:{r.EntraUserId}", k.Id, k.SerialNumber, k.Model, k.Status, k.Usage, r.EntraUserId, r.UserPrincipalName, r.UserDisplayName,
-                            r.RegisteredAt, "Konto in Entra deaktiviert, Key noch aktiv"));
+                            null, "Konto in Entra deaktiviert, Key noch aktiv"));
                     if (active.Count == 0 && k.Regs.Count > 0)
                     {
                         // Alle Passkeys sind in Entra verschwunden (z. B. Konto gelöscht), der Key gilt aber noch als ausgegeben.

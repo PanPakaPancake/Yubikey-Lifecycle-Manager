@@ -133,7 +133,7 @@ function ReminderSection({ k, items, allTenants, editable, note, onDismiss, onRe
       {items.length === 0 ? <Empty>Nichts offen.</Empty> : (
         <div className="table-wrap">
           <table>
-            <thead><tr><th>Person</th><th>Key</th><th>{k.kind === 'UnusedKey' ? 'Zuletzt benutzt' : k.kind === 'RetiredWithPasskey' ? 'Status seit' : k.kind === 'Leaver' ? 'Bezug' : 'Registriert'}</th><th>Hinweis</th>{allTenants && <th>Tenant</th>}<th /></tr></thead>
+            <thead><tr><th>Person</th><th>Key</th><th>{k.kind === 'UnusedKey' ? 'Zuletzt benutzt' : k.kind === 'RetiredWithPasskey' ? 'Status seit' : k.kind === 'Leaver' ? 'Entfernt am' : 'Registriert'}</th><th>Hinweis</th>{allTenants && <th>Tenant</th>}<th /></tr></thead>
             <tbody>
               {items.map((i) => (
                 <tr key={i.tenantId + i.kind + i.subject} className={i.dismissed ? 'rem-dismissed' : undefined}>
@@ -150,7 +150,7 @@ function ReminderSection({ k, items, allTenants, editable, note, onDismiss, onRe
                   </td>
                   {allTenants && <td>{i.tenantName}</td>}
                   <td className="actions">
-                    {k.kind === 'NoSpareKey' && !i.dismissed && <Link className="btn small" to="/register"><Icon name="keyPlus" size={14} />Registrieren</Link>}
+                    {k.kind === 'NoSpareKey' && !i.dismissed && <Link className="small" to="/register">Zweiten Key registrieren</Link>}
                     {editable && (i.dismissed
                       ? <button type="button" className="small" onClick={() => onRestore(i)}>Einblenden</button>
                       : <button type="button" className="small ghost" onClick={() => onDismiss(i)}>Ausblenden</button>)}
