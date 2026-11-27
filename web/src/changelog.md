@@ -7,6 +7,9 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.11.3 · 2026-11-27
+- Verbessert: Der Menüpunkt „Passkey-Rollout“ heißt jetzt „Rollout Übersicht“, ebenso der Seitentitel und die Excel-/CSV-Exporte. Die Adresse /rollout bleibt gleich.
+
 ## 0.11.2 · 2026-11-27
 - Behoben: Das Tray-Symbol des Agents 0.11.1 stürzte direkt beim Start ab und erschien deshalb nicht. Der Agent-Dienst selbst lief weiter.
 
