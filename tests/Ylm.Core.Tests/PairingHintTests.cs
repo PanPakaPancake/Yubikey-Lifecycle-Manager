@@ -85,4 +85,11 @@ public sealed class PairingHintTests
         Assert.False(AgentHttp.IsAcceptable(System.Net.Security.SslPolicyErrors.RemoteCertificateNameMismatch, F(System.Security.Cryptography.X509Certificates.X509ChainStatusFlags.NoError)));
         Assert.False(AgentHttp.IsAcceptable(chainErr, []));
     }
+
+    [Fact]
+    public void FallbackOnlyBlamesServerForNetworkErrors()
+    {
+        Assert.Equal("Server nicht erreichbar.", AgentConnection.FallbackMessage(new HttpRequestException("x", new System.Net.Sockets.SocketException())));
+        Assert.Equal("Kopplung auf diesem PC fehlgeschlagen.", AgentConnection.FallbackMessage(new System.Security.SecurityException("Requested registry access is not allowed.")));
+    }
 }
