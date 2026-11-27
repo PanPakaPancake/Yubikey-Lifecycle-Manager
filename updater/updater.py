@@ -42,6 +42,11 @@ HOSTING_SECRETS = {"YLM_DNS_TOKEN", "YLM_DNS_SECRET"}
 CERT_FILES = {"ylm.crt", "ylm.key"}
 # Ohne Steuerzeichen und ohne Zeichen, die Compose in .env auswertet ($ für Variablen, Anführungszeichen, Backslash).
 VALUE_RE = re.compile("^[^\\x00-\\x1f\\x7f$'\"\\\\]*$")
+# Nicht geheime Werte setzt Caddy vor dem Parsen in die Caddyfile ein ({$VAR}): keine geschweiften Klammern,
+# sonst ließen sich eigene Blöcke oder Direktiven einschleusen. Geheimnisse liest Caddy erst zur Laufzeit ({env.VAR}).
+CADDY_RE = re.compile(r"^[^{}#]*$")
+# Nur die Formen, die die Plattform selbst schreibt.
+CADDY_TLS_RE = re.compile(r"^(|tls internal|tls /certs/ylm\.crt /certs/ylm\.key|tls [^\s@]+@[^\s@]+|import dns-[a-z0-9-]+)$")
 
 state = {"state": "idle", "startedAt": None, "finishedAt": None, "version": None, "log": [],
          "refresh": {"schedule": AUTO_REFRESH if TIME_RE.match(AUTO_REFRESH) else None,
@@ -208,7 +213,11 @@ def validate_hosting(body):
     for k, v in changes.items():
         if k not in HOSTING_KEYS:
             return f"key not allowed: {k}"
-        if v is not None and (not isinstance(v, str) or len(v) > 2000 or not VALUE_RE.match(v)):
+        if v is not None and (not isinstance(v, str) or len(v) > 2000 or not VALUE_RE.fullmatch(v)):
+            return f"invalid value: {k}"
+        if v and k not in HOSTING_SECRETS and not CADDY_RE.fullmatch(v):
+            return f"invalid value: {k}"
+        if k == "YLM_CADDY_TLS" and v is not None and not CADDY_TLS_RE.fullmatch(v):
             return f"invalid value: {k}"
     for name, content in files.items():
         if name not in CERT_FILES or not isinstance(content, str) or len(content) > 200_000 or "-----BEGIN " not in content:

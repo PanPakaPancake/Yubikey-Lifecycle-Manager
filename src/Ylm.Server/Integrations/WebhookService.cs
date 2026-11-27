@@ -58,6 +58,16 @@ public sealed class WebhookService(YlmDbContext db, IHttpClientFactory http, IDa
         new(AuditActions.AppCertificateExpiring, "Plattform", "App-Zertifikat läuft bald ab"),
         new(AuditActions.AppCertificateRenewed, "Plattform", "App-Zertifikat erneuert"),
         new(AuditActions.AppCertificateRenewalFailed, "Plattform", "Erneuerung des App-Zertifikats fehlgeschlagen"),
+        // Sicherheit: Schritte, mit denen eine einzelne Person Schutzmechanismen umgehen könnte. Ein zweiter Mensch soll sie sofort sehen.
+        new(AuditActions.UserCreated, "Sicherheit", "Plattform-Benutzer angelegt"),
+        new(AuditActions.UserUpdated, "Sicherheit", "Plattform-Benutzer geändert (Rolle, Tenants, aktiv)"),
+        new(AuditActions.RoleUpdated, "Sicherheit", "Rolle geändert"),
+        new(AuditActions.TenantProtectionChanged, "Sicherheit", "Schutz geändert (Vier-Augen, geschützte Konten)"),
+        new(AuditActions.LoginSettingsChanged, "Sicherheit", "Anmeldeeinstellungen geändert"),
+        new(AuditActions.ApiKeyCreated, "Sicherheit", "API-Schlüssel angelegt"),
+        new(AuditActions.ApiKeyScopeChanged, "Sicherheit", "Rechte eines API-Schlüssels geändert"),
+        new(AuditActions.AgentPaired, "Sicherheit", "Agent gekoppelt"),
+        new(AuditActions.TapCreated, "Sicherheit", "Befristeter Zugriffspass (TAP) erzeugt"),
     ];
 
     private static readonly HashSet<string> Exposed = Catalog.Select(c => c.Type).ToHashSet();

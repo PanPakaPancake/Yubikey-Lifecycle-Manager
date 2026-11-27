@@ -84,7 +84,8 @@ builder.Services.AddScoped<SharedKeyService>();
 builder.Services.AddScoped<Ylm.Server.Integrations.WebhookService>();
 builder.Services.AddScoped<Ylm.Server.Integrations.ReportMailService>();
 builder.Services.AddSingleton<Ylm.Server.Integrations.IMailSender, Ylm.Server.Integrations.SmtpMailSender>();
-builder.Services.AddHttpClient(Ylm.Server.Integrations.WebhookService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddHttpClient(Ylm.Server.Integrations.WebhookService.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(15))
+    .ConfigurePrimaryHttpMessageHandler(Ylm.Server.Integrations.WebhookTargets.CreateHandler);
 builder.Services.AddSingleton<Ylm.Server.Integrations.IntegrationJobs>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<Ylm.Server.Integrations.IntegrationJobs>());
 builder.Services.AddScoped<DashboardService>();

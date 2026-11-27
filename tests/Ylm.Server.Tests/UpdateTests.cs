@@ -122,6 +122,17 @@ public sealed class UpdateTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Pairing_code_works_only_once()
+    {
+        var op = await LoginAsync("op@home.example", PlatformRole.Operator);
+        var code = (await Json(await op.PostAsync("/api/agents/pairing-codes", null))).GetProperty("code").GetString();
+        var first = Client().PostAsJsonAsync("/api/agent/pair", new { code, machineName = "PC-A", agentVersion = "9.0.0" });
+        var second = Client().PostAsJsonAsync("/api/agent/pair", new { code, machineName = "PC-B", agentVersion = "9.0.0" });
+        var codes = (await Task.WhenAll(first, second)).Select(r => r.StatusCode).OrderBy(c => c).ToList();
+        Assert.Equal([HttpStatusCode.OK, HttpStatusCode.BadRequest], codes);
+    }
+
+    [Fact]
     public async Task Agent_update_info_carries_server_policy_and_never_blocks_old_agents()
     {
         var owner = await LoginAsync("owner@home.example", PlatformRole.Owner);
