@@ -7,6 +7,9 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.11.2 · 2026-11-27
+- Behoben: Das Tray-Symbol des Agents 0.11.1 stürzte direkt beim Start ab und erschien deshalb nicht. Der Agent-Dienst selbst lief weiter.
+
 ## 0.11.1 · 2026-11-26
 - Neu: Im Passkey-Rollout zeigt das Personenfenster bei Windows Hello, Authenticator-App und Platform Credential das zugehörige Gerät aus Entra: Name, Modell, Betriebssystem mit Version, Join-Art, Konformität und letzte Aktivität, dazu ein Link „in Entra öffnen“.
 - Behoben: Bei Windows Hello for Business fehlte das Gerät oft, weil Entra es nur bei der Einzelabfrage einer Methode mitliefert.
