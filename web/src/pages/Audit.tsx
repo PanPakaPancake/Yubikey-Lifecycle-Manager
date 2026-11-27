@@ -5,6 +5,7 @@ import { useAuth } from '../auth';
 import { Card, download, Empty, ErrorBox, Info, LiveSearchInput, PageHeader, useAction, useApi } from '../ui';
 import { useToast } from '../feedback';
 import { useTenant } from '../tenant';
+import { tr } from '../i18n';
 
 /** Einträge des gewählten Tenants oder (ohne Auswahl) alle Einträge inkl. plattformweiter Ereignisse. */
 export default function AuditPage() {
@@ -38,46 +39,46 @@ export default function AuditPage() {
   const doVerify = () => act.run(async () => {
     const r = await api.get<{ valid: boolean; checkedEntries: number; brokenAt?: number }>('/api/audit/verify');
     setVerify(r);
-    if (r.valid) toast.ok(`Die Kette ist intakt (${r.checkedEntries} Einträge geprüft).`);
+    if (r.valid) toast.ok(tr("Die Kette ist intakt ({checkedEntries} Einträge geprüft).", { checkedEntries: r.checkedEntries }));
   });
   const exportQs = tenantId ? '?tenantId=' + tenantId : '';
 
   return (
     <>
       <PageHeader
-        title="Audit-Log"
-        subtitle="Jede Aktion wird unveränderbar protokolliert (Hash-Kette)."
+        title={tr("Audit-Log")}
+        subtitle={tr("Jede Aktion wird unveränderbar protokolliert (Hash-Kette).")}
         actions={<>
-          {me.user?.allTenants && <button disabled={act.busy} onClick={doVerify}>Integrität prüfen</button>}
-          <button onClick={() => download('/api/audit/export.csv' + exportQs)}>Export (CSV)</button>
+          {me.user?.allTenants && <button disabled={act.busy} onClick={doVerify}>{tr("Integrität prüfen")}</button>}
+          <button onClick={() => download('/api/audit/export.csv' + exportQs)}>{tr("Export (CSV)")}</button>
         </>}
       />
       {verify && !verify.valid && (
-        <Info tone="error">Die Kette ist ab Eintrag {verify.brokenAt} verändert worden! ({verify.checkedEntries} Einträge geprüft)</Info>)}
+        <Info tone="error">{tr("Die Kette ist ab Eintrag {brokenAt} verändert worden! ({checkedEntries} Einträge geprüft)", { brokenAt: verify.brokenAt, checkedEntries: verify.checkedEntries })}</Info>)}
       <div className="toolbar">
-        <select value={action} onChange={(e) => resetFilters(() => setAction(e.target.value))} aria-label="Aktion">
-          <option value="">Alle Aktionen</option>
-          <option value="key.">Keys</option>
-          <option value="pin_letter.">PIN-Briefe</option>
-          <option value="tenant.">Tenants</option>
-          <option value="sync.">Synchronisation</option>
-          <option value="profile.">Profile</option>
-          <option value="auth.">Anmeldungen</option>
-          <option value="user.">Benutzer</option>
-          <option value="fields.">Zusatzfelder</option>
-          <option value="agent.">Agents</option>
-          <option value="apikey.">API-Schlüssel</option>
-          <option value="export.">Exporte</option>
-          <option value="setup.">Einrichtung</option>
+        <select value={action} onChange={(e) => resetFilters(() => setAction(e.target.value))} aria-label={tr("Aktion")}>
+          <option value="">{tr("Alle Aktionen")}</option>
+          <option value="key.">{tr("Keys")}</option>
+          <option value="pin_letter.">{tr("PIN-Briefe")}</option>
+          <option value="tenant.">{tr("Tenants")}</option>
+          <option value="sync.">{tr("Synchronisation")}</option>
+          <option value="profile.">{tr("Profile")}</option>
+          <option value="auth.">{tr("Anmeldungen")}</option>
+          <option value="user.">{tr("Benutzer")}</option>
+          <option value="fields.">{tr("Zusatzfelder")}</option>
+          <option value="agent.">{tr("Agents")}</option>
+          <option value="apikey.">{tr("API-Schlüssel")}</option>
+          <option value="export.">{tr("Exporte")}</option>
+          <option value="setup.">{tr("Einrichtung")}</option>
         </select>
-        <LiveSearchInput value={q} onSearch={(v) => resetFilters(() => setQ(v))} placeholder="Person oder Ziel …" busy={loading} />
+        <LiveSearchInput value={q} onSearch={(v) => resetFilters(() => setQ(v))} placeholder={tr("Person oder Ziel …")} busy={loading} />
       </div>
       <ErrorBox error={error ?? act.error} />
-      {data && rows.length === 0 && <Empty>Keine Einträge.</Empty>}
+      {data && rows.length === 0 && <Empty>{tr("Keine Einträge.")}</Empty>}
       {rows.length > 0 && (
         <Card className="table-wrap">
           <table>
-            <thead><tr><th>#</th><th>Zeitpunkt</th><th>Wer</th><th>Aktion</th><th>Ziel</th><th>Details</th></tr></thead>
+            <thead><tr><th>#</th><th>{tr("Zeitpunkt")}</th><th>{tr("Wer")}</th><th>{tr("Aktion")}</th><th>{tr("Ziel")}</th><th>{tr("Details")}</th></tr></thead>
             <tbody>
               {rows.map((a) => (
                 <tr key={a.sequence}>
@@ -91,7 +92,7 @@ export default function AuditPage() {
               ))}
             </tbody>
           </table>
-          {data && data.length === 100 && <div style={{ textAlign: 'center', marginTop: 12 }}><button disabled={act.busy} onClick={loadMore}>Ältere laden</button></div>}
+          {data && data.length === 100 && <div style={{ textAlign: 'center', marginTop: 12 }}><button disabled={act.busy} onClick={loadMore}>{tr("Ältere laden")}</button></div>}
         </Card>
       )}
     </>

@@ -1,3 +1,4 @@
+import { language, locale, tr } from './i18n';
 // Thin fetch wrapper for the backend API. Cookie auth + CSRF header for state-changing calls.
 
 export class ApiError extends Error {
@@ -7,7 +8,7 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, url: string, body?: unknown, headers: Record<string, string> = {}): Promise<T> {
-  const init: RequestInit = { method, credentials: 'same-origin', headers: { 'X-YLM-CSRF': '1', ...headers } };
+  const init: RequestInit = { method, credentials: 'same-origin', headers: { 'X-YLM-CSRF': '1', 'X-YLM-Language': language(), ...headers } };
   if (body !== undefined) {
     if (typeof body === 'string') {
       init.body = body;
@@ -22,7 +23,7 @@ async function request<T>(method: string, url: string, body?: unknown, headers: 
   }
   if (!res.ok) {
     let code = 'error';
-    let message = `Fehler ${res.status}`;
+    let message = tr("Fehler {status}", { status: res.status });
     let details: unknown;
     try {
       const j = await res.json();
@@ -57,7 +58,7 @@ export interface PlatformUser {
 }
 
 export type LoginKind = 'Entra' | 'Local' | 'Emergency';
-export const loginKindLabel: Record<LoginKind, string> = { Entra: 'Entra-SSO', Local: 'Lokales Konto (Passkey)', Emergency: 'Lokales Konto (Passwort + TOTP)' };
+export const loginKindLabel: Record<LoginKind, string> = { Entra: tr("Entra-SSO"), Local: tr("Lokales Konto (Passkey)"), Emergency: tr("Lokales Konto (Passwort + TOTP)") };
 
 export interface UserPasskey { id: string; name: string; aaguid: string; createdAt: string; lastUsedAt?: string | null }
 
@@ -65,6 +66,8 @@ export interface Me {
   authenticated: boolean; setupComplete: boolean; organizationName?: string; version?: string; user?: PlatformUser; permissions?: string[];
   /** Nur für Owner: verbleibende Notfallcodes. */
   recoveryCodes?: number | null;
+  /** Im Benutzerkonto gespeicherte Sprache der Oberfläche (de/en), null = Browser-Sprache. */
+  language?: string | null;
 }
 
 export interface AgentPackageInfo { available: boolean; version?: string | null; size?: number | null; sha256?: string | null; downloadUrl?: string | null }
@@ -150,7 +153,7 @@ export interface ResolvedField extends CustomField {
 
 export interface GlobalField extends CustomField { id: string; tenantsModified: number; tenantsDisabled: number }
 
-export const fieldTypes: Record<CustomFieldType, string> = { Text: 'Text', Number: 'Zahl', Date: 'Datum', Select: 'Auswahl', Boolean: 'Ja/Nein' };
+export const fieldTypes: Record<CustomFieldType, string> = { Text: tr("Text"), Number: tr("Zahl"), Date: tr("Datum"), Select: tr("Auswahl"), Boolean: tr("Ja/Nein") };
 
 /** Converts a label into a suggestion for the technical key. */
 export const keyFromLabel = (label: string) =>
@@ -158,13 +161,13 @@ export const keyFromLabel = (label: string) =>
     .replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40);
 
 export const statusLabels: Record<KeyStatus, string> = {
-  InStock: 'Im Lager', Active: 'Zugewiesen/Aktiv', Locked: 'Gesperrt', Retired: 'Ausgemustert',
+  InStock: tr("Im Lager"), Active: tr("Zugewiesen/Aktiv"), Locked: tr("Gesperrt"), Retired: tr("Ausgemustert"),
 };
 
-export const lockReasons: Record<string, string> = { Lost: 'Verloren', Defective: 'Defekt', Stolen: 'Gestohlen', Other: 'Sonstiges' };
+export const lockReasons: Record<string, string> = { Lost: tr("Verloren"), Defective: tr("Defekt"), Stolen: tr("Gestohlen"), Other: tr("Sonstiges") };
 
 export const fmtDate = (s?: string | null, withTime = true) =>
-  s ? new Date(s).toLocaleString('de-DE', withTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' }) : '–';
+  s ? new Date(s).toLocaleString(locale(), withTime ? { dateStyle: 'medium', timeStyle: 'short' } : { dateStyle: 'medium' }) : '–';
 
 export type BatchStatus = 'Open' | 'Completed' | 'Cancelled';
 export type BatchItemStatus = 'Pending' | 'Running' | 'Done' | 'Failed' | 'Skipped';
@@ -186,16 +189,16 @@ export interface BatchCandidate {
   entraYubiKeys?: number | null; entraOtherPasskeys?: number | null; profileId?: string | null; profileGroupName?: string | null; expectedSerialNumber?: number | null;
 }
 
-export const batchStatusLabels: Record<BatchStatus, string> = { Open: 'Offen', Completed: 'Abgeschlossen', Cancelled: 'Abgebrochen' };
-export const batchItemLabels: Record<BatchItemStatus, string> = { Pending: 'Offen', Running: 'Läuft', Done: 'Registriert', Failed: 'Fehlgeschlagen', Skipped: 'Übersprungen' };
+export const batchStatusLabels: Record<BatchStatus, string> = { Open: tr("Offen"), Completed: tr("Abgeschlossen"), Cancelled: tr("Abgebrochen") };
+export const batchItemLabels: Record<BatchItemStatus, string> = { Pending: tr("Offen"), Running: tr("Läuft"), Done: tr("Registriert"), Failed: tr("Fehlgeschlagen"), Skipped: tr("Übersprungen") };
 
 export type KeyUsage = 'Personal' | 'Shared' | 'Breakglass';
-export const usageLabels: Record<KeyUsage, string> = { Personal: 'Persönlich', Shared: 'Geteilter Key', Breakglass: 'Breakglass' };
+export const usageLabels: Record<KeyUsage, string> = { Personal: tr("Persönlich"), Shared: tr("Geteilter Key"), Breakglass: tr("Breakglass") };
 
 export type ApprovalStatus = 'Pending' | 'Approved' | 'Rejected' | 'Used' | 'Cancelled';
-export const approvalLabels: Record<ApprovalStatus, string> = { Pending: 'Wartet auf Freigabe', Approved: 'Freigegeben', Rejected: 'Abgelehnt', Used: 'Verwendet', Cancelled: 'Zurückgezogen' };
+export const approvalLabels: Record<ApprovalStatus, string> = { Pending: tr("Wartet auf Freigabe"), Approved: tr("Freigegeben"), Rejected: tr("Abgelehnt"), Used: tr("Verwendet"), Cancelled: tr("Zurückgezogen") };
 export type RemovalAction = 'Lock' | 'Reset' | 'RemoveAccount';
-export const removalLabels: Record<RemovalAction, string> = { Lock: 'Sperren', Reset: 'Zurücksetzen', RemoveAccount: 'Konto entfernen' };
+export const removalLabels: Record<RemovalAction, string> = { Lock: tr("Sperren"), Reset: tr("Zurücksetzen"), RemoveAccount: tr("Konto entfernen") };
 export interface Approval {
   id: string; tenantId: string; usage: KeyUsage; kind: 'Registration' | 'KeyRemoval'; removalAction?: RemovalAction | null; registrationId?: string | null; entraUserIds: string[]; userPrincipalNames: string[]; custodian?: string | null; reason: string; status: ApprovalStatus;
   requestedById: string; requestedByName: string; requestedAt: string; decidedByName?: string | null; decidedAt?: string | null; decisionNote?: string | null;
@@ -203,7 +206,7 @@ export interface Approval {
 }
 
 export type TodoStatus = 'Open' | 'Done' | 'Cancelled';
-export const todoLabels: Record<TodoStatus, string> = { Open: 'Offen', Done: 'Erledigt', Cancelled: 'Zurückgezogen' };
+export const todoLabels: Record<TodoStatus, string> = { Open: tr("Offen"), Done: tr("Erledigt"), Cancelled: tr("Zurückgezogen") };
 export interface Todo {
   id: string; tenantId: string; tenantName?: string | null; entraUserId: string; userPrincipalName: string; userDisplayName?: string | null; department?: string | null;
   ticketId?: string | null; ticketUrl?: string | null; note?: string | null; profileId?: string | null; profileName?: string | null; dueDate?: string | null;

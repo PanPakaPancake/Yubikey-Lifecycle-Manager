@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { api, type Tenant } from './api';
+import { tr } from './i18n';
 
 // Kundenebene: der oben gewählte Tenant gilt für alle Kundenseiten (ähnlich dem Tenant-Umschalter im Admin Center).
 interface TenantCtx {
@@ -74,32 +75,32 @@ export function TenantSwitcher({ partnerContext }: { partnerContext: boolean }) 
   return (
     <div className={'tenant-switcher' + (partnerContext ? ' dim' : '')} ref={ref}>
       <button type="button" className="tenant-current" onClick={() => setOpen((o) => !o)} aria-haspopup="listbox" aria-expanded={open}>
-        <span className="tenant-label">Kunden-Tenant</span>
-        <span className="tenant-name">{tenant ? tenant.displayName : 'Alle Tenants'}</span>
+        <span className="tenant-label">{tr("Kunden-Tenant")}</span>
+        <span className="tenant-name">{tenant ? tenant.displayName : tr("Alle Tenants")}</span>
         {tenant?.defaultDomain && <span className="tenant-domain">{tenant.defaultDomain}</span>}
         <span aria-hidden>▾</span>
       </button>
       {open && (
         <div className="tenant-menu" role="listbox">
-          <input type="search" autoFocus placeholder="Tenant suchen (Name, Domain, ID) …" value={q} onChange={(e) => { setQ(e.target.value); setCursor(0); }}
+          <input type="search" autoFocus placeholder={tr("Tenant suchen (Name, Domain, ID) …")} value={q} onChange={(e) => { setQ(e.target.value); setCursor(0); }}
             onKeyDown={onKey} aria-activedescendant={options[cursor] !== undefined ? 'tenant-opt-' + (options[cursor] || 'all') : undefined} />
           <label className="check small" style={{ margin: '6px 2px' }}>
-            <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> Nur Tenants mit Handlungsbedarf
+            <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} /> {tr("Nur Tenants mit Handlungsbedarf")}
           </label>
           <div className="tenant-options" ref={optionsRef}>
             {showAll && (
               <button type="button" id="tenant-opt-all" role="option" aria-selected={tenantId === ''} className={(tenantId === '' ? 'selected' : '') + (cursor === 0 ? ' kb-active' : '')} onClick={() => pick('')} onMouseEnter={() => setCursor(0)}>
-                <strong>Alle Tenants</strong><span className="small muted">Übersicht über alle Kunden</span>
+                <strong>{tr("Alle Tenants")}</strong><span className="small muted">{tr("Übersicht über alle Kunden")}</span>
               </button>
             )}
             {list.map((t, i) => (
               <button type="button" key={t.id} id={'tenant-opt-' + t.id} role="option" aria-selected={t.id === tenantId} className={(t.id === tenantId ? 'selected' : '') + (cursor === i + (showAll ? 1 : 0) ? ' kb-active' : '')}
                 onClick={() => pick(t.id)} onMouseEnter={() => setCursor(i + (showAll ? 1 : 0))}>
-                <strong>{t.displayName}{hasProblems(t) && <span className="dot-warn" title="Handlungsbedarf" />}</strong>
+                <strong>{t.displayName}{hasProblems(t) && <span className="dot-warn" title={tr("Handlungsbedarf")} />}</strong>
                 <span className="small muted">{t.defaultDomain ?? t.entraTenantId}</span>
               </button>
             ))}
-            {list.length === 0 && <span className="muted small" style={{ padding: 8 }}>Kein Tenant gefunden.</span>}
+            {list.length === 0 && <span className="muted small" style={{ padding: 8 }}>{tr("Kein Tenant gefunden.")}</span>}
           </div>
         </div>
       )}
@@ -108,14 +109,14 @@ export function TenantSwitcher({ partnerContext }: { partnerContext: boolean }) 
 }
 
 /** Hinweis mit Direktauswahl, wenn eine Seite einen bestimmten Tenant braucht („Alle Tenants“ passt hier nicht). */
-export function ChooseTenant({ purpose = 'Für diese Seite' }: { purpose?: string }) {
+export function ChooseTenant({ purpose = tr("Für diese Seite") }: { purpose?: string }) {
   const { tenants, setTenantId } = useTenant();
   const active = tenants.filter((t) => t.status === 'Active');
   return (
     <div className="choose-tenant">
-      <p><strong>{purpose} bitte einen Kunden-Tenant wählen.</strong> <span className="muted">Die Auswahl gilt auch oben im Umschalter.</span></p>
+      <p><strong>{tr("{purpose} bitte einen Kunden-Tenant wählen.", { purpose })}</strong> <span className="muted">{tr("Die Auswahl gilt auch oben im Umschalter.")}</span></p>
       {active.length === 0
-        ? <p className="muted">Noch kein Tenant angebunden.</p>
+        ? <p className="muted">{tr("Noch kein Tenant angebunden.")}</p>
         : <div className="choose-tenant-list">{active.map((t) => <button key={t.id} type="button" onClick={() => setTenantId(t.id)}>{t.displayName}</button>)}</div>}
     </div>
   );

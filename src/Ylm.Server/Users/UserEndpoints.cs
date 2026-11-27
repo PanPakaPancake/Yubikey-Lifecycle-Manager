@@ -41,8 +41,22 @@ public static class UserEndpoints
                 recoveryCodes = Security.RecoveryCodeService.Eligible(user)
                     ? await db.RecoveryCodes.CountAsync(c => c.PlatformUserId == user.Id && c.UsedAt == null)
                     : (int?)null,
+                language = user.Language,
             });
         }).AllowAnonymous();
+
+        // Sprache der Oberfläche im eigenen Konto speichern, damit sie auf jedem PC gilt.
+        app.MapPut("/api/me/language", async (LanguageRequest req, CurrentUser cu, YlmDbContext db) =>
+        {
+            var user = await cu.TryGetAsync();
+            if (user is null) return Results.Unauthorized();
+            var lang = req.Language?.Trim().ToLowerInvariant();
+            if (lang is not (null or "" or "de" or "en")) throw ApiException.BadRequest("invalid_language", "Unbekannte Sprache. Erlaubt sind de und en.");
+            var tracked = await db.PlatformUsers.FirstAsync(u => u.Id == user.Id);
+            tracked.Language = string.IsNullOrEmpty(lang) ? null : lang;
+            await db.SaveChangesAsync();
+            return Results.NoContent();
+        }).RequireAuthorization();
 
         // Profilbild des angemeldeten Entra-Benutzers aus Microsoft 365 (Heim-Tenant, App-Berechtigung User.Read.All).
         // Ohne Bild oder Berechtigung: 404, die Oberfläche zeigt dann die Initialen. Zwischengespeichert, damit nicht jede Seite Graph fragt.
@@ -131,3 +145,5 @@ public static class UserEndpoints
             user.TenantAssignments.Add(new PlatformUserTenant { PlatformUserId = user.Id, TenantId = t });
     }
 }
+
+public sealed record LanguageRequest(string? Language);

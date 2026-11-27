@@ -4,6 +4,7 @@ import { api, batchStatusLabels, fmtDate, type Batch, type BatchCandidate, type 
 import { Badge, Card, Empty, ErrorBox, Field, GroupSearch, Info, PageHeader, Spinner, useAction, useApi, useLiveSearch } from '../ui';
 import { RegisterModes } from '../register';
 import { ChooseTenant, useTenant } from '../tenant';
+import { tr } from '../i18n';
 
 const statusTone: Record<BatchStatus, 'info' | 'ok' | 'neutral'> = { Open: 'info', Completed: 'ok', Cancelled: 'neutral' };
 
@@ -18,19 +19,19 @@ export default function BatchesPage() {
   return (
     <>
       <PageHeader
-        title="Stapelregistrierung"
-        subtitle="Viele Personen nacheinander mit Keys versorgen: Liste aus Gruppe, CSV oder Suche, dann Key für Key einstecken."
-        actions={tenantId && <Link className="btn primary" to="/batches/new">Neuer Stapel</Link>}
+        title={tr("Stapelregistrierung")}
+        subtitle={tr("Viele Personen nacheinander mit Keys versorgen: Liste aus Gruppe, CSV oder Suche, dann Key für Key einstecken.")}
+        actions={tenantId && <Link className="btn primary" to="/batches/new">{tr("Neuer Stapel")}</Link>}
       />
       <RegisterModes />
-      {!tenantId && <ChooseTenant purpose="Für Stapel" />}
+      {!tenantId && <ChooseTenant purpose={tr("Für Stapel")} />}
       <ErrorBox error={error} />
       {loading && !data && <Spinner />}
-      {tenantId && data && data.length === 0 && <Empty>Für {tenant?.displayName} gibt es noch keinen Stapel.</Empty>}
+      {tenantId && data && data.length === 0 && <Empty>{tr("Für {displayName} gibt es noch keinen Stapel.", { displayName: tenant?.displayName })}</Empty>}
       {data && data.length > 0 && (
         <div className="card table-wrap" style={{ padding: 0 }}>
           <table>
-            <thead><tr><th>Name</th><th>Quelle</th><th>Status</th><th>Fortschritt</th><th>Angelegt</th></tr></thead>
+            <thead><tr><th>{tr("Name")}</th><th>{tr("Quelle")}</th><th>{tr("Status")}</th><th>{tr("Fortschritt")}</th><th>{tr("Angelegt")}</th></tr></thead>
             <tbody>
               {data.map((b) => (
                 <tr key={b.id}>
@@ -55,9 +56,9 @@ export function BatchProgress({ counts }: { counts: BatchSummary['counts'] }) {
     <div>
       <div className="progress" style={{ margin: '2px 0 4px' }}><span style={{ width: (counts.total ? (finished / counts.total) * 100 : 0) + '%' }} /></div>
       <span className="small">
-        {counts.done} von {counts.total} registriert
-        {counts.failed > 0 && <span className="tone-warn"> · {counts.failed} fehlgeschlagen</span>}
-        {counts.skipped > 0 && <span className="muted"> · {counts.skipped} übersprungen</span>}
+        {tr("{done} von {total} registriert", { done: counts.done, total: counts.total })}
+        {counts.failed > 0 && <span className="tone-warn"> {tr("· {failed} fehlgeschlagen", { failed: counts.failed })}</span>}
+        {counts.skipped > 0 && <span className="muted"> {tr("· {skipped} übersprungen", { skipped: counts.skipped })}</span>}
       </span>
     </div>
   );
@@ -101,14 +102,15 @@ export function NewBatchPage() {
       const known = new Set(cur.map((r) => r.entraUserId));
       return [...cur, ...list.filter((c) => !known.has(c.entraUserId)).map(toRow)];
     });
-    setSourceLabel((cur) => (cur && cur !== label ? 'Gemischt' : label));
+    setSourceLabel((cur) => (cur && cur !== label ? tr("Gemischt") : label));
   };
 
   const load = (body: object, label: string) => run(async () => {
     const r = await api.post<{ candidates: BatchCandidate[]; errors: { line: number; value: string; message: string }[] }>(`/api/tenants/${tenantId}/batches/candidates`, body);
     merge(r.candidates, label);
     setCsvErrors(r.errors);
-    if (!name && label.startsWith('Gruppe: ')) setName(label.slice(8));
+    const prefix = tr("Gruppe: {name}", { name: '' });
+    if (!name && label.startsWith(prefix)) setName(label.slice(prefix.length));
   });
 
   const update = (id: string, patch: Partial<Row>) => setRows((cur) => cur.map((r) => (r.entraUserId === id ? { ...r, ...patch } : r)));
@@ -132,70 +134,69 @@ export function NewBatchPage() {
     navigate('/batches/' + b.id);
   });
 
-  if (!tenantId) return <><PageHeader title="Neuer Stapel" /><ChooseTenant purpose="Für Stapel" /></>;
+  if (!tenantId) return <><PageHeader title={tr("Neuer Stapel")} /><ChooseTenant purpose={tr("Für Stapel")} /></>;
 
   return (
     <>
-      <PageHeader title="Neuer Stapel" subtitle={`Personen für die Stapelregistrierung in ${tenant?.displayName ?? 'diesem Tenant'} zusammenstellen`} actions={<Link className="btn" to="/batches">Zurück</Link>} />
-      <Card title="1. Personen hinzufügen">
+      <PageHeader title={tr("Neuer Stapel")} subtitle={tr("Personen für die Stapelregistrierung in {n} zusammenstellen", { n: tenant?.displayName ?? tr("diesem Tenant") })} actions={<Link className="btn" to="/batches">{tr("Zurück")}</Link>} />
+      <Card title={tr("1. Personen hinzufügen")}>
         <div className="tabs">
-          <button className={source === 'group' ? 'selected' : ''} onClick={() => setSource('group')}>Entra-Gruppe</button>
-          <button className={source === 'csv' ? 'selected' : ''} onClick={() => setSource('csv')}>CSV-Datei</button>
-          <button className={source === 'search' ? 'selected' : ''} onClick={() => setSource('search')}>Personen suchen</button>
+          <button className={source === 'group' ? 'selected' : ''} onClick={() => setSource('group')}>{tr("Entra-Gruppe")}</button>
+          <button className={source === 'csv' ? 'selected' : ''} onClick={() => setSource('csv')}>{tr("CSV-Datei")}</button>
+          <button className={source === 'search' ? 'selected' : ''} onClick={() => setSource('search')}>{tr("Personen suchen")}</button>
         </div>
         {source === 'group' && (
           <>
-            <p className="small muted">Alle Mitglieder der Gruppe (auch über verschachtelte Gruppen) kommen in die Liste. Sie können danach einzelne abwählen.</p>
-            <GroupSearch tenantId={tenantId} onPick={(g) => void load({ groupId: g.id }, 'Gruppe: ' + g.name)} />
+            <p className="small muted">{tr("Alle Mitglieder der Gruppe (auch über verschachtelte Gruppen) kommen in die Liste. Sie können danach einzelne abwählen.")}</p>
+            <GroupSearch tenantId={tenantId} onPick={(g) => void load({ groupId: g.id }, tr("Gruppe: {name}", { name: g.name }))} />
           </>
         )}
         {source === 'csv' && <CsvSource busy={busy} onLoad={(csv) => void load({ csv }, 'CSV')} />}
-        {source === 'search' && <PersonSearch tenantId={tenantId} exclude={rows.map((r) => r.entraUserId)} onPick={(id) => void load({ userIds: [id] }, 'Auswahl')} />}
-        {busy && <Spinner label="Personen werden geprüft …" />}
+        {source === 'search' && <PersonSearch tenantId={tenantId} exclude={rows.map((r) => r.entraUserId)} onPick={(id) => void load({ userIds: [id] }, tr("Auswahl"))} />}
+        {busy && <Spinner label={tr("Personen werden geprüft …")} />}
         {csvErrors.length > 0 && (
           <Info tone="warn">
-            <strong>{csvErrors.length} Zeile(n) wurden nicht übernommen:</strong>
-            <ul>{csvErrors.slice(0, 30).map((e, i) => <li key={i}>{e.line > 0 ? `Zeile ${e.line}: ` : ''}{e.value} – {e.message}</li>)}</ul>
+            <strong>{tr("{length} Zeile(n) wurden nicht übernommen:", { length: csvErrors.length })}</strong>
+            <ul>{csvErrors.slice(0, 30).map((e, i) => <li key={i}>{e.line > 0 ? tr("Zeile {line}: ", { line: e.line }) : ''}{e.value} – {e.message}</li>)}</ul>
           </Info>
         )}
       </Card>
 
       {rows.length > 0 && (
-        <Card title={`2. Liste prüfen (${selected.length} von ${rows.length} ausgewählt)`} actions={<button className="link" onClick={() => { setRows([]); setSourceLabel(undefined); setCsvErrors([]); }}>Liste leeren</button>}>
-          {withKey > 0 && <Info tone="warn">{withKey} Person(en) haben bereits einen Key (im Inventar oder als YubiKey in Entra). Sie sind abgewählt; bei Bedarf wieder anhaken.</Info>}
+        <Card title={tr("2. Liste prüfen ({length} von {length2} ausgewählt)", { length: selected.length, length2: rows.length })} actions={<button className="link" onClick={() => { setRows([]); setSourceLabel(undefined); setCsvErrors([]); }}>{tr("Liste leeren")}</button>}>
+          {withKey > 0 && <Info tone="warn">{tr("{withKey} Person(en) haben bereits einen Key (im Inventar oder als YubiKey in Entra). Sie sind abgewählt; bei Bedarf wieder anhaken.", { withKey })}</Info>}
           <p className="small muted">
-            Die Reihenfolge der Liste ist die Reihenfolge am Agent: Jeder eingesteckte Key geht an die nächste offene Person.
-            Steht bei einer Person eine Seriennummer, bekommt nur genau dieser Key die Person, egal an welcher Stelle er eingesteckt wird.
+            {tr("Die Reihenfolge der Liste ist die Reihenfolge am Agent: Jeder eingesteckte Key geht an die nächste offene Person. Steht bei einer Person eine Seriennummer, bekommt nur genau dieser Key die Person, egal an welcher Stelle er eingesteckt wird.")}
           </p>
           <div className="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th><input type="checkbox" aria-label="Alle auswählen" checked={selected.length === rows.length} onChange={(e) => setRows((cur) => cur.map((r) => ({ ...r, selected: e.target.checked && r.accountEnabled })))} /></th>
-                  <th>Person</th><th>Keys</th><th>Profil</th><th>Feste Seriennummer (optional)</th><th />
+                  <th><input type="checkbox" aria-label={tr("Alle auswählen")} checked={selected.length === rows.length} onChange={(e) => setRows((cur) => cur.map((r) => ({ ...r, selected: e.target.checked && r.accountEnabled })))} /></th>
+                  <th>{tr("Person")}</th><th>{tr("Keys")}</th><th>{tr("Profil")}</th><th>{tr("Feste Seriennummer (optional)")}</th><th />
                 </tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.entraUserId} className={r.selected ? '' : 'muted'}>
-                    <td><input type="checkbox" checked={r.selected} disabled={!r.accountEnabled} onChange={(e) => update(r.entraUserId, { selected: e.target.checked })} aria-label={'Auswählen ' + r.userPrincipalName} /></td>
+                    <td><input type="checkbox" checked={r.selected} disabled={!r.accountEnabled} onChange={(e) => update(r.entraUserId, { selected: e.target.checked })} aria-label={tr("Auswählen {userPrincipalName}", { userPrincipalName: r.userPrincipalName })} /></td>
                     <td><strong>{r.displayName ?? r.userPrincipalName}</strong><br /><span className="small muted">{r.userPrincipalName}{r.department ? ' · ' + r.department : ''}</span></td>
                     <td><span className="badges">
-                      {!r.accountEnabled && <Badge tone="error">deaktiviert</Badge>}
-                      {r.activeKeys > 0 && <Badge tone="info">{r.activeKeys} im Inventar</Badge>}
-                      {(r.entraYubiKeys ?? 0) > r.activeKeys && <Badge tone="warn">{r.entraYubiKeys} YubiKey(s) in Entra</Badge>}
-                      {(r.entraOtherPasskeys ?? 0) > 0 && <Badge>{r.entraOtherPasskeys} anderer Passkey</Badge>}
-                      {r.accountEnabled && !hasKey(r) && !r.entraOtherPasskeys && <Badge>kein Key</Badge>}
+                      {!r.accountEnabled && <Badge tone="error">{tr("deaktiviert")}</Badge>}
+                      {r.activeKeys > 0 && <Badge tone="info">{tr("{activeKeys} im Inventar", { activeKeys: r.activeKeys })}</Badge>}
+                      {(r.entraYubiKeys ?? 0) > r.activeKeys && <Badge tone="warn">{tr("{entraYubiKeys} YubiKey(s) in Entra", { entraYubiKeys: r.entraYubiKeys })}</Badge>}
+                      {(r.entraOtherPasskeys ?? 0) > 0 && <Badge>{tr("{entraOtherPasskeys} anderer Passkey", { entraOtherPasskeys: r.entraOtherPasskeys })}</Badge>}
+                      {r.accountEnabled && !hasKey(r) && !r.entraOtherPasskeys && <Badge>{tr("kein Key")}</Badge>}
                     </span></td>
                     <td>
-                      <select value={r.profileId ?? ''} onChange={(e) => update(r.entraUserId, { profileId: e.target.value || null, profileGroupName: null })} aria-label="Profil">
-                        <option value="">Stapel-Standard: {profileName(defaultProfileId) ?? '–'}</option>
+                      <select value={r.profileId ?? ''} onChange={(e) => update(r.entraUserId, { profileId: e.target.value || null, profileGroupName: null })} aria-label={tr("Profil")}>
+                        <option value="">{tr("Stapel-Standard: {n}", { n: profileName(defaultProfileId) ?? '–' })}</option>
                         {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
-                      {r.profileId && r.profileGroupName && <div className="small muted">{r.profileGroupName === 'CSV' ? 'aus der CSV-Datei' : 'über Gruppe ' + r.profileGroupName}</div>}
+                      {r.profileId && r.profileGroupName && <div className="small muted">{r.profileGroupName === 'CSV' ? tr("aus der CSV-Datei") : tr("über Gruppe {profileGroupName}", { profileGroupName: r.profileGroupName })}</div>}
                     </td>
-                    <td><input className="mono" style={{ width: 130 }} inputMode="numeric" placeholder="beliebiger Key" value={r.serialText} onChange={(e) => update(r.entraUserId, { serialText: e.target.value })} /></td>
-                    <td><button className="link" onClick={() => setRows((cur) => cur.filter((x) => x.entraUserId !== r.entraUserId))}>Entfernen</button></td>
+                    <td><input className="mono" style={{ width: 130 }} inputMode="numeric" placeholder={tr("beliebiger Key")} value={r.serialText} onChange={(e) => update(r.entraUserId, { serialText: e.target.value })} /></td>
+                    <td><button className="link" onClick={() => setRows((cur) => cur.filter((x) => x.entraUserId !== r.entraUserId))}>{tr("Entfernen")}</button></td>
                   </tr>
                 ))}
               </tbody>
@@ -205,21 +206,21 @@ export function NewBatchPage() {
       )}
 
       {rows.length > 0 && (
-        <Card title="3. Stapel anlegen">
+        <Card title={tr("3. Stapel anlegen")}>
           <div className="grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
-            <Field label="Name" hint="Zum Wiederfinden, z. B. „Rollout Vertrieb März“."><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Stapel vom heutigen Datum" /></Field>
-            <Field label="Standardprofil" hint="Gilt für alle ohne eigenes Profil oder Gruppenprofil.">
+            <Field label={tr("Name")} hint={tr("Zum Wiederfinden, z. B. „Rollout Vertrieb März“.")}><input value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("Stapel vom heutigen Datum")} /></Field>
+            <Field label={tr("Standardprofil")} hint={tr("Gilt für alle ohne eigenes Profil oder Gruppenprofil.")}>
               <select value={defaultProfileId} onChange={(e) => setDefaultProfileId(e.target.value)}>
-                {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.tenantId ? '' : ' (alle Tenants)'}</option>)}
+                {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.tenantId ? '' : tr(" (alle Tenants)")}</option>)}
               </select>
             </Field>
           </div>
-          {invalidSerial && <Info tone="error">Die Seriennummer bei {invalidSerial.userPrincipalName} ist keine Zahl.</Info>}
-          {duplicateSerial && <Info tone="error">Seriennummer {duplicateSerial.serialText} ist mehreren Personen zugeordnet.</Info>}
+          {invalidSerial && <Info tone="error">{tr("Die Seriennummer bei {userPrincipalName} ist keine Zahl.", { userPrincipalName: invalidSerial.userPrincipalName })}</Info>}
+          {duplicateSerial && <Info tone="error">{tr("Seriennummer {serialText} ist mehreren Personen zugeordnet.", { serialText: duplicateSerial.serialText })}</Info>}
           <ErrorBox error={error} />
           <div className="actions">
             <button className="primary" disabled={busy || selected.length === 0 || !defaultProfileId || !!invalidSerial || !!duplicateSerial} onClick={create}>
-              Stapel mit {selected.length} Person(en) anlegen
+              {tr("Stapel mit {length} Person(en) anlegen", { length: selected.length })}
             </button>
           </div>
         </Card>
@@ -235,15 +236,13 @@ function CsvSource({ busy, onLoad }: { busy: boolean; onLoad: (csv: string) => v
   return (
     <>
       <p className="small muted">
-        Spalten mit Semikolon oder Komma getrennt, erste Zeile als Kopf: <code>UPN</code> (Pflicht, alternativ <code>Mail</code>),
-        optional <code>Seriennummer</code> (fester Key für die Person) und <code>Profil</code> (Name eines Registrierungsprofils).
-        Ohne Kopfzeile gilt: 1. Spalte UPN, 2. Seriennummer, 3. Profil.
+        {tr("Spalten mit Semikolon oder Komma getrennt, erste Zeile als Kopf:")} <code>{tr("UPN")}</code> {tr("(Pflicht, alternativ")} <code>{tr("Mail")}</code>{tr("), optional")} <code>{tr("Seriennummer")}</code> {tr("(fester Key für die Person) und")} <code>{tr("Profil")}</code> {tr("(Name eines Registrierungsprofils). Ohne Kopfzeile gilt: 1. Spalte UPN, 2. Seriennummer, 3. Profil.")}
       </p>
-      <Field label="Datei"><input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => void readFile(e.target.files?.[0])} /></Field>
-      <Field label="oder Inhalt einfügen">
-        <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder={'UPN;Seriennummer;Profil\nanna@contoso.com;;\nben@contoso.com;31234567;Standard'} style={{ width: '100%', fontFamily: 'monospace' }} />
+      <Field label={tr("Datei")}><input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => void readFile(e.target.files?.[0])} /></Field>
+      <Field label={tr("oder Inhalt einfügen")}>
+        <textarea rows={5} value={text} onChange={(e) => setText(e.target.value)} placeholder={tr("UPN;Seriennummer;Profil\nanna@contoso.com;;\nben@contoso.com;31234567;Standard")} style={{ width: '100%', fontFamily: 'monospace' }} />
       </Field>
-      <div className="actions"><button disabled={busy || !text.trim()} onClick={() => onLoad(text)}>Liste prüfen und übernehmen</button></div>
+      <div className="actions"><button disabled={busy || !text.trim()} onClick={() => onLoad(text)}>{tr("Liste prüfen und übernehmen")}</button></div>
     </>
   );
 }
@@ -257,7 +256,7 @@ export function PersonSearch({ tenantId, exclude, onPick }: { tenantId: string; 
   return (
     <>
       <div className="toolbar" style={{ margin: 0 }}>
-        <input type="search" placeholder="Name, UPN oder Mail eintippen (ab 2 Zeichen)" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
+        <input type="search" placeholder={tr("Name, UPN oder Mail eintippen (ab 2 Zeichen)")} value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} />
         {busy && <Spinner />}
       </div>
       <ErrorBox error={error} />
@@ -266,10 +265,10 @@ export function PersonSearch({ tenantId, exclude, onPick }: { tenantId: string; 
           {visible.map((u) => (
             <button key={u.id} disabled={!u.accountEnabled} onClick={() => onPick(u.id)}>
               <span><strong>{u.displayName ?? u.userPrincipalName}</strong><br /><span className="small muted">{u.userPrincipalName}{u.department ? ' · ' + u.department : ''}</span></span>
-              <span>{u.accountEnabled ? '+ hinzufügen' : <Badge tone="error">deaktiviert</Badge>}</span>
+              <span>{u.accountEnabled ? tr("+ hinzufügen") : <Badge tone="error">{tr("deaktiviert")}</Badge>}</span>
             </button>
           ))}
-          {visible.length === 0 && <span className="muted small">Keine (weitere) Person gefunden.</span>}
+          {visible.length === 0 && <span className="muted small">{tr("Keine (weitere) Person gefunden.")}</span>}
         </div>
       )}
     </>

@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router';
 import { api, fmtDate, type Tenant } from '../api';
 import { useCan } from '../auth';
 import { Badge, Empty, ErrorBox, Field, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
+import { tr } from '../i18n';
 
 export default function TenantsPage() {
   const [params] = useSearchParams();
@@ -13,14 +14,14 @@ export default function TenantsPage() {
 
   return (
     <>
-      <PageHeader title="Tenants" subtitle="Angebundene Entra-ID-Umgebungen" actions={can('ManageTenants') && <button className="primary" onClick={() => setAdding(true)}>Tenant hinzufügen</button>} />
-      <ErrorBox error={consentError ? 'Onboarding fehlgeschlagen: ' + consentError : error} />
+      <PageHeader title={tr("Tenants")} subtitle={tr("Angebundene Entra-ID-Umgebungen")} actions={can('ManageTenants') && <button className="primary" onClick={() => setAdding(true)}>{tr("Tenant hinzufügen")}</button>} />
+      <ErrorBox error={consentError ? tr("Onboarding fehlgeschlagen: {consentError}", { consentError }) : error} />
       {loading && !data && <Spinner />}
-      {data && data.length === 0 && <Empty>Noch kein Tenant angebunden.</Empty>}
+      {data && data.length === 0 && <Empty>{tr("Noch kein Tenant angebunden.")}</Empty>}
       {data && data.length > 0 && (
         <div className="card table-wrap" style={{ padding: 0 }}>
           <table>
-            <thead><tr><th>Tenant</th><th>Domain</th><th>Prüfungen</th><th>Zielgruppe</th><th>Letzter Sync</th><th>Status</th></tr></thead>
+            <thead><tr><th>{tr("Tenant")}</th><th>{tr("Domain")}</th><th>{tr("Prüfungen")}</th><th>{tr("Zielgruppe")}</th><th>{tr("Letzter Sync")}</th><th>{tr("Status")}</th></tr></thead>
             <tbody>
               {data.map((t) => {
                 const failed = t.checks.filter((c) => c.status === 'Failed').length;
@@ -29,10 +30,10 @@ export default function TenantsPage() {
                   <tr key={t.id}>
                     <td><Link to={'/tenants/' + t.id}>{t.displayName}</Link></td>
                     <td className="small">{t.defaultDomain}</td>
-                    <td>{failed > 0 ? <Badge tone="error">{failed} offen</Badge> : warn > 0 ? <Badge tone="warn">{warn} Hinweis(e)</Badge> : t.checks.length ? <Badge tone="ok">alles ok</Badge> : '–'}</td>
-                    <td>{t.targetIncludeGroups.length === 0 ? 'Alle Benutzer' : t.targetIncludeGroups.map((g) => g.name).join(', ')}{t.targetExcludeGroups.length > 0 && <span className="muted small"> ohne {t.targetExcludeGroups.map((g) => g.name).join(', ')}</span>}{t.targetUserCount != null && <span className="muted small"> ({t.targetUserCount})</span>}</td>
-                    <td>{t.lastSyncSucceeded === false ? <Badge tone="error">Fehler</Badge> : <span className="small">{fmtDate(t.lastSyncAt)}</span>}</td>
-                    <td>{t.status === 'Active' ? <Badge tone="ok">aktiv</Badge> : t.status === 'PendingConsent' ? <Badge tone="warn">Consent fehlt</Badge> : <Badge>offboarded, Löschung {fmtDate(t.dataDeletionDueAt, false)}</Badge>}</td>
+                    <td>{failed > 0 ? <Badge tone="error">{tr("{failed} offen", { failed })}</Badge> : warn > 0 ? <Badge tone="warn">{tr("{warn} Hinweis(e)", { warn })}</Badge> : t.checks.length ? <Badge tone="ok">{tr("alles ok")}</Badge> : '–'}</td>
+                    <td>{t.targetIncludeGroups.length === 0 ? tr("Alle Benutzer") : t.targetIncludeGroups.map((g) => g.name).join(', ')}{t.targetExcludeGroups.length > 0 && <span className="muted small"> {tr("ohne {n}", { n: t.targetExcludeGroups.map((g) => g.name).join(', ') })}</span>}{t.targetUserCount != null && <span className="muted small"> ({t.targetUserCount})</span>}</td>
+                    <td>{t.lastSyncSucceeded === false ? <Badge tone="error">{tr("Fehler")}</Badge> : <span className="small">{fmtDate(t.lastSyncAt)}</span>}</td>
+                    <td>{t.status === 'Active' ? <Badge tone="ok">{tr("aktiv")}</Badge> : t.status === 'PendingConsent' ? <Badge tone="warn">{tr("Consent fehlt")}</Badge> : <Badge>{tr("offboarded, Löschung {n}", { n: fmtDate(t.dataDeletionDueAt, false) })}</Badge>}</td>
                   </tr>
                 );
               })}
@@ -53,13 +54,13 @@ function AddTenantModal({ onClose }: { onClose: () => void }) {
     window.location.href = url;
   });
   return (
-    <Modal title="Tenant hinzufügen" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy} onClick={go}>Weiter zu Microsoft</button></>}>
+    <Modal title={tr("Tenant hinzufügen")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="primary" disabled={busy} onClick={go}>{tr("Weiter zu Microsoft")}</button></>}>
       <ol>
-        <li>Sie werden zu Microsoft weitergeleitet. Melden Sie sich dort als <strong>Globaler Administrator</strong> des Kunden-Tenants an.</li>
-        <li>Erteilen Sie der App „Yubikey Lifecycle Manager“ die angezeigten Berechtigungen (Admin-Consent).</li>
-        <li>Danach prüft die Plattform die FIDO2-Einstellungen des Tenants und zeigt, was noch fehlt.</li>
+        <li>{tr("Sie werden zu Microsoft weitergeleitet. Melden Sie sich dort als")} <strong>{tr("Globaler Administrator")}</strong> {tr("des Kunden-Tenants an.")}</li>
+        <li>{tr("Erteilen Sie der App „Yubikey Lifecycle Manager“ die angezeigten Berechtigungen (Admin-Consent).")}</li>
+        <li>{tr("Danach prüft die Plattform die FIDO2-Einstellungen des Tenants und zeigt, was noch fehlt.")}</li>
       </ol>
-      <Field label="Tenant-Domain oder -ID (optional)" hint="Hilft Microsoft, direkt den richtigen Tenant anzuzeigen.">
+      <Field label={tr("Tenant-Domain oder -ID (optional)")} hint={tr("Hilft Microsoft, direkt den richtigen Tenant anzuzeigen.")}>
         <input value={hint} onChange={(e) => setHint(e.target.value)} placeholder="contoso.onmicrosoft.com" />
       </Field>
       <ErrorBox error={error} />

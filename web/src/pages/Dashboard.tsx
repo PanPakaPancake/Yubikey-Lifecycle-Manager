@@ -8,6 +8,7 @@ import { Icon, type IconName } from '../icons';
 import { useTenant } from '../tenant';
 import type { CertificateStatus } from './Platform';
 import type { UpdateSummary } from '../changelog';
+import { locale, tr } from '../i18n';
 
 interface DashboardData {
   generatedAt: string; byStatus: Record<string, number>; inStock: number; total: number; needsDetails: number;
@@ -19,7 +20,7 @@ interface DashboardData {
   tenants: { id: string; displayName: string; lastSyncAt?: string; lastSyncSucceeded?: boolean; targetUserCount?: number; active: number; inStock: number; usersWithKey: number; checksFailed: number }[];
 }
 
-const monthLabel = (m: string) => new Date(m + '-01').toLocaleDateString('de-DE', { month: 'short', year: '2-digit' });
+const monthLabel = (m: string) => new Date(m + '-01').toLocaleDateString(locale(), { month: 'short', year: '2-digit' });
 
 /** Gewählter Tenant aus dem Umschalter oder (ohne Auswahl) alle Tenants. */
 export default function DashboardPage() {
@@ -37,19 +38,19 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title={ctx.tenant ? 'Übersicht ' + ctx.tenant.displayName : 'Übersicht aller Tenants'}
-        subtitle={data ? 'Stand ' + fmtDate(data.generatedAt) : undefined}
+        title={ctx.tenant ? tr("Übersicht {displayName}", { displayName: ctx.tenant.displayName }) : tr("Übersicht aller Tenants")}
+        subtitle={data ? tr("Stand {generatedAt}", { generatedAt: fmtDate(data.generatedAt) }) : undefined}
         actions={can('ReadReports') && (
-          <MenuButton label="Exportieren" items={[
-            { label: 'Bericht (PDF)', hint: 'Kennzahlen, Ausgaben pro Monat, Firmware', icon: 'scroll', onClick: () => download('/api/exports/dashboard.pdf' + q) },
-            { label: 'Wer hat welchen Key (Excel)', hint: 'Person, Key, Verwahrer', icon: 'users', onClick: () => download('/api/exports/assignments.xlsx' + q) },
-            { label: 'Alle Keys (CSV)', hint: 'Inventar mit Status, Tags und Zusatzfeldern', icon: 'key', onClick: () => download('/api/exports/keys.csv' + q) },
-            { label: 'Registrierungen (CSV)', hint: 'Verlauf inkl. entfernter Registrierungen', icon: 'list', onClick: () => download('/api/exports/registrations.csv' + q) },
+          <MenuButton label={tr("Exportieren")} items={[
+            { label: tr("Bericht (PDF)"), hint: tr("Kennzahlen, Ausgaben pro Monat, Firmware"), icon: 'scroll', onClick: () => download('/api/exports/dashboard.pdf' + q) },
+            { label: tr("Wer hat welchen Key (Excel)"), hint: tr("Person, Key, Verwahrer"), icon: 'users', onClick: () => download('/api/exports/assignments.xlsx' + q) },
+            { label: tr("Alle Keys (CSV)"), hint: tr("Inventar mit Status, Tags und Zusatzfeldern"), icon: 'key', onClick: () => download('/api/exports/keys.csv' + q) },
+            { label: tr("Registrierungen (CSV)"), hint: tr("Verlauf inkl. entfernter Registrierungen"), icon: 'list', onClick: () => download('/api/exports/registrations.csv' + q) },
           ]} />
         )}
       />
       <ErrorBox error={error} />
-      {!data && loading && <Spinner label="Wird geladen …" />}
+      {!data && loading && <Spinner label={tr("Wird geladen …")} />}
       {data && (
         <>
           <div className="dash">
@@ -57,21 +58,21 @@ export default function DashboardPage() {
           <ActionItems data={data} keysLink={keysLink} cert={cert} update={update} />
 
           <div className="grid cols-4 dash-kpis">
-            <Kpi icon="users" className="kpi-coverage" label="Abdeckung Zielgruppe" value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
-              sub={data.targetUsers != null ? `${data.usersWithKey} von ${data.targetUsers} Personen mit Key` : `${data.usersWithKey} Personen mit Key, Zielgruppe noch nicht ermittelt`} to="/keys?view=people"
-              footer={data.targetAllUsers && <span className="kpi-foot">Zielgruppe: alle aktiven Konten · <Link to={tenantId ? '/tenant' : '/tenants'}>Zielgruppe festlegen</Link></span>}
+            <Kpi icon="users" className="kpi-coverage" label={tr("Abdeckung Zielgruppe")} value={data.coveragePercent != null ? data.coveragePercent.toFixed(0) + ' %' : '–'}
+              sub={data.targetUsers != null ? tr("{usersWithKey} von {targetUsers} Personen mit Key", { usersWithKey: data.usersWithKey, targetUsers: data.targetUsers }) : tr("{usersWithKey} Personen mit Key, Zielgruppe noch nicht ermittelt", { usersWithKey: data.usersWithKey })} to="/keys?view=people"
+              footer={data.targetAllUsers && <span className="kpi-foot">{tr("Zielgruppe: alle aktiven Konten ·")} <Link to={tenantId ? '/tenant' : '/tenants'}>{tr("Zielgruppe festlegen")}</Link></span>}
               aside={data.coveragePercent != null && <Donut size={64} thickness={9} parts={[
-                { key: 'with', value: Math.min(100, data.coveragePercent), color: 'var(--ok)', label: 'Mit Key' },
-                { key: 'without', value: Math.max(0, 100 - data.coveragePercent), color: 'transparent', label: 'Ohne Key' },
+                { key: 'with', value: Math.min(100, data.coveragePercent), color: 'var(--ok)', label: tr("Mit Key") },
+                { key: 'without', value: Math.max(0, 100 - data.coveragePercent), color: 'transparent', label: tr("Ohne Key") },
               ]} />} />
-            <Kpi icon="key" className="kpi-active" label="Keys aktiv" value={data.byStatus.Active ?? 0} sub={`${data.total} Keys gesamt`} to={keysLink('Active')} />
-            <Kpi icon="box" className="kpi-stock" label="Im Lager" value={data.inStock} sub={`${data.byStatus.Locked ?? 0} gesperrt, ${data.byStatus.Retired ?? 0} ausgemustert`} to={keysLink('InStock')} />
-            <Kpi icon="shield" className="kpi-firmware" label="Keys mit Sicherheitshinweis" value={data.vulnerableKeys} tone={data.vulnerableKeys ? 'warn' : undefined}
+            <Kpi icon="key" className="kpi-active" label={tr("Keys aktiv")} value={data.byStatus.Active ?? 0} sub={tr("{total} Keys gesamt", { total: data.total })} to={keysLink('Active')} />
+            <Kpi icon="box" className="kpi-stock" label={tr("Im Lager")} value={data.inStock} sub={tr("{n} gesperrt, {n2} ausgemustert", { n: data.byStatus.Locked ?? 0, n2: data.byStatus.Retired ?? 0 })} to={keysLink('InStock')} />
+            <Kpi icon="shield" className="kpi-firmware" label={tr("Keys mit Sicherheitshinweis")} value={data.vulnerableKeys} tone={data.vulnerableKeys ? 'warn' : undefined}
               sub={advisorySub(data)} to="/sicherheitshinweise" />
           </div>
 
           <div className="grid cols-2 dash-charts" style={{ marginTop: 16 }}>
-            <Card title="Ausgegebene Keys pro Monat" className="card-months">
+            <Card title={tr("Ausgegebene Keys pro Monat")} className="card-months">
               <div className="bars">
                 {data.issuedPerMonth.map((m) => (
                   <div className="bar" key={m.month} title={`${monthLabel(m.month)}: ${m.count}`}>
@@ -82,10 +83,10 @@ export default function DashboardPage() {
                 ))}
               </div>
             </Card>
-            <Card title="Keys nach Status" className="card-status">
+            <Card title={tr("Keys nach Status")} className="card-status">
               <div className="status-chart">
                 <Donut parts={(Object.keys(statusLabels) as KeyStatus[]).map((s) => ({ key: s, value: data.byStatus[s] ?? 0, color: statusColor[s], label: statusLabels[s] }))}
-                  center={<><strong>{data.total}</strong><span className="small muted">Keys</span></>} />
+                  center={<><strong>{data.total}</strong><span className="small muted">{tr("Keys")}</span></>} />
                 <ul className="status-legend">
                   {(Object.keys(statusLabels) as KeyStatus[]).map((s) => (
                     <li key={s}><Link to={keysLink(s)}><i style={{ background: statusColor[s] }} />{statusLabels[s]}<span className="num">{data.byStatus[s] ?? 0}</span></Link></li>
@@ -96,10 +97,10 @@ export default function DashboardPage() {
           </div>
 
           <div className="grid cols-2 dash-tables" style={{ marginTop: 16 }}>
-            <Card title={<span id="firmware">Firmware-Stände</span>} className="card-firmware">
-              {data.firmware.length === 0 ? <Empty>Noch keine Firmware-Daten.</Empty> : (
+            <Card title={<span id="firmware">{tr("Firmware-Stände")}</span>} className="card-firmware">
+              {data.firmware.length === 0 ? <Empty>{tr("Noch keine Firmware-Daten.")}</Empty> : (
                 <table>
-                  <thead><tr><th>Firmware</th><th>Keys</th><th>Hinweise</th></tr></thead>
+                  <thead><tr><th>{tr("Firmware")}</th><th>{tr("Keys")}</th><th>{tr("Hinweise")}</th></tr></thead>
                   <tbody>
                     {data.firmware.map((f) => (
                       <tr key={f.firmware}>
@@ -112,18 +113,18 @@ export default function DashboardPage() {
                 </table>
               )}
             </Card>
-            <Card title="Tenants" className="card-tenants">
-              {data.tenants.length === 0 ? <Empty>Noch kein Tenant angebunden. <Link to="/tenants">Tenant hinzufügen</Link></Empty> : (
+            <Card title={tr("Tenants")} className="card-tenants">
+              {data.tenants.length === 0 ? <Empty>{tr("Noch kein Tenant angebunden.")} <Link to="/tenants">{tr("Tenant hinzufügen")}</Link></Empty> : (
                 <table>
-                  <thead><tr><th>Tenant</th><th>Aktiv</th><th>Lager</th><th>Abdeckung</th><th>Sync</th></tr></thead>
+                  <thead><tr><th>{tr("Tenant")}</th><th>{tr("Aktiv")}</th><th>{tr("Lager")}</th><th>{tr("Abdeckung")}</th><th>{tr("Sync")}</th></tr></thead>
                   <tbody>
                     {data.tenants.map((t) => (
                       <tr key={t.id}>
-                        <td><Link to={'/tenants/' + t.id}>{t.displayName}</Link> {t.checksFailed > 0 && <Badge tone="error">{t.checksFailed} Prüfung(en)</Badge>}</td>
+                        <td><Link to={'/tenants/' + t.id}>{t.displayName}</Link> {t.checksFailed > 0 && <Badge tone="error">{tr("{checksFailed} Prüfung(en)", { checksFailed: t.checksFailed })}</Badge>}</td>
                         <td>{t.active}</td>
                         <td>{t.inStock}</td>
                         <td>{t.targetUserCount ? Math.round((t.usersWithKey / t.targetUserCount) * 100) + ' %' : '–'}</td>
-                        <td>{t.lastSyncSucceeded === false ? <Badge tone="error">Fehler</Badge> : <span className="small muted">{fmtDate(t.lastSyncAt)}</span>}</td>
+                        <td>{t.lastSyncSucceeded === false ? <Badge tone="error">{tr("Fehler")}</Badge> : <span className="small muted">{fmtDate(t.lastSyncAt)}</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -145,7 +146,7 @@ export default function DashboardPage() {
 function DashHero({ data, cert, update }: { data: DashboardData; cert?: CertificateStatus; update?: UpdateSummary }) {
   const { me } = useAuth();
   const h = new Date().getHours();
-  const hello = h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend';
+  const hello = h < 11 ? tr("Guten Morgen") : h < 18 ? tr("Guten Tag") : tr("Guten Abend");
   const first = me.user?.displayName?.split(/\s+/)[0];
   const todo = data.tenants.reduce((n, t) => n + (t.checksFailed > 0 ? 1 : 0) + (t.lastSyncSucceeded === false ? 1 : 0), 0)
     + (cert && cert.state !== 'ok' && cert.state !== 'missing' ? 1 : 0) + (data.byStatus.Locked ? 1 : 0) + (data.vulnerableKeys ? 1 : 0) + (data.pendingApprovals ? 1 : 0) + (data.openTodos ? 1 : 0) + (data.needsDetails ? 1 : 0) + (update?.updateAvailable && update.canApply ? 1 : 0);
@@ -154,16 +155,16 @@ function DashHero({ data, cert, update }: { data: DashboardData; cert?: Certific
       <div className="dash-hero-text">
         <span className="dash-eyebrow">{hello}{first ? ', ' + first : ''}</span>
         <p className="dash-hero-title">
-          {data.coveragePercent != null ? <><b>{data.coveragePercent.toFixed(0)} %</b> der Zielgruppe haben einen YubiKey.</> : <><b>{data.byStatus.Active ?? 0}</b> Keys sind aktiv.</>}
+          {data.coveragePercent != null ? <><b>{data.coveragePercent.toFixed(0)} %</b> {tr("der Zielgruppe haben einen YubiKey.")}</> : <><b>{data.byStatus.Active ?? 0}</b> {tr("Keys sind aktiv.")}</>}
         </p>
-        <p className="dash-hero-sub">{todo ? (todo === 1 ? '1 Punkt braucht heute Ihre Aufmerksamkeit.' : `${todo} Punkte brauchen heute Ihre Aufmerksamkeit.`) : 'Alles in Ordnung, kein Handlungsbedarf.'} {data.inStock} Keys liegen bereit.</p>
+        <p className="dash-hero-sub">{todo ? (todo === 1 ? tr("1 Punkt braucht heute Ihre Aufmerksamkeit.") : tr("{todo} Punkte brauchen heute Ihre Aufmerksamkeit.", { todo })) : tr("Alles in Ordnung, kein Handlungsbedarf.")} {tr("{inStock} Keys liegen bereit.", { inStock: data.inStock })}</p>
         <div className="dash-hero-meter"><span style={{ width: Math.min(100, data.coveragePercent ?? 0) + '%' }} /></div>
         <div className="dash-hero-links">
-          <Link to="/register" className="hero-chip"><Icon name="keyPlus" size={15} />Key registrieren</Link>
-          <Link to="/passkey" className="hero-chip"><Icon name="info" size={15} />Passkeys erklärt</Link>
+          <Link to="/register" className="hero-chip"><Icon name="keyPlus" size={15} />{tr("Key registrieren")}</Link>
+          <Link to="/passkey" className="hero-chip"><Icon name="info" size={15} />{tr("Passkeys erklärt")}</Link>
           {update && (update.updateAvailable
-            ? <Link to="/versionen" className="hero-chip hero-chip-update" title={`Installiert: ${update.currentVersion}`}><Icon name="sparkle" size={15} />Update auf {update.latestVersion} verfügbar</Link>
-            : <Link to="/versionen" className="hero-chip hero-chip-version" title="Versionsverlauf"><Icon name="history" size={15} />Version {update.currentVersion}{!update.error && ' · aktuell'}</Link>)}
+            ? <Link to="/versionen" className="hero-chip hero-chip-update" title={tr("Installiert: {currentVersion}", { currentVersion: update.currentVersion })}><Icon name="sparkle" size={15} />{tr("Update auf {latestVersion} verfügbar", { latestVersion: update.latestVersion })}</Link>
+            : <Link to="/versionen" className="hero-chip hero-chip-version" title={tr("Versionsverlauf")}><Icon name="history" size={15} />{tr("Version {currentVersion}", { currentVersion: update.currentVersion })}{!update.error && tr(" · aktuell")}</Link>)}
         </div>
       </div>
       <div className="dash-hero-art"><span className="pk-float"><KeyArt size={190} glow /></span></div>
@@ -174,8 +175,8 @@ function DashHero({ data, cert, update }: { data: DashboardData; cert?: Certific
 /** Unterzeile der Kachel: der Hinweis mit den meisten Keys, sonst PIN-Wechsel-Fähigkeit. */
 function advisorySub(data: DashboardData) {
   const top = [...(data.advisories ?? [])].filter((a) => a.affectsFido).sort((a, b) => b.keys - a.keys)[0];
-  const pin = `${data.forcePinChangeUnsupported} ohne erzwingbaren PIN-Wechsel`;
-  return top ? `am häufigsten ${top.id} (${top.keys}) · ${pin}` : 'keine bekannten Hinweise · ' + pin;
+  const pin = tr("{forcePinChangeUnsupported} ohne erzwingbaren PIN-Wechsel", { forcePinChangeUnsupported: data.forcePinChangeUnsupported });
+  return top ? tr("am häufigsten {id} ({keys}) · {pin}", { id: top.id, keys: top.keys, pin }) : tr("keine bekannten Hinweise · {pin}", { pin });
 }
 
 const statusColor: Record<KeyStatus, string> = { Active: 'var(--ok)', InStock: 'var(--accent)', Locked: 'var(--error)', Retired: 'var(--muted)' };
@@ -202,27 +203,27 @@ function ActionItems({ data, keysLink, cert, update }: { data: DashboardData; ke
   if (cert && cert.state !== 'ok' && cert.state !== 'missing') items.push({
     tone: cert.state === 'warning' ? 'warn' : 'error',
     text: cert.state === 'expired'
-      ? <>Das App-Zertifikat ist abgelaufen. Die Plattform kann sich bei keinem Tenant mehr anmelden.</>
-      : <>Das App-Zertifikat läuft in {cert.daysLeft} Tag(en) ab{cert.lastError ? ', die automatische Erneuerung ist fehlgeschlagen' : cert.nextThumbprint ? ', ein neues wartet auf Entra' : ''}.</>,
-    to: '/platform#certificate', cta: 'Zertifikat',
+      ? <>{tr("Das App-Zertifikat ist abgelaufen. Die Plattform kann sich bei keinem Tenant mehr anmelden.")}</>
+      : <>{tr("Das App-Zertifikat läuft in {daysLeft} Tag(en) ab", { daysLeft: cert.daysLeft })}{cert.lastError ? tr(", die automatische Erneuerung ist fehlgeschlagen") : cert.nextThumbprint ? tr(", ein neues wartet auf Entra") : ''}.</>,
+    to: '/platform#certificate', cta: tr("Zertifikat"),
   });
   for (const t of data.tenants) {
-    if (t.checksFailed > 0) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: {t.checksFailed} FIDO2-Prüfung(en) fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Beheben' });
-    if (t.lastSyncSucceeded === false) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: letzte Synchronisation fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Ansehen' });
+    if (t.checksFailed > 0) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>{tr(": {checksFailed} FIDO2-Prüfung(en) fehlgeschlagen", { checksFailed: t.checksFailed })}</>, to: '/tenants/' + t.id, cta: tr("Beheben") });
+    if (t.lastSyncSucceeded === false) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>{tr(": letzte Synchronisation fehlgeschlagen")}</>, to: '/tenants/' + t.id, cta: tr("Ansehen") });
   }
-  if ((data.byStatus.Locked ?? 0) > 0) items.push({ tone: 'warn', text: <>{data.byStatus.Locked} gesperrte(r) Key(s)</>, to: keysLink('Locked'), cta: 'Im Inventar' });
-  if (data.vulnerableKeys > 0) items.push({ tone: 'warn', text: <>{data.vulnerableKeys} Key(s) von einem Yubico-Sicherheitshinweis zu Passkeys betroffen</>, to: '/sicherheitshinweise', cta: 'Betroffene Keys' });
-  if (data.pendingApprovals > 0) items.push({ tone: 'warn', text: <>{data.pendingApprovals} Breakglass-Antrag/Anträge warten auf Freigabe</>, to: '/approvals', cta: 'Freigaben' });
-  if (data.openTodos > 0) items.push({ tone: 'info', text: <>{data.openTodos} offene(s) ToDo(s): Personen, die einen Key bekommen sollen</>, to: '/todos', cta: 'ToDo-Liste' });
-  if (update?.updateAvailable && update.canApply) items.push({ tone: 'info', text: <>Version {update.latestVersion} ist verfügbar (installiert: {update.currentVersion})</>, to: '/versionen', cta: 'Was ist neu' });
-  if (data.needsDetails > 0) items.push({ tone: 'info', text: <>{data.needsDetails} selbst registrierte Key(s) ohne Seriennummer/Firmware</>, to: '/keys/identify', cta: 'Nacherfassen' });
+  if ((data.byStatus.Locked ?? 0) > 0) items.push({ tone: 'warn', text: <>{tr("{Locked} gesperrte(r) Key(s)", { Locked: data.byStatus.Locked })}</>, to: keysLink('Locked'), cta: tr("Im Inventar") });
+  if (data.vulnerableKeys > 0) items.push({ tone: 'warn', text: <>{tr("{vulnerableKeys} Key(s) von einem Yubico-Sicherheitshinweis zu Passkeys betroffen", { vulnerableKeys: data.vulnerableKeys })}</>, to: '/sicherheitshinweise', cta: tr("Betroffene Keys") });
+  if (data.pendingApprovals > 0) items.push({ tone: 'warn', text: <>{tr("{pendingApprovals} Breakglass-Antrag/Anträge warten auf Freigabe", { pendingApprovals: data.pendingApprovals })}</>, to: '/approvals', cta: tr("Freigaben") });
+  if (data.openTodos > 0) items.push({ tone: 'info', text: <>{tr("{openTodos} offene(s) ToDo(s): Personen, die einen Key bekommen sollen", { openTodos: data.openTodos })}</>, to: '/todos', cta: tr("ToDo-Liste") });
+  if (update?.updateAvailable && update.canApply) items.push({ tone: 'info', text: <>{tr("Version {latestVersion} ist verfügbar (installiert: {currentVersion})", { latestVersion: update.latestVersion, currentVersion: update.currentVersion })}</>, to: '/versionen', cta: tr("Was ist neu") });
+  if (data.needsDetails > 0) items.push({ tone: 'info', text: <>{tr("{needsDetails} selbst registrierte Key(s) ohne Seriennummer/Firmware", { needsDetails: data.needsDetails })}</>, to: '/keys/identify', cta: tr("Nacherfassen") });
 
   if (items.length === 0) return (
-    <div className="action-items all-good"><span className="ai-icon tone-ok"><Icon name="check" size={16} /></span>Kein Handlungsbedarf. Alle Prüfungen und Synchronisationen sind in Ordnung.</div>
+    <div className="action-items all-good"><span className="ai-icon tone-ok"><Icon name="check" size={16} /></span>{tr("Kein Handlungsbedarf. Alle Prüfungen und Synchronisationen sind in Ordnung.")}</div>
   );
   return (
-    <section className="action-items" aria-label="Handlungsbedarf">
-      <h2>Handlungsbedarf <span className="count">{items.length}</span></h2>
+    <section className="action-items" aria-label={tr("Handlungsbedarf")}>
+      <h2>{tr("Handlungsbedarf")} <span className="count">{items.length}</span></h2>
       <ul>
         {items.map((i, n) => (
           <li key={n}>

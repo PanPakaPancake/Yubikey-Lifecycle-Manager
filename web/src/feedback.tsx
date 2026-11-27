@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon } from './icons';
+import { tr } from './i18n';
 
 // Kurze Rückmeldungen (Toasts) und Bestätigungsdialoge. Ersetzt dauerhafte Hinweiskästen nach Aktionen
 // und window.confirm, damit Ergebnisse animiert erscheinen und von selbst wieder verschwinden.
@@ -59,7 +60,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
             <div key={t.id} className={'toast tone-' + t.tone + (t.leaving ? ' leaving' : '')} role={t.tone === 'error' ? 'alert' : 'status'}>
               <span className="toast-icon"><Icon name={toneIcon[t.tone]} size={16} /></span>
               <div className="toast-text">{t.text}</div>
-              <button type="button" className="icon-btn" aria-label="Schließen" onClick={() => dismiss(t.id)}><Icon name="x" size={14} /></button>
+              <button type="button" className="icon-btn" aria-label={tr("Schließen")} onClick={() => dismiss(t.id)}><Icon name="x" size={14} /></button>
             </div>
           ))}
         </div>, document.body)}
@@ -70,7 +71,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   );
 }
 
-function ConfirmDialog({ title, message, confirmLabel = 'Bestätigen', danger, onClose }: ConfirmOptions & { onClose: (v: boolean) => void }) {
+function ConfirmDialog({ title, message, confirmLabel = tr("Bestätigen"), danger, onClose }: ConfirmOptions & { onClose: (v: boolean) => void }) {
   const ok = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     ok.current?.focus();
@@ -89,7 +90,7 @@ function ConfirmDialog({ title, message, confirmLabel = 'Bestätigen', danger, o
           </div>
         </div>
         <div className="modal-foot">
-          <button type="button" onClick={() => onClose(false)}>Abbrechen</button>
+          <button type="button" onClick={() => onClose(false)}>{tr("Abbrechen")}</button>
           <button type="button" ref={ok} className={danger ? 'primary danger-fill' : 'primary'} onClick={() => onClose(true)}>{confirmLabel}</button>
         </div>
       </div>

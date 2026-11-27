@@ -9,6 +9,7 @@ import { ChooseTenant, useTenant } from '../tenant';
 import { Badge, CountUp, Donut, download, Empty, ErrorBox, LiveSearchInput, MenuButton, Modal, PageHeader, Spinner, useAction, useApi } from '../ui';
 import '../passkey.css';
 import '../rollout.css';
+import { locale, tr } from '../i18n';
 
 // Passkey-Rollout: Wer hat schon einen Passkey, wer nur klassische MFA, wer gar nichts – und direkt handeln (TAP, Methoden entfernen).
 
@@ -28,20 +29,20 @@ interface RemovalResult { userId: string; upn: string; removed: number; removedL
 
 /** Reihenfolge vom Anfang bis zum Ziel. Farben passen zu den Status-Tönen der Plattform. */
 export const stages: { key: Stage; label: string; short: string; text: string; icon: IconName; tone: 'error' | 'warn' | 'info' | 'ok'; color: string }[] = [
-  { key: 'NoMfa', label: 'Keine MFA', short: 'Keine MFA', text: 'Nur Kennwort. Höchste Priorität: am besten direkt mit TAP und Key starten.', icon: 'alert', tone: 'error', color: 'var(--error)' },
-  { key: 'ClassicMfa', label: 'Nur klassische MFA', short: 'Klassisch', text: 'Authenticator, SMS oder OTP. Lässt sich abfangen (Phishing).', icon: 'phone', tone: 'warn', color: 'var(--warn)' },
-  { key: 'OtherPasskey', label: 'Passkey (App / Windows Hello)', short: 'Ausreichend', text: 'Passkey im Authenticator, Windows Hello oder ein anderer Passkey. Phishing-resistent, gilt als ausreichend.', icon: 'monitor', tone: 'info', color: 'var(--accent-2)' },
-  { key: 'SecurityKey', label: 'Sicherheitsschlüssel', short: 'Ausreichend', text: 'Passkey auf einem YubiKey bzw. FIDO2-Key. Phishing-resistent, gilt als ausreichend.', icon: 'key', tone: 'ok', color: 'var(--ok)' },
+  { key: 'NoMfa', label: tr("Keine MFA"), short: tr("Keine MFA"), text: tr("Nur Kennwort. Höchste Priorität: am besten direkt mit TAP und Key starten."), icon: 'alert', tone: 'error', color: 'var(--error)' },
+  { key: 'ClassicMfa', label: tr("Nur klassische MFA"), short: tr("Klassisch"), text: tr("Authenticator, SMS oder OTP. Lässt sich abfangen (Phishing)."), icon: 'phone', tone: 'warn', color: 'var(--warn)' },
+  { key: 'OtherPasskey', label: tr("Passkey (App / Windows Hello)"), short: tr("Ausreichend"), text: tr("Passkey im Authenticator, Windows Hello oder ein anderer Passkey. Phishing-resistent, gilt als ausreichend."), icon: 'monitor', tone: 'info', color: 'var(--accent-2)' },
+  { key: 'SecurityKey', label: tr("Sicherheitsschlüssel"), short: tr("Ausreichend"), text: tr("Passkey auf einem YubiKey bzw. FIDO2-Key. Phishing-resistent, gilt als ausreichend."), icon: 'key', tone: 'ok', color: 'var(--ok)' },
 ];
 const stageOf = (k: Stage) => stages.find((s) => s.key === k)!;
 
 /** Methodentypen, die sich in der Sammelaktion entfernen lassen (Graph-Typ → Anzeige). */
 const removableKinds: { kind: string; label: string; reportNames: string[] }[] = [
-  { kind: 'phone', label: 'SMS / Anruf', reportNames: ['mobilePhone', 'alternateMobilePhone', 'officePhone'] },
-  { kind: 'microsoftAuthenticator', label: 'Authenticator-App', reportNames: ['microsoftAuthenticatorPush', 'microsoftAuthenticatorPasswordless'] },
-  { kind: 'softwareOath', label: 'Software-OTP', reportNames: ['softwareOneTimePasscode'] },
-  { kind: 'email', label: 'E-Mail (SSPR)', reportNames: ['email'] },
-  { kind: 'temporaryAccessPass', label: 'Befristeter Zugriffspass', reportNames: ['temporaryAccessPass'] },
+  { kind: 'phone', label: tr("SMS / Anruf"), reportNames: ['mobilePhone', 'alternateMobilePhone', 'officePhone'] },
+  { kind: 'microsoftAuthenticator', label: tr("Authenticator-App"), reportNames: ['microsoftAuthenticatorPush', 'microsoftAuthenticatorPasswordless'] },
+  { kind: 'softwareOath', label: tr("Software-OTP"), reportNames: ['softwareOneTimePasscode'] },
+  { kind: 'email', label: tr("E-Mail (SSPR)"), reportNames: ['email'] },
+  { kind: 'temporaryAccessPass', label: tr("Befristeter Zugriffspass"), reportNames: ['temporaryAccessPass'] },
 ];
 
 const collator = new Intl.Collator('de', { sensitivity: 'base', numeric: true });
@@ -49,7 +50,7 @@ const PageSize = 150;
 
 export default function RolloutPage() {
   const { tenant } = useTenant();
-  if (!tenant) return <><PageHeader title="Rollout Übersicht" subtitle="Wer hat schon einen Passkey, wer nur klassische MFA, wer noch gar nichts." /><ChooseTenant purpose="Für den Rollout-Überblick" /></>;
+  if (!tenant) return <><PageHeader title={tr("Rollout Übersicht")} subtitle={tr("Wer hat schon einen Passkey, wer nur klassische MFA, wer noch gar nichts.")} /><ChooseTenant purpose={tr("Für den Rollout-Überblick")} /></>;
   return <Rollout key={tenant.id} tenantId={tenant.id} tenantName={tenant.displayName} />;
 }
 
@@ -113,7 +114,7 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
     setRefreshing(true);
     try {
       setData(await api.get<RolloutData>(`/api/tenants/${tenantId}/rollout?refresh=true`));
-      toast.ok('Daten aus Entra neu geladen.');
+      toast.ok(tr("Daten aus Entra neu geladen."));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -137,26 +138,25 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
 
   return (
     <div className="ro">
-      <PageHeader title="Rollout Übersicht"
-        subtitle={data ? <>Stand {fmtDate(data.generatedAt)} · {data.fromReport ? 'aus dem Entra-Registrierungsbericht' : 'pro Benutzer abgefragt (ohne Entra ID P1)'}</> : undefined}
+      <PageHeader title={tr("Rollout Übersicht")}
+        subtitle={data ? <>{tr("Stand {generatedAt} ·", { generatedAt: fmtDate(data.generatedAt) })} {data.fromReport ? tr("aus dem Entra-Registrierungsbericht") : tr("pro Benutzer abgefragt (ohne Entra ID P1)")}</> : undefined}
         actions={<>
-          <button type="button" onClick={refresh} disabled={refreshing || loading}><Icon name="refresh" size={16} className={refreshing ? 'spin' : undefined} />Aktualisieren</button>
-          {can('ReadReports') && <MenuButton label="Exportieren" items={[
-            { label: 'Liste (Excel)', hint: 'Mit den aktuellen Filtern (Stand, Zielgruppe)', icon: 'users', onClick: () => download(exportUrl('xlsx')) },
-            { label: 'Liste (CSV)', hint: 'Für andere Programme', icon: 'download', onClick: () => download(exportUrl('csv')) },
+          <button type="button" onClick={refresh} disabled={refreshing || loading}><Icon name="refresh" size={16} className={refreshing ? 'spin' : undefined} />{tr("Aktualisieren")}</button>
+          {can('ReadReports') && <MenuButton label={tr("Exportieren")} items={[
+            { label: tr("Liste (Excel)"), hint: tr("Mit den aktuellen Filtern (Stand, Zielgruppe)"), icon: 'users', onClick: () => download(exportUrl('xlsx')) },
+            { label: tr("Liste (CSV)"), hint: tr("Für andere Programme"), icon: 'download', onClick: () => download(exportUrl('csv')) },
           ]} />}
         </>} />
       <ErrorBox error={error} />
-      {!data && loading && <div className="ro-loading"><Spinner label="Daten werden aus Entra geladen … bei großen Tenants ohne Entra ID P1 kann das etwas dauern." /></div>}
+      {!data && loading && <div className="ro-loading"><Spinner label={tr("Daten werden aus Entra geladen … bei großen Tenants ohne Entra ID P1 kann das etwas dauern.")} /></div>}
       {data && (
         <>
           <section className="ro-hero">
             <div>
               <div className="pk-eyebrow">{tenantName}</div>
-              <h2 className="ro-title">{goal >= 100 ? 'Alle melden sich mit Passkey an.' : <><CountUp value={atGoal} /> von {total} Personen melden sich mit Passkey an.</>}</h2>
+              <h2 className="ro-title">{goal >= 100 ? tr("Alle melden sich mit Passkey an.") : <><CountUp value={atGoal} /> {tr("von {total} Personen melden sich mit Passkey an.", { total })}</>}</h2>
               <p className="ro-lead">
-                Davon <strong>{counts.SecurityKey}</strong> mit Sicherheitsschlüssel und <strong>{counts.OtherPasskey}</strong> mit Passkey im Authenticator oder Windows Hello. <strong>{counts.NoMfa}</strong> haben noch gar keine MFA,
-                {' '}<strong>{counts.ClassicMfa}</strong> nur klassische MFA wie SMS oder Authenticator-Push.
+                {tr("Davon")} <strong>{counts.SecurityKey}</strong> {tr("mit Sicherheitsschlüssel und")} <strong>{counts.OtherPasskey}</strong> {tr("mit Passkey im Authenticator oder Windows Hello.")} <strong>{counts.NoMfa}</strong> {tr("haben noch gar keine MFA, ")}<strong>{counts.ClassicMfa}</strong> {tr("nur klassische MFA wie SMS oder Authenticator-Push.")}
               </p>
               <div className="ro-journey" role="img" aria-label={stages.map((s) => `${s.label}: ${counts[s.key]}`).join(', ')}>
                 {stages.map((s, i) => counts[s.key] > 0 && (
@@ -164,14 +164,14 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
                 ))}
               </div>
               <div className="ro-toggles">
-                {data.targetDefined && <Toggle on={onlyTarget} onChange={(v) => set('target', v ? '1' : '')}>Nur Zielgruppe</Toggle>}
-                <Toggle on={guests} onChange={(v) => set('guests', v ? '1' : '')}>Gäste</Toggle>
-                <Toggle on={disabled} onChange={(v) => set('disabled', v ? '1' : '')}>Deaktivierte Konten</Toggle>
+                {data.targetDefined && <Toggle on={onlyTarget} onChange={(v) => set('target', v ? '1' : '')}>{tr("Nur Zielgruppe")}</Toggle>}
+                <Toggle on={guests} onChange={(v) => set('guests', v ? '1' : '')}>{tr("Gäste")}</Toggle>
+                <Toggle on={disabled} onChange={(v) => set('disabled', v ? '1' : '')}>{tr("Deaktivierte Konten")}</Toggle>
               </div>
             </div>
             <div className="ro-hero-art">
               <Donut size={168} thickness={18} parts={stages.map((s) => ({ key: s.key, value: counts[s.key], color: s.color, label: s.label }))}
-                center={<><strong className="ro-goal"><CountUp value={goal + ' %'} /></strong><span className="small muted">am Ziel</span></>} />
+                center={<><strong className="ro-goal"><CountUp value={goal + ' %'} /></strong><span className="small muted">{tr("am Ziel")}</span></>} />
             </div>
           </section>
 
@@ -179,7 +179,7 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
             {stages.map((s, i) => (
               <button key={s.key} type="button" className={'ro-stage tone-' + s.tone + (stageFilter.includes(s.key) ? ' on' : '')} onClick={() => toggleStage(s.key)} aria-pressed={stageFilter.includes(s.key)}>
                 <span className="ro-stage-top"><span className="pk-num">{i + 1}</span><Icon name={s.icon} size={18} /><span className="ro-stage-label">{s.label}</span></span>
-                <span className="ro-stage-value"><CountUp value={counts[s.key]} /><small>{total ? Math.round((counts[s.key] / total) * 100) : 0}&nbsp;%</small></span>
+                <span className="ro-stage-value"><CountUp value={counts[s.key]} /><small>{tr("{n} %", { n: total ? Math.round((counts[s.key] / total) * 100) : 0 })}</small></span>
                 <span className="ro-stage-bar"><i style={{ width: (total ? (counts[s.key] / total) * 100 : 0) + '%' }} /></span>
                 <span className="ro-stage-text">{s.text}</span>
               </button>
@@ -189,10 +189,10 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
           {tap.data && !tap.data.enabled && (can('IssueTemporaryAccessPass')) && (
             <div className="pk-note ro-note"><Icon name="ticket" size={20} />
               <div>
-                <strong>Befristeter Zugriffspass (TAP) ist im Tenant ausgeschaltet.</strong> Ohne TAP können sich Personen ohne MFA nicht selbst einen Passkey einrichten, und hier lassen sich keine TAPs erzeugen.
+                <strong>{tr("Befristeter Zugriffspass (TAP) ist im Tenant ausgeschaltet.")}</strong> {tr("Ohne TAP können sich Personen ohne MFA nicht selbst einen Passkey einrichten, und hier lassen sich keine TAPs erzeugen.")}
                 <div className="ro-note-actions">
                   {can('ManageTenants') && <EnableTap tenantId={tenantId} onDone={(p) => tap.setData(p)} />}
-                  <span className="small muted">Manuell: Entra Admin Center → Schutz → Authentifizierungsmethoden → Richtlinien → Befristeter Zugriffspass → Aktivieren.</span>
+                  <span className="small muted">{tr("Manuell: Entra Admin Center → Schutz → Authentifizierungsmethoden → Richtlinien → Befristeter Zugriffspass → Aktivieren.")}</span>
                 </div>
               </div>
             </div>
@@ -200,8 +200,8 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
 
           <div className="ro-grid">
             <section className="card ro-methods">
-              <div className="card-head"><h2>Andere Methoden im Einsatz</h2>{method && <button type="button" className="link" onClick={() => set('method', '')}>Filter aufheben</button>}</div>
-              {methodCounts.length === 0 ? <Empty>Außer dem Kennwort ist nichts registriert.</Empty> : (
+              <div className="card-head"><h2>{tr("Andere Methoden im Einsatz")}</h2>{method && <button type="button" className="link" onClick={() => set('method', '')}>{tr("Filter aufheben")}</button>}</div>
+              {methodCounts.length === 0 ? <Empty>{tr("Außer dem Kennwort ist nichts registriert.")}</Empty> : (
                 <ul className="ro-method-list">
                   {methodCounts.map(([label, n]) => (
                     <li key={label}>
@@ -214,46 +214,46 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
                   ))}
                 </ul>
               )}
-              <p className="small muted">Ein Klick filtert die Liste, z. B. alle mit SMS. Danach lassen sich die Methoden gesammelt entfernen.</p>
+              <p className="small muted">{tr("Ein Klick filtert die Liste, z. B. alle mit SMS. Danach lassen sich die Methoden gesammelt entfernen.")}</p>
             </section>
             <section className="card ro-howto">
-              <div className="card-head"><h2>So geht der Rollout</h2></div>
+              <div className="card-head"><h2>{tr("So geht der Rollout")}</h2></div>
               <ol className="ro-steps">
-                <li><span className="pk-num">1</span><div><strong>Ohne MFA zuerst</strong><span>Filter „Keine MFA“, Personen auswählen, TAP erzeugen und mit dem Key übergeben.</span></div></li>
-                <li><span className="pk-num">2</span><div><strong>Keys registrieren</strong><span>Über <Link to="/register">Registrieren</Link> on Behalf oder die Person richtet ihn mit dem TAP selbst ein.</span></div></li>
-                <li><span className="pk-num">3</span><div><strong>Altlasten entfernen</strong><span>Wer einen Key hat, braucht kein SMS mehr: Methode filtern, auswählen, entfernen.</span></div></li>
+                <li><span className="pk-num">1</span><div><strong>{tr("Ohne MFA zuerst")}</strong><span>{tr("Filter „Keine MFA“, Personen auswählen, TAP erzeugen und mit dem Key übergeben.")}</span></div></li>
+                <li><span className="pk-num">2</span><div><strong>{tr("Keys registrieren")}</strong><span>{tr("Über")} <Link to="/register">{tr("Registrieren")}</Link> {tr("on Behalf oder die Person richtet ihn mit dem TAP selbst ein.")}</span></div></li>
+                <li><span className="pk-num">3</span><div><strong>{tr("Altlasten entfernen")}</strong><span>{tr("Wer einen Key hat, braucht kein SMS mehr: Methode filtern, auswählen, entfernen.")}</span></div></li>
               </ol>
             </section>
           </div>
 
           <section className="card ro-list">
             <div className="toolbar">
-              <LiveSearchInput value={q} onSearch={(v) => set('q', v)} placeholder="Name, UPN oder Abteilung" />
+              <LiveSearchInput value={q} onSearch={(v) => set('q', v)} placeholder={tr("Name, UPN oder Abteilung")} />
               {(stageFilter.length > 0 || method) && (
                 <div className="chips" style={{ margin: 0 }}>
-                  {stageFilter.map((s) => <span key={s} className="chip">{stageOf(s).label}<button type="button" className="chip-x" aria-label="Filter entfernen" onClick={() => toggleStage(s)}>×</button></span>)}
-                  {method && <span className="chip">{method}<button type="button" className="chip-x" aria-label="Filter entfernen" onClick={() => set('method', '')}>×</button></span>}
+                  {stageFilter.map((s) => <span key={s} className="chip">{stageOf(s).label}<button type="button" className="chip-x" aria-label={tr("Filter entfernen")} onClick={() => toggleStage(s)}>×</button></span>)}
+                  {method && <span className="chip">{method}<button type="button" className="chip-x" aria-label={tr("Filter entfernen")} onClick={() => set('method', '')}>×</button></span>}
                 </div>
               )}
-              <span className="muted small" style={{ marginLeft: 'auto' }}>{filtered.length} von {total} Personen</span>
+              <span className="muted small" style={{ marginLeft: 'auto' }}>{tr("{length} von {total} Personen", { length: filtered.length, total })}</span>
             </div>
-            {filtered.length === 0 ? <Empty>Keine Person passt zu den Filtern.</Empty> : (
+            {filtered.length === 0 ? <Empty>{tr("Keine Person passt zu den Filtern.")}</Empty> : (
               <div className="table-wrap">
                 <table className="ro-table">
                   <thead>
                     <tr>
-                      <th className="ro-check"><input type="checkbox" aria-label="Alle sichtbaren auswählen" checked={allVisibleSelected}
+                      <th className="ro-check"><input type="checkbox" aria-label={tr("Alle sichtbaren auswählen")} checked={allVisibleSelected}
                         onChange={() => setSelected((cur) => { const n = new Set(cur); filtered.slice(0, limit).forEach((u) => (allVisibleSelected ? n.delete(u.id) : n.add(u.id))); return n; })} /></th>
-                      <th>Person</th><th>Stand</th><th>Methoden</th><th className="hide-sm">Keys</th>{data.hasSignInData && <th className="hide-sm">Letzte Anmeldung</th>}
+                      <th>{tr("Person")}</th><th>{tr("Stand")}</th><th>{tr("Methoden")}</th><th className="hide-sm">{tr("Keys")}</th>{data.hasSignInData && <th className="hide-sm">{tr("Letzte Anmeldung")}</th>}
                     </tr>
                   </thead>
                   <tbody>
                     {filtered.slice(0, limit).map((u) => (
                       <tr key={u.id} className={'clickable' + (selected.has(u.id) ? ' selected-row' : '')} onClick={() => setOpenUser(u)}>
-                        <td className="ro-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={`${u.displayName ?? u.upn} auswählen`} checked={selected.has(u.id)} onChange={() => toggle(u.id)} /></td>
+                        <td className="ro-check" onClick={(e) => e.stopPropagation()}><input type="checkbox" aria-label={tr("{n} auswählen", { n: u.displayName ?? u.upn })} checked={selected.has(u.id)} onChange={() => toggle(u.id)} /></td>
                         <td>
                           <div className="ro-person"><strong>{u.displayName ?? u.upn}</strong>
-                            {u.isAdmin && <Badge tone="info">Admin</Badge>}{!u.accountEnabled && <Badge>Deaktiviert</Badge>}{u.userType?.toLowerCase() === 'guest' && <Badge>Gast</Badge>}
+                            {u.isAdmin && <Badge tone="info">{tr("Admin")}</Badge>}{!u.accountEnabled && <Badge>{tr("Deaktiviert")}</Badge>}{u.userType?.toLowerCase() === 'guest' && <Badge>{tr("Gast")}</Badge>}
                           </div>
                           <div className="small muted">{u.upn}{u.department ? ' · ' + u.department : ''}</div>
                         </td>
@@ -265,7 +265,7 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
                     ))}
                   </tbody>
                 </table>
-                {filtered.length > limit && <div className="ro-more"><button type="button" onClick={() => setLimit(limit + PageSize)}>Weitere {Math.min(PageSize, filtered.length - limit)} anzeigen</button></div>}
+                {filtered.length > limit && <div className="ro-more"><button type="button" onClick={() => setLimit(limit + PageSize)}>{tr("Weitere {n} anzeigen", { n: Math.min(PageSize, filtered.length - limit) })}</button></div>}
               </div>
             )}
           </section>
@@ -273,11 +273,11 @@ function Rollout({ tenantId, tenantName }: { tenantId: string; tenantName: strin
           {/* Overlays außerhalb der animierten Seite, sonst gelten „fixed“-Positionen relativ zur Seite statt zum Fenster. */}
           {createPortal(<div className="ro-layer">
           {selected.size > 0 && (
-            <div className="ro-selbar" role="region" aria-label="Auswahl">
-              <span><strong>{selected.size}</strong> ausgewählt</span>
-              {can('IssueTemporaryAccessPass') && <button type="button" className="primary" onClick={() => { setTapTargets(selectedUsers); setDialog('tap'); }}><Icon name="ticket" size={16} />TAP erzeugen</button>}
-              {can('RemoveAuthMethods') && <button type="button" onClick={() => setDialog('remove')}><Icon name="trash" size={16} />Methoden entfernen</button>}
-              <button type="button" className="ghost" onClick={() => setSelected(new Set())}>Auswahl aufheben</button>
+            <div className="ro-selbar" role="region" aria-label={tr("Auswahl")}>
+              <span><strong>{selected.size}</strong> {tr("ausgewählt")}</span>
+              {can('IssueTemporaryAccessPass') && <button type="button" className="primary" onClick={() => { setTapTargets(selectedUsers); setDialog('tap'); }}><Icon name="ticket" size={16} />{tr("TAP erzeugen")}</button>}
+              {can('RemoveAuthMethods') && <button type="button" onClick={() => setDialog('remove')}><Icon name="trash" size={16} />{tr("Methoden entfernen")}</button>}
+              <button type="button" className="ghost" onClick={() => setSelected(new Set())}>{tr("Auswahl aufheben")}</button>
             </div>
           )}
 
@@ -327,7 +327,7 @@ export function StageBadge({ stage }: { stage: Stage }) {
 
 function MethodChips({ data, methods }: { data: RolloutData; methods: string[] }) {
   const labels = [...new Set(methods.filter((m) => m.toLowerCase() !== 'password').map((m) => labelOf(data, m)))];
-  if (labels.length === 0) return <span className="muted small">nur Kennwort</span>;
+  if (labels.length === 0) return <span className="muted small">{tr("nur Kennwort")}</span>;
   return (
     <span className="ro-chips">
       {labels.map((l) => {
@@ -345,8 +345,8 @@ function EnableTap({ tenantId, onDone }: { tenantId: string; onDone: (p: TapPoli
     <>
       <button type="button" className="primary small" disabled={busy} onClick={() => run(async () => {
         onDone(await api.post<TapPolicy>(`/api/tenants/${tenantId}/rollout/tap-policy/enable`));
-        toast.ok('Befristeter Zugriffspass ist jetzt aktiviert.');
-      })}>{busy ? 'Wird aktiviert …' : 'Jetzt aktivieren'}</button>
+        toast.ok(tr("Befristeter Zugriffspass ist jetzt aktiviert."));
+      })}>{busy ? tr("Wird aktiviert …") : tr("Jetzt aktivieren")}</button>
       <ErrorBox error={error} />
     </>
   );
@@ -367,8 +367,8 @@ function UserDialog({ tenantId, user, data, onClose, onChanged, onTap }: { tenan
     const lastMfa = !rest.some((x) => x.strength !== 'None');
     const ok = await confirm({
       title: `${m.label} entfernen?`,
-      message: <>Die Methode wird bei <strong>{user.displayName ?? user.upn}</strong> in Entra gelöscht.{lastMfa && <><br /><br /><strong>Achtung:</strong> Danach hat die Person keine MFA-Methode mehr und kann sich ggf. nicht mehr anmelden.</>}</>,
-      confirmLabel: 'Entfernen', danger: true,
+      message: <>{tr("Die Methode wird bei")} <strong>{user.displayName ?? user.upn}</strong> {tr("in Entra gelöscht.")}{lastMfa && <><br /><br /><strong>{tr("Achtung:")}</strong> {tr("Danach hat die Person keine MFA-Methode mehr und kann sich ggf. nicht mehr anmelden.")}</>}</>,
+      confirmLabel: tr("Entfernen"), danger: true,
     });
     if (!ok) return;
     setBusyId(m.id);
@@ -386,19 +386,19 @@ function UserDialog({ tenantId, user, data, onClose, onChanged, onTap }: { tenan
 
   return (
     <Modal title={user.displayName ?? user.upn} onClose={onClose} footer={<>
-      {can('RegisterKeys') && <Link className="btn" to={`/register?tenantId=${tenantId}&q=${encodeURIComponent(user.upn)}`}><Icon name="keyPlus" size={16} />Key registrieren</Link>}
-      {can('IssueTemporaryAccessPass') && <button type="button" className="primary" onClick={onTap}><Icon name="ticket" size={16} />TAP erzeugen</button>}
+      {can('RegisterKeys') && <Link className="btn" to={`/register?tenantId=${tenantId}&q=${encodeURIComponent(user.upn)}`}><Icon name="keyPlus" size={16} />{tr("Key registrieren")}</Link>}
+      {can('IssueTemporaryAccessPass') && <button type="button" className="primary" onClick={onTap}><Icon name="ticket" size={16} />{tr("TAP erzeugen")}</button>}
     </>}>
       <div className="ro-user-head">
         <span className="avatar" aria-hidden>{(user.displayName ?? user.upn).split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase()}</span>
         <div>
           <div>{user.upn}</div>
-          <div className="small muted">{[user.department, user.isAdmin ? 'Administrator' : null, user.platformKeys ? `${user.platformKeys} Key(s) im Inventar` : null].filter(Boolean).join(' · ') || ' '}</div>
+          <div className="small muted">{[user.department, user.isAdmin ? 'Administrator' : null, user.platformKeys ? tr("{platformKeys} Key(s) im Inventar", { platformKeys: user.platformKeys }) : null].filter(Boolean).join(' · ') || ' '}</div>
         </div>
         <StageBadge stage={stage} />
       </div>
       <ErrorBox error={error} />
-      {loading && !methods && <Spinner label="Methoden werden aus Entra geladen …" />}
+      {loading && !methods && <Spinner label={tr("Methoden werden aus Entra geladen …")} />}
       {methods && (
         <ul className="ro-live">
           {live.map((m) => (
@@ -410,18 +410,18 @@ function UserDialog({ tenantId, user, data, onClose, onChanged, onTap }: { tenan
                 <div className="small muted">{methodDetails(m).join(' · ') || ' '}</div>
               </div>
               {m.removable && can('RemoveAuthMethods')
-                ? <button type="button" className="ghost small danger" disabled={busyId === m.id} onClick={() => remove(m)}><Icon name="trash" size={15} />{busyId === m.id ? '…' : 'Entfernen'}</button>
-                : m.isSecurityKey ? <span className="small muted" title="Passkeys auf Sicherheitsschlüsseln werden über das Inventar gesperrt">über Inventar</span> : <span />}
+                ? <button type="button" className="ghost small danger" disabled={busyId === m.id} onClick={() => remove(m)}><Icon name="trash" size={15} />{busyId === m.id ? '…' : tr("Entfernen")}</button>
+                : m.isSecurityKey ? <span className="small muted" title={tr("Passkeys auf Sicherheitsschlüsseln werden über das Inventar gesperrt")}>{tr("über Inventar")}</span> : <span />}
             </li>
           ))}
         </ul>
       )}
-      <p className="small muted">Microsoft aktualisiert den Registrierungsbericht mit etwas Verzögerung. Diese Liste kommt live aus Entra.</p>
+      <p className="small muted">{tr("Microsoft aktualisiert den Registrierungsbericht mit etwas Verzögerung. Diese Liste kommt live aus Entra.")}</p>
     </Modal>
   );
 }
 
-const trustLabels: Record<string, string> = { AzureAd: 'Entra-Join', ServerAd: 'Hybrid-Join', Workplace: 'registriert' };
+const trustLabels: Record<string, string> = { AzureAd: tr("Entra-Join"), ServerAd: tr("Hybrid-Join"), Workplace: 'registriert' };
 
 /** Gerät einer Methode: Name, Modell, Betriebssystem, Join-Art, Konformität, letzte Anmeldung, Link ins Azure-Portal. */
 function DeviceInfo({ device: d }: { device: MethodDevice }) {
@@ -432,15 +432,15 @@ function DeviceInfo({ device: d }: { device: MethodDevice }) {
     hardware && !(d.name ?? '').toLowerCase().includes(hardware.toLowerCase()) ? hardware : null,
     os || null,
     d.trustType ? trustLabels[d.trustType] ?? d.trustType : null,
-    d.isCompliant === true ? 'konform' : d.isCompliant === false && d.isManaged ? 'nicht konform' : null,
+    d.isCompliant === true ? 'konform' : d.isCompliant === false && d.isManaged ? tr("nicht konform") : null,
     d.enabled === false ? 'deaktiviert' : null,
-    d.lastSignIn ? 'zuletzt aktiv ' + fmtDate(d.lastSignIn, false) : null,
+    d.lastSignIn ? tr("zuletzt aktiv {n}", { n: fmtDate(d.lastSignIn, false) }) : null,
   ].filter((x): x is string => !!x);
   return (
     <div className="ro-device-box">
       <div className="ro-device">
-        <Icon name={mobile ? 'phone' : 'monitor'} size={14} />{d.name || hardware || 'Gerät'}
-        {d.portalUrl && <a className="ro-device-link small" href={d.portalUrl} target="_blank" rel="noreferrer noopener" title="Gerät im Azure-Portal öffnen">in Entra öffnen</a>}
+        <Icon name={mobile ? 'phone' : 'monitor'} size={14} />{d.name || hardware || tr("Gerät")}
+        {d.portalUrl && <a className="ro-device-link small" href={d.portalUrl} target="_blank" rel="noreferrer noopener" title={tr("Gerät im Azure-Portal öffnen")}>{tr("in Entra öffnen")}</a>}
       </div>
       {facts.length > 0 && <div className={'small muted' + (d.enabled === false || (d.isCompliant === false && d.isManaged) ? ' ro-device-warn' : '')}>{facts.join(' · ')}</div>}
     </div>
@@ -457,7 +457,7 @@ function methodDetails(m: LiveMethod) {
 }
 
 const lifetimes = [60, 120, 240, 480, 1440, 2880, 10080, 43200];
-const lifetimeLabel = (m: number) => (m < 60 ? `${m} Minuten` : m < 1440 ? `${m / 60} Stunde${m === 60 ? '' : 'n'}` : `${m / 1440} Tag${m === 1440 ? '' : 'e'}`);
+const lifetimeLabel = (m: number) => (m < 60 ? tr("{m} Minuten", { m }) : m < 1440 ? tr("{n} Stunde{n2}", { n: m / 60, n2: m === 60 ? '' : 'n' }) : tr("{n} Tag{n2}", { n: m / 1440, n2: m === 1440 ? '' : 'e' }));
 
 function TapDialog({ tenantId, users, policy, onClose, onDone }: { tenantId: string; users: RolloutUser[]; policy?: TapPolicy; onClose: () => void; onDone: (r: TapResult[]) => void }) {
   const toast = useToast();
@@ -480,17 +480,17 @@ function TapDialog({ tenantId, users, policy, onClose, onDone }: { tenantId: str
     setResults(r);
     onDone(r);
     const ok = r.filter((x) => x.pass).length;
-    if (ok) toast.ok(`${ok} TAP${ok === 1 ? '' : 's'} erzeugt.`);
+    if (ok) toast.ok(tr("{ok} TAP{n} erzeugt.", { ok, n: ok === 1 ? '' : 's' }));
   });
 
   const ok = results?.filter((r) => r.pass) ?? [];
   const copyAll = async () => {
     await navigator.clipboard.writeText(ok.map((r) => `${r.displayName ?? r.upn}\t${r.upn}\t${r.pass}`).join('\n'));
-    toast.ok('In die Zwischenablage kopiert.');
+    toast.ok(tr("In die Zwischenablage kopiert."));
   };
   const saveCsv = () => {
     const esc = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    const rows = [['Name', 'UPN', 'TAP', 'Gültig ab', 'Gültigkeit (Minuten)', 'Einmalig'], ...ok.map((r) => [r.displayName, r.upn, r.pass, r.startDateTime ? new Date(r.startDateTime).toLocaleString('de-DE') : '', r.lifetimeInMinutes, r.isUsableOnce ? 'ja' : 'nein'])];
+    const rows = [['Name', 'UPN', 'TAP', tr("Gültig ab"), tr("Gültigkeit (Minuten)"), tr("Einmalig")], ...ok.map((r) => [r.displayName, r.upn, r.pass, r.startDateTime ? new Date(r.startDateTime).toLocaleString(locale()) : '', r.lifetimeInMinutes, r.isUsableOnce ? tr("ja") : tr("nein")])];
     const blob = new Blob(['﻿' + rows.map((r) => r.map(esc).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
@@ -501,12 +501,12 @@ function TapDialog({ tenantId, users, policy, onClose, onDone }: { tenantId: str
 
   if (results) {
     return (
-      <Modal title="Befristete Zugriffspässe" onClose={onClose} footer={<>
-        {ok.length > 1 && <button type="button" onClick={saveCsv}><Icon name="download" size={16} />Als CSV speichern</button>}
-        {ok.length > 0 && <button type="button" onClick={copyAll}><Icon name="copy" size={16} />Alle kopieren</button>}
-        <button type="button" className="primary" onClick={onClose}>Fertig</button>
+      <Modal title={tr("Befristete Zugriffspässe")} onClose={onClose} footer={<>
+        {ok.length > 1 && <button type="button" onClick={saveCsv}><Icon name="download" size={16} />{tr("Als CSV speichern")}</button>}
+        {ok.length > 0 && <button type="button" onClick={copyAll}><Icon name="copy" size={16} />{tr("Alle kopieren")}</button>}
+        <button type="button" className="primary" onClick={onClose}>{tr("Fertig")}</button>
       </>}>
-        {ok.length > 0 && <div className="pk-note"><Icon name="alert" size={18} /><div><strong>Die Codes werden nur jetzt angezeigt.</strong> Die Plattform speichert sie nicht. Bitte direkt weitergeben oder sicher ablegen.</div></div>}
+        {ok.length > 0 && <div className="pk-note"><Icon name="alert" size={18} /><div><strong>{tr("Die Codes werden nur jetzt angezeigt.")}</strong> {tr("Die Plattform speichert sie nicht. Bitte direkt weitergeben oder sicher ablegen.")}</div></div>}
         <ul className="ro-taps">
           {results.map((r) => (
             <li key={r.userId} className={r.pass ? '' : 'failed'}>
@@ -515,7 +515,7 @@ function TapDialog({ tenantId, users, policy, onClose, onDone }: { tenantId: str
                 <>
                   <code className="ro-tap-code">{r.pass}</code>
                   <span className="small muted">{r.startDateTime ? 'ab ' + fmtDate(r.startDateTime) : 'sofort'} · {lifetimeLabel(r.lifetimeInMinutes ?? 60)}{r.isUsableOnce ? ' · einmalig' : ''}</span>
-                  <button type="button" className="icon-btn" aria-label="Kopieren" onClick={async () => { await navigator.clipboard.writeText(r.pass!); toast.ok('Kopiert.'); }}><Icon name="copy" size={16} /></button>
+                  <button type="button" className="icon-btn" aria-label={tr("Kopieren")} onClick={async () => { await navigator.clipboard.writeText(r.pass!); toast.ok(tr("Kopiert.")); }}><Icon name="copy" size={16} /></button>
                 </>
               ) : <span className="ro-tap-error">{r.error}</span>}
             </li>
@@ -526,26 +526,26 @@ function TapDialog({ tenantId, users, policy, onClose, onDone }: { tenantId: str
   }
 
   return (
-    <Modal title={users.length === 1 ? 'TAP erzeugen' : `TAP für ${users.length} Personen erzeugen`} onClose={onClose} footer={<>
-      <button type="button" onClick={onClose}>Abbrechen</button>
-      <button type="button" className="primary" disabled={busy || users.length === 0 || users.length > 100} onClick={submit}>{busy ? 'Wird erzeugt …' : 'Erzeugen'}</button>
+    <Modal title={users.length === 1 ? tr("TAP erzeugen") : tr("TAP für {length} Personen erzeugen", { length: users.length })} onClose={onClose} footer={<>
+      <button type="button" onClick={onClose}>{tr("Abbrechen")}</button>
+      <button type="button" className="primary" disabled={busy || users.length === 0 || users.length > 100} onClick={submit}>{busy ? tr("Wird erzeugt …") : tr("Erzeugen")}</button>
     </>}>
-      <p className="muted">Mit dem befristeten Zugriffspass melden sich die Personen ohne Kennwort an und richten ihren Passkey ein. {users.length > 100 && <strong>Höchstens 100 Personen auf einmal.</strong>}</p>
-      <div className="ro-who">{users.slice(0, 8).map((u) => <span key={u.id} className="chip" style={{ paddingRight: 10 }}>{u.displayName ?? u.upn}</span>)}{users.length > 8 && <span className="muted small">und {users.length - 8} weitere</span>}</div>
-      {policy && !policy.enabled && <div className="alert warn">Die Methode ist im Tenant ausgeschaltet; das Erzeugen schlägt fehl, bis sie aktiviert ist.</div>}
+      <p className="muted">{tr("Mit dem befristeten Zugriffspass melden sich die Personen ohne Kennwort an und richten ihren Passkey ein.")} {users.length > 100 && <strong>{tr("Höchstens 100 Personen auf einmal.")}</strong>}</p>
+      <div className="ro-who">{users.slice(0, 8).map((u) => <span key={u.id} className="chip" style={{ paddingRight: 10 }}>{u.displayName ?? u.upn}</span>)}{users.length > 8 && <span className="muted small">{tr("und {n} weitere", { n: users.length - 8 })}</span>}</div>
+      {policy && !policy.enabled && <div className="alert warn">{tr("Die Methode ist im Tenant ausgeschaltet; das Erzeugen schlägt fehl, bis sie aktiviert ist.")}</div>}
       <div className="ro-form">
-        <label className="field"><span className="field-label">Gültigkeit</span>
+        <label className="field"><span className="field-label">{tr("Gültigkeit")}</span>
           <select value={lifetime} onChange={(e) => setLifetime(Number(e.target.value))}>{options.map((m) => <option key={m} value={m}>{lifetimeLabel(m)}</option>)}</select>
-          <span className="field-hint">Laut Tenant-Richtlinie {lifetimeLabel(min)} bis {lifetimeLabel(max)}.</span>
+          <span className="field-hint">{tr("Laut Tenant-Richtlinie {min} bis {max}.", { min: lifetimeLabel(min), max: lifetimeLabel(max) })}</span>
         </label>
-        <div className="field"><span className="field-label">Beginn</span>
-          <div className="segmented"><button type="button" className={startNow ? 'on' : ''} onClick={() => setStartNow(true)}>Sofort</button><button type="button" className={!startNow ? 'on' : ''} onClick={() => setStartNow(false)}>Später</button></div>
+        <div className="field"><span className="field-label">{tr("Beginn")}</span>
+          <div className="segmented"><button type="button" className={startNow ? 'on' : ''} onClick={() => setStartNow(true)}>{tr("Sofort")}</button><button type="button" className={!startNow ? 'on' : ''} onClick={() => setStartNow(false)}>{tr("Später")}</button></div>
           {!startNow && <input type="datetime-local" value={start} onChange={(e) => setStart(e.target.value)} style={{ marginTop: 8 }} />}
         </div>
       </div>
       <label className="check"><input type="checkbox" checked={policy?.isUsableOnceEnforced ? true : once} disabled={policy?.isUsableOnceEnforced} onChange={(e) => setOnce(e.target.checked)} />
-        <span>Nur einmal verwendbar{policy?.isUsableOnceEnforced && <span className="muted small"> (vom Tenant vorgegeben)</span>}</span></label>
-      <label className="check"><input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} /><span>Vorhandenen TAP ersetzen <span className="muted small">(Entra erlaubt nur einen pro Person)</span></span></label>
+        <span>{tr("Nur einmal verwendbar")}{policy?.isUsableOnceEnforced && <span className="muted small"> {tr("(vom Tenant vorgegeben)")}</span>}</span></label>
+      <label className="check"><input type="checkbox" checked={replace} onChange={(e) => setReplace(e.target.checked)} /><span>{tr("Vorhandenen TAP ersetzen")} <span className="muted small">{tr("(Entra erlaubt nur einen pro Person)")}</span></span></label>
       <ErrorBox error={error} />
     </Modal>
   );
@@ -569,18 +569,18 @@ function RemoveDialog({ tenantId, users, data, onClose, onDone }: { tenantId: st
     setResults(r);
     onDone();
     const n = r.reduce((s, x) => s + x.removed, 0);
-    toast.ok(`${n} Methode${n === 1 ? '' : 'n'} entfernt.`);
+    toast.ok(tr("{n} Methode{n2} entfernt.", { n, n2: n === 1 ? '' : 'n' }));
   });
 
   if (results) {
     return (
-      <Modal title="Methoden entfernt" onClose={onClose} footer={<button type="button" className="primary" onClick={onClose}>Fertig</button>}>
+      <Modal title={tr("Methoden entfernt")} onClose={onClose} footer={<button type="button" className="primary" onClick={onClose}>{tr("Fertig")}</button>}>
         <ul className="ro-taps">
           {results.map((r) => (
             <li key={r.userId} className={r.error ? 'failed' : ''}>
               <div><strong>{data.users.find((u) => u.id === r.userId)?.displayName ?? r.upn}</strong><div className="small muted">{r.upn}</div></div>
               {r.error ? <span className="ro-tap-error">{r.error}</span>
-                : r.removed > 0 ? <span><Badge tone="ok">{r.removed} entfernt</Badge> <span className="small muted">{r.removedLabels.join(', ')}</span></span>
+                : r.removed > 0 ? <span><Badge tone="ok">{tr("{removed} entfernt", { removed: r.removed })}</Badge> <span className="small muted">{r.removedLabels.join(', ')}</span></span>
                 : <span className="small muted">{r.skipped}</span>}
             </li>
           ))}
@@ -590,12 +590,12 @@ function RemoveDialog({ tenantId, users, data, onClose, onDone }: { tenantId: st
   }
 
   return (
-    <Modal title="Andere Methoden entfernen" onClose={onClose} footer={<>
-      <button type="button" onClick={onClose}>Abbrechen</button>
-      <button type="button" className="primary danger-fill" disabled={busy || !canSubmit} onClick={submit}>{busy ? 'Wird entfernt …' : `Bei ${effective} Person${effective === 1 ? '' : 'en'} entfernen`}</button>
+    <Modal title={tr("Andere Methoden entfernen")} onClose={onClose} footer={<>
+      <button type="button" onClick={onClose}>{tr("Abbrechen")}</button>
+      <button type="button" className="primary danger-fill" disabled={busy || !canSubmit} onClick={submit}>{busy ? tr("Wird entfernt …") : tr("Bei {effective} Person{n} entfernen", { effective, n: effective === 1 ? '' : 'en' })}</button>
     </>}>
-      <p className="muted">Welche Methoden sollen bei den {users.length} ausgewählten Personen in Entra gelöscht werden? Kennwort und Passkeys bleiben immer erhalten.</p>
-      {present.length === 0 ? <Empty>Keine der ausgewählten Personen hat eine entfernbare Methode.</Empty> : (
+      <p className="muted">{tr("Welche Methoden sollen bei den {length} ausgewählten Personen in Entra gelöscht werden? Kennwort und Passkeys bleiben immer erhalten.", { length: users.length })}</p>
+      {present.length === 0 ? <Empty>{tr("Keine der ausgewählten Personen hat eine entfernbare Methode.")}</Empty> : (
         <div className="ro-kinds">
           {present.map((k) => {
             const n = users.filter((u) => u.methods.some((m) => k.reportNames.includes(m))).length;
@@ -610,11 +610,11 @@ function RemoveDialog({ tenantId, users, data, onClose, onDone }: { tenantId: st
         </div>
       )}
       <label className="check"><input type="checkbox" checked={keep} onChange={(e) => setKeep(e.target.checked)} />
-        <span><strong>Nur bei Personen, die danach noch einen Passkey haben</strong><br /><span className="small muted">Schützt davor, jemanden ohne MFA zurückzulassen. {keep && unsafe > 0 && `${unsafe} Person${unsafe === 1 ? '' : 'en'} werden dadurch übersprungen.`}</span></span></label>
+        <span><strong>{tr("Nur bei Personen, die danach noch einen Passkey haben")}</strong><br /><span className="small muted">{tr("Schützt davor, jemanden ohne MFA zurückzulassen.")} {keep && unsafe > 0 && tr("{unsafe} Person{n} werden dadurch übersprungen.", { unsafe, n: unsafe === 1 ? '' : 'en' })}</span></span></label>
       {!keep && (
         <div className="alert error">
-          <strong>Ohne Schutz</strong> können Personen danach ohne MFA dastehen{unsafe > 0 && ` (hier ${unsafe})`}. Zum Bestätigen <code>ENTFERNEN</code> eingeben:
-          <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="ENTFERNEN" style={{ marginTop: 8, width: '100%' }} aria-label="Bestätigung" />
+          <strong>{tr("Ohne Schutz")}</strong> {tr("können Personen danach ohne MFA dastehen")}{unsafe > 0 && ` (hier ${unsafe})`}{tr(". Zum Bestätigen")} <code>{tr("ENTFERNEN")}</code> {tr("eingeben:")}
+          <input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="ENTFERNEN" style={{ marginTop: 8, width: '100%' }} aria-label={tr("Bestätigung")} />
         </div>
       )}
       <ErrorBox error={error} />

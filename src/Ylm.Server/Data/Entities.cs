@@ -70,6 +70,9 @@ public sealed class PlatformUser
     public DateTimeOffset? LastLoginAt { get; set; }
     public List<PlatformUserTenant> TenantAssignments { get; set; } = [];
 
+    /// <summary>Sprache der Oberfläche ("de" oder "en"); null = Sprache des Browsers.</summary>
+    public string? Language { get; set; }
+
     public UserLoginKind LoginKind { get; set; } = UserLoginKind.Entra;
     /// <summary>WebAuthn user handle (zufällig, nicht die Benutzer-ID).</summary>
     public byte[]? WebAuthnUserHandle { get; set; }

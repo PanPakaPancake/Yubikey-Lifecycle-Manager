@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 /** Browser side of WebAuthn: converts the server's JSON options and the authenticator's answer (base64url <-> ArrayBuffer). */
 
 type Json = Record<string, unknown>;
@@ -24,7 +25,7 @@ export async function createPasskey(options: Json) {
     excludeCredentials: descriptors(o.excludeCredentials) ?? [],
   } as unknown as PublicKeyCredentialCreationOptions;
   const cred = (await navigator.credentials.create({ publicKey })) as PublicKeyCredential | null;
-  if (!cred) throw new Error('Abgebrochen.');
+  if (!cred) throw new Error(tr("Abgebrochen."));
   const r = cred.response as AuthenticatorAttestationResponse;
   return {
     id: cred.id,
@@ -39,7 +40,7 @@ export async function getPasskey(options: Json) {
   const o = options as Json & { challenge: string; allowCredentials?: { id: string; type: string }[] };
   const publicKey = { ...o, challenge: toBuffer(o.challenge), allowCredentials: descriptors(o.allowCredentials) ?? [] } as unknown as PublicKeyCredentialRequestOptions;
   const cred = (await navigator.credentials.get({ publicKey })) as PublicKeyCredential | null;
-  if (!cred) throw new Error('Abgebrochen.');
+  if (!cred) throw new Error(tr("Abgebrochen."));
   const r = cred.response as AuthenticatorAssertionResponse;
   return {
     id: cred.id,
@@ -53,9 +54,9 @@ export async function getPasskey(options: Json) {
 /** Friendly German text for the typical browser errors. */
 export function passkeyError(e: unknown) {
   if (e instanceof DOMException) {
-    if (e.name === 'NotAllowedError') return 'Abgebrochen oder Zeit abgelaufen. Bitte erneut versuchen und den Schlüssel berühren.';
-    if (e.name === 'InvalidStateError') return 'Dieser Schlüssel ist für dieses Konto bereits eingerichtet.';
-    if (e.name === 'SecurityError') return 'Passkeys funktionieren nur über HTTPS mit der richtigen Server-Adresse.';
+    if (e.name === 'NotAllowedError') return tr("Abgebrochen oder Zeit abgelaufen. Bitte erneut versuchen und den Schlüssel berühren.");
+    if (e.name === 'InvalidStateError') return tr("Dieser Schlüssel ist für dieses Konto bereits eingerichtet.");
+    if (e.name === 'SecurityError') return tr("Passkeys funktionieren nur über HTTPS mit der richtigen Server-Adresse.");
   }
   return e instanceof Error ? e.message : String(e);
 }

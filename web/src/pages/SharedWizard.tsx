@@ -9,6 +9,7 @@ import { useToast } from '../feedback';
 import { JobProgress } from './KeyDetail';
 import { BreakglassSheetModal } from './BreakglassSheet';
 import { KeyStep, ProfileStep, type EntraUser, type Violation } from './Wizard';
+import { tr } from '../i18n';
 
 interface SharedPreview {
   key: KeyInfo; violations: Violation[]; resetRequired: boolean; resetPlanned: boolean; willForcePinChange: boolean;
@@ -19,7 +20,7 @@ interface SharedPreview {
 
 interface Picked { id: string; userPrincipalName: string; displayName?: string }
 
-const stepNames = ['Konten & Verwahrer', 'Key', 'Profil & Prüfung', 'Registrierung', 'PIN-Brief'];
+const stepNames = [tr("Konten & Verwahrer"), 'Key', tr("Profil & Prüfung"), tr("Registrierung"), tr("PIN-Brief")];
 
 /** Geteilter Key (V1.1): mehrere Konten auf einem Key, Pflichtfeld Verwahrer; Breakglass optional mit Vier-Augen-Freigabe. */
 export default function SharedWizardPage() {
@@ -79,34 +80,34 @@ export default function SharedWizardPage() {
   return (
     <>
       <PageHeader
-        title="Geteilter Key"
-        subtitle="Mehrere Konten auf einem Key, z. B. für Produktionsmitarbeiter oder Breakglass-Konten. Ausgabe und Rückgabe regelt der Verwahrer."
-        actions={step > 0 && <button onClick={restart}>Neu beginnen</button>}
+        title={tr("Geteilter Key")}
+        subtitle={tr("Mehrere Konten auf einem Key, z. B. für Produktionsmitarbeiter oder Breakglass-Konten. Ausgabe und Rückgabe regelt der Verwahrer.")}
+        actions={step > 0 && <button onClick={restart}>{tr("Neu beginnen")}</button>}
       />
       {step === 0 && <RegisterModes />}
       <Steps names={stepNames} current={step} />
       <ErrorBox error={error} />
-      {!tenantId && <ChooseTenant purpose="Für den geteilten Key" />}
+      {!tenantId && <ChooseTenant purpose={tr("Für den geteilten Key")} />}
 
       {step === 0 && tenantId && (
-        <Card title="Welche Konten kommen auf den Key?">
-          <div className="tabs" role="tablist" aria-label="Nutzung">
+        <Card title={tr("Welche Konten kommen auf den Key?")}>
+          <div className="tabs" role="tablist" aria-label={tr("Nutzung")}>
             {(['Shared', 'Breakglass'] as KeyUsage[]).map((u) => (
               <button key={u} type="button" role="tab" aria-selected={usage === u} className={usage === u ? 'selected' : ''} onClick={() => setUsage(u)}>{usageLabels[u]}</button>
             ))}
           </div>
           <p className="small muted" style={{ marginTop: 8 }}>
             {usage === 'Shared'
-              ? 'Ein Key für mehrere Personen, z. B. an einem Schichtarbeitsplatz. Der Verwahrer gibt ihn aus und nimmt ihn zurück.'
-              : 'Notfallzugang für Breakglass-Konten. Der Key gehört in einen Tresor; der Verwahrer ist verantwortlich.'}
-            {usage === 'Breakglass' && tenant?.requireBreakglassApproval && <> <strong>Dieser Tenant verlangt eine Vier-Augen-Freigabe.</strong></>}
+              ? tr("Ein Key für mehrere Personen, z. B. an einem Schichtarbeitsplatz. Der Verwahrer gibt ihn aus und nimmt ihn zurück.")
+              : tr("Notfallzugang für Breakglass-Konten. Der Key gehört in einen Tresor; der Verwahrer ist verantwortlich.")}
+            {usage === 'Breakglass' && tenant?.requireBreakglassApproval && <> <strong>{tr("Dieser Tenant verlangt eine Vier-Augen-Freigabe.")}</strong></>}
           </p>
-          <Field label="Verwahrer *" hint="Wer den Key aufbewahrt, z. B. „Dieter Leiter (Produktion)“ oder „IT-Tresor Raum 2.14“">
+          <Field label={tr("Verwahrer *")} hint={tr("Wer den Key aufbewahrt, z. B. „Dieter Leiter (Produktion)“ oder „IT-Tresor Raum 2.14“")}>
             <input value={custodian} onChange={(e) => setCustodian(e.target.value)} />
           </Field>
           <AccountPicker tenantId={tenantId} accounts={accounts} setAccounts={setAccounts} />
           <div className="actions" style={{ marginTop: 12 }}>
-            <button className="primary" disabled={accounts.length === 0 || !custodian.trim()} onClick={() => setStep(1)}>Weiter</button>
+            <button className="primary" disabled={accounts.length === 0 || !custodian.trim()} onClick={() => setStep(1)}>{tr("Weiter")}</button>
           </div>
         </Card>
       )}
@@ -116,35 +117,35 @@ export default function SharedWizardPage() {
       {step === 2 && (
         <ProfileStep tenantId={tenantId} profileId={profileId} setProfileId={(id) => { setProfileId(id); setPreview(undefined); }}>
           <div className="actions">
-            <button onClick={() => setStep(1)}>Zurück</button>
-            <button disabled={!profileId || busy} onClick={loadPreview}>{preview ? 'Erneut prüfen' : 'Prüfen'}</button>
+            <button onClick={() => setStep(1)}>{tr("Zurück")}</button>
+            <button disabled={!profileId || busy} onClick={loadPreview}>{preview ? tr("Erneut prüfen") : tr("Prüfen")}</button>
           </div>
           {preview && (
             <div style={{ marginTop: 16 }}>
               <table>
                 <tbody>
-                  <tr><th>Nutzung</th><td>{usageLabels[usage]} · Verwahrer <strong>{custodian}</strong></td></tr>
-                  <tr><th>Key</th><td>{preview.key.model} · Seriennummer <span className="mono">{preview.key.serialNumber}</span> · Firmware <span className="mono">{preview.key.firmwareVersion}</span></td></tr>
-                  <tr><th>Freie Passkey-Plätze</th><td>{preview.remainingSlots ?? 'unbekannt'}{preview.remainingSlots != null && <span className="small muted"> (je nach Firmware 25 bis 100 insgesamt)</span>}</td></tr>
-                  <tr><th>Konten</th><td>{preview.users.map((u) => <div key={u.id}>{u.displayName ?? u.userPrincipalName} <span className="muted small">{u.userPrincipalName}</span> {u.alreadyOnKey && <Badge tone="warn">schon auf dem Key</Badge>} {!u.accountEnabled && <Badge tone="error">deaktiviert</Badge>}</div>)}</td></tr>
-                  <tr><th>PIN</th><td>{preview.needsCurrentPin && !performReset ? 'Bleibt unverändert (aktuelle PIN wird gebraucht)' : preview.willForcePinChange ? 'Neu, Wechsel wird erzwungen' : 'Neu'}</td></tr>
+                  <tr><th>{tr("Nutzung")}</th><td>{tr("{n} · Verwahrer", { n: usageLabels[usage] })} <strong>{custodian}</strong></td></tr>
+                  <tr><th>{tr("Key")}</th><td>{tr("{model} · Seriennummer", { model: preview.key.model })} <span className="mono">{preview.key.serialNumber}</span> {tr("· Firmware")} <span className="mono">{preview.key.firmwareVersion}</span></td></tr>
+                  <tr><th>{tr("Freie Passkey-Plätze")}</th><td>{preview.remainingSlots ?? 'unbekannt'}{preview.remainingSlots != null && <span className="small muted"> {tr("(je nach Firmware 25 bis 100 insgesamt)")}</span>}</td></tr>
+                  <tr><th>{tr("Konten")}</th><td>{preview.users.map((u) => <div key={u.id}>{u.displayName ?? u.userPrincipalName} <span className="muted small">{u.userPrincipalName}</span> {u.alreadyOnKey && <Badge tone="warn">{tr("schon auf dem Key")}</Badge>} {!u.accountEnabled && <Badge tone="error">{tr("deaktiviert")}</Badge>}</div>)}</td></tr>
+                  <tr><th>{tr("PIN")}</th><td>{preview.needsCurrentPin && !performReset ? tr("Bleibt unverändert (aktuelle PIN wird gebraucht)") : preview.willForcePinChange ? tr("Neu, Wechsel wird erzwungen") : tr("Neu")}</td></tr>
                 </tbody>
               </table>
               {preview.inventoryKey && preview.inventoryKey.activeRegistrations.length > 0 && (
-                <Info>Schon auf dem Key ({usageLabels[preview.inventoryKey.usage]}{preview.inventoryKey.custodian ? `, Verwahrer ${preview.inventoryKey.custodian}` : ''}): {preview.inventoryKey.activeRegistrations.join(', ')}</Info>
+                <Info>{tr("Schon auf dem Key ({n}", { n: usageLabels[preview.inventoryKey.usage] })}{preview.inventoryKey.custodian ? tr(", Verwahrer {custodian}", { custodian: preview.inventoryKey.custodian }) : ''}): {preview.inventoryKey.activeRegistrations.join(', ')}</Info>
               )}
               {preview.problems.map((p) => <Info key={p} tone={performReset ? 'warn' : 'error'}>{p}</Info>)}
               {preview.violations.length > 0 && (
                 <div className="alert warn">
-                  <strong>Der Key passt nicht vollständig zum Profil:</strong>
+                  <strong>{tr("Der Key passt nicht vollständig zum Profil:")}</strong>
                   {preview.violations.map((v) => (
                     <div key={v.code} className={'violation-row' + (!v.canOverride && !v.resolvedByReset ? ' blocking' : '')}>
                       <span className="violation-icon" aria-hidden>!</span>
-                      <div>{v.message}{v.resolvedByReset && <div className="small muted">Wird durch einen Werksreset behoben.</div>}</div>
+                      <div>{v.message}{v.resolvedByReset && <div className="small muted">{tr("Wird durch einen Werksreset behoben.")}</div>}</div>
                       {v.canOverride && !(v.resolvedByReset && performReset) && (
                         <label className="check">
                           <input type="checkbox" checked={overrides.includes(v.code)} onChange={(e) => setOverrides((o) => e.target.checked ? [...o, v.code] : o.filter((x) => x !== v.code))} />
-                          Für diesen Key bewusst überschreiben
+                          {tr("Für diesen Key bewusst überschreiben")}
                         </label>
                       )}
                     </div>
@@ -152,45 +153,45 @@ export default function SharedWizardPage() {
                 </div>
               )}
               {preview.needsCurrentPin && !performReset && (
-                <Field label="Aktuelle PIN des Keys *" hint="Beim Verwahrer erfragen. Wird nur für diesen Vorgang an den Agent gegeben und nicht gespeichert. Steht der erzwungene PIN-Wechsel noch aus, muss der Verwahrer die PIN zuerst ändern.">
+                <Field label={tr("Aktuelle PIN des Keys *")} hint={tr("Beim Verwahrer erfragen. Wird nur für diesen Vorgang an den Agent gegeben und nicht gespeichert. Steht der erzwungene PIN-Wechsel noch aus, muss der Verwahrer die PIN zuerst ändern.")}>
                   <input type="password" autoComplete="off" inputMode="numeric" value={currentPin} onChange={(e) => setCurrentPin(e.target.value)} style={{ maxWidth: 220 }} />
                 </Field>
               )}
               {(preview.resetRequired || preview.resetPlanned || preview.key.pinIsSet) && (
                 <label className="check" style={{ margin: '12px 0' }}>
                   <input type="checkbox" checked={performReset} disabled={preview.resetRequired} onChange={(e) => setPerformReset(e.target.checked)} />
-                  FIDO-Werksreset vor der Registrierung {preview.resetRequired && '(erforderlich)'}
+                  {tr("FIDO-Werksreset vor der Registrierung")} {preview.resetRequired && '(erforderlich)'}
                 </label>
               )}
-              {performReset && <Info tone="error"><strong>Achtung:</strong> Der Reset löscht alle Passkeys auf dem Key unwiderruflich; vorhandene Konten werden auch in Entra entfernt.</Info>}
+              {performReset && <Info tone="error"><strong>{tr("Achtung:")}</strong> {tr("Der Reset löscht alle Passkeys auf dem Key unwiderruflich; vorhandene Konten werden auch in Entra entfernt.")}</Info>}
               {preview.approvalRequired && (
                 <ApprovalBox tenantId={tenantId} accounts={accounts} custodian={custodian} approvals={preview.approvals} approvalId={approvalId} setApprovalId={setApprovalId} onRequested={loadPreview} />
               )}
-              <button className="primary" disabled={!canStart || busy} onClick={start}>Registrierung starten</button>
+              <button className="primary" disabled={!canStart || busy} onClick={start}>{tr("Registrierung starten")}</button>
             </div>
           )}
         </ProfileStep>
       )}
 
       {step === 3 && job && (
-        <Card title="Registrierung läuft">
+        <Card title={tr("Registrierung läuft")}>
           <JobProgress job={job} />
-          {job.state === 'Failed' && <div className="actions"><button onClick={() => { setJob(undefined); setStep(2); }}>Zurück zur Prüfung</button></div>}
+          {job.state === 'Failed' && <div className="actions"><button onClick={() => { setJob(undefined); setStep(2); }}>{tr("Zurück zur Prüfung")}</button></div>}
         </Card>
       )}
 
       {step === 4 && job && (
-        <Card title="Fertig">
-          <Info tone="ok">{accounts.length} Konto/Konten sind auf dem Key registriert. Verwahrer: {custodian}.</Info>
+        <Card title={tr("Fertig")}>
+          <Info tone="ok">{tr("{length} Konto/Konten sind auf dem Key registriert. Verwahrer: {custodian}.", { length: accounts.length, custodian })}</Info>
           {job.notes.length > 0 && <ul className="small muted">{job.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
-          {job.pinLetterId && <p>Laden Sie den PIN-Brief für den Verwahrer jetzt herunter. Die PIN wird nicht gespeichert; der Brief ist 30 Minuten abrufbar.</p>}
+          {job.pinLetterId && <p>{tr("Laden Sie den PIN-Brief für den Verwahrer jetzt herunter. Die PIN wird nicht gespeichert; der Brief ist 30 Minuten abrufbar.")}</p>}
           <div className="actions">
-            {job.pinLetterId && <button className="primary" onClick={() => download('/api/pin-letters/' + job.pinLetterId)}>PIN-Brief (PDF)</button>}
-            {usage === 'Breakglass' && <button onClick={() => setSheet(true)}>Notfallblatt drucken</button>}
-            {job.keyId && <Link className="btn" to={'/keys/' + job.keyId}>Key ansehen</Link>}
-            <button onClick={restart}>Nächsten geteilten Key</button>
+            {job.pinLetterId && <button className="primary" onClick={() => download('/api/pin-letters/' + job.pinLetterId)}>{tr("PIN-Brief (PDF)")}</button>}
+            {usage === 'Breakglass' && <button onClick={() => setSheet(true)}>{tr("Notfallblatt drucken")}</button>}
+            {job.keyId && <Link className="btn" to={'/keys/' + job.keyId}>{tr("Key ansehen")}</Link>}
+            <button onClick={restart}>{tr("Nächsten geteilten Key")}</button>
           </div>
-          {usage === 'Breakglass' && <p className="small muted">Mit dem Notfallblatt notieren Sie weitere Notfallkonten (z. B. Amazon, Registrar) für den versiegelten Umschlag. Es wird nicht gespeichert und lässt sich später an der Key-Ansicht erneut erstellen.</p>}
+          {usage === 'Breakglass' && <p className="small muted">{tr("Mit dem Notfallblatt notieren Sie weitere Notfallkonten (z. B. Amazon, Registrar) für den versiegelten Umschlag. Es wird nicht gespeichert und lässt sich später an der Key-Ansicht erneut erstellen.")}</p>}
           {sheet && <BreakglassSheetModal context={{ tenantName: tenant?.displayName, serialNumber: preview?.key.serialNumber, custodian,
             accounts: accounts.map((a) => ({ userPrincipalName: a.userPrincipalName, userDisplayName: a.displayName })) }} onClose={() => setSheet(false)} />}
         </Card>
@@ -204,22 +205,22 @@ function AccountPicker({ tenantId, accounts, setAccounts }: { tenantId: string; 
   const { results, busy, error } = useLiveSearch<EntraUser>((term) => `/api/tenants/${tenantId}/users?q=${encodeURIComponent(term)}`, q);
   return (
     <>
-      <Field label="Konten" hint="Name, UPN oder Mail eintippen und Konten hinzufügen. Höchstens 25 pro Vorgang.">
-        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Konto suchen …" />
+      <Field label={tr("Konten")} hint={tr("Name, UPN oder Mail eintippen und Konten hinzufügen. Höchstens 25 pro Vorgang.")}>
+        <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={tr("Konto suchen …")} />
       </Field>
       <ErrorBox error={error} />
-      {busy && <Spinner label="Suche in Entra ID …" />}
+      {busy && <Spinner label={tr("Suche in Entra ID …")} />}
       {results && results.length > 0 && (
         <div className="pick">
           {results.filter((u) => !accounts.some((a) => a.id === u.id)).slice(0, 8).map((u) => (
             <button key={u.id} disabled={!u.accountEnabled} onClick={() => { setAccounts((a) => [...a, { id: u.id, userPrincipalName: u.userPrincipalName, displayName: u.displayName }]); setQ(''); }}>
               <span><strong>{u.displayName ?? u.userPrincipalName}</strong><br /><span className="small muted">{u.userPrincipalName}</span></span>
-              <span className="badges">{u.accountEnabled ? <Badge tone="info">hinzufügen</Badge> : <Badge tone="error">deaktiviert</Badge>}</span>
+              <span className="badges">{u.accountEnabled ? <Badge tone="info">{tr("hinzufügen")}</Badge> : <Badge tone="error">{tr("deaktiviert")}</Badge>}</span>
             </button>
           ))}
         </div>
       )}
-      {accounts.length === 0 ? <p className="small muted">Noch keine Konten ausgewählt.</p> : (
+      {accounts.length === 0 ? <p className="small muted">{tr("Noch keine Konten ausgewählt.")}</p> : (
         <div className="chips" style={{ marginTop: 8 }}>
           {accounts.map((a) => (
             <span className="chip" key={a.id}>
@@ -245,31 +246,31 @@ function ApprovalBox({ tenantId, accounts, custodian, approvals, approvalId, set
   const pending = mine?.map((m) => m.approval).filter((a) => a.status === 'Pending') ?? [];
   const request = () => run(async () => {
     await api.post(`/api/tenants/${tenantId}/approvals`, { entraUserIds: accounts.map((a) => a.id), custodian, reason });
-    toast.ok('Freigabe beantragt. Ein zweiter Admin muss sie unter „Freigaben“ erteilen.');
+    toast.ok(tr("Freigabe beantragt. Ein zweiter Admin muss sie unter „Freigaben“ erteilen."));
     setReason('');
     reload();
     onRequested();
   });
   return (
     <div className="alert info" style={{ margin: '12px 0' }}>
-      <strong>Vier-Augen-Freigabe nötig</strong>
-      <p className="small">Dieser Tenant verlangt für Breakglass-Keys die Freigabe eines zweiten Admins. Eine Freigabe gilt 24 Stunden und für einen Lauf.</p>
+      <strong>{tr("Vier-Augen-Freigabe nötig")}</strong>
+      <p className="small">{tr("Dieser Tenant verlangt für Breakglass-Keys die Freigabe eines zweiten Admins. Eine Freigabe gilt 24 Stunden und für einen Lauf.")}</p>
       {approvals.length > 0 ? (
-        <Field label="Freigabe">
+        <Field label={tr("Freigabe")}>
           <select value={approvalId} onChange={(e) => setApprovalId(e.target.value)}>
-            {approvals.map((a) => <option key={a.id} value={a.id}>{a.userPrincipalNames.join(', ')} · freigegeben von {a.decidedByName} · gültig bis {fmtDate(a.validUntil)}</option>)}
+            {approvals.map((a) => <option key={a.id} value={a.id}>{tr("{n} · freigegeben von {decidedByName} · gültig bis {validUntil}", { n: a.userPrincipalNames.join(', '), decidedByName: a.decidedByName, validUntil: fmtDate(a.validUntil) })}</option>)}
           </select>
         </Field>
       ) : pending.length > 0 ? (
-        <p>Offener Antrag: {pending.map((a) => <span key={a.id}><Badge tone="warn">{approvalLabels[a.status]}</Badge> {a.userPrincipalNames.join(', ')} </span>)}. Nach der Freigabe hier „Erneut prüfen“.</p>
+        <p>{tr("Offener Antrag:")} {pending.map((a) => <span key={a.id}><Badge tone="warn">{approvalLabels[a.status]}</Badge> {a.userPrincipalNames.join(', ')} </span>)}{tr(". Nach der Freigabe hier „Erneut prüfen“.")}</p>
       ) : can('RegisterKeys') && (
         <>
-          <Field label="Grund *"><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="z. B. Neue Notfallkonten nach Audit" /></Field>
-          <button disabled={!reason.trim() || busy} onClick={request}>Freigabe beantragen</button>
+          <Field label={tr("Grund *")}><input value={reason} onChange={(e) => setReason(e.target.value)} placeholder={tr("z. B. Neue Notfallkonten nach Audit")} /></Field>
+          <button disabled={!reason.trim() || busy} onClick={request}>{tr("Freigabe beantragen")}</button>
         </>
       )}
       <ErrorBox error={error} />
-      {approvals.length === 0 && pending.length === 0 && mine && mine.length === 0 && <Empty>Noch keine Freigaben.</Empty>}
+      {approvals.length === 0 && pending.length === 0 && mine && mine.length === 0 && <Empty>{tr("Noch keine Freigaben.")}</Empty>}
     </div>
   );
 }

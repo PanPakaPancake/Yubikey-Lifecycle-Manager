@@ -1,4 +1,5 @@
 import { useId } from 'react';
+import { tr } from './i18n';
 
 /**
  * Logo „YubiKey LC Manager“: ein Key in einer Umlaufbahn (der Lebenszyklus). Der Bogen dreht sich langsam,
@@ -46,8 +47,8 @@ export function LogoMark({ size = 40 }: { size?: number }) {
 export function Wordmark({ sub }: { sub?: string }) {
   return (
     <span className="ylm-wordmark">
-      <span className="ylm-wordmark-eyebrow">YubiKey</span>
-      <span className="ylm-wordmark-name">LC <b>Manager</b></span>
+      <span className="ylm-wordmark-eyebrow">{tr("YubiKey")}</span>
+      <span className="ylm-wordmark-name">{tr("LC")} <b>{tr("Manager")}</b></span>
       {sub && <small>{sub}</small>}
     </span>
   );

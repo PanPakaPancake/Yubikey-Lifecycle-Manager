@@ -7,8 +7,9 @@ import { useToast } from '../feedback';
 import { BrandingCard } from './Branding';
 import { LetterEditorCard } from './LetterEditor';
 import { TenantProfilesCard } from './Profiles';
+import { tr } from '../i18n';
 
-const statusText = { Ok: 'In Ordnung', Warning: 'Hinweis', Failed: 'Fehlt' } as const;
+const statusText = { Ok: tr("In Ordnung"), Warning: tr("Hinweis"), Failed: tr("Fehlt") } as const;
 
 export default function TenantDetailPage({ id: propId }: { id?: string }) {
   const routeParams = useParams();
@@ -21,7 +22,7 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
   const [offboarding, setOffboarding] = useState(false);
 
   if (error) return <ErrorBox error={error} />;
-  if (!t) return <Spinner label="Wird geladen …" />;
+  if (!t) return <Spinner label={tr("Wird geladen …")} />;
   const active = t.status === 'Active';
   const fixable = t.checks.filter((c) => c.canFix && c.status !== 'Ok');
 
@@ -29,7 +30,7 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
   const fix = (ids: string[]) => act.run(async () => setData(await api.post<Tenant>(`/api/tenants/${t.id}/fix`, { checkIds: ids })));
   const sync = () => act.run(async () => {
     const r = await api.post<{ usersScanned: number; imported: number; updated: number; removed: number }>(`/api/tenants/${t.id}/sync`);
-    toast.ok(`Synchronisiert: ${r.usersScanned} Personen geprüft, ${r.imported} Keys neu übernommen, ${r.updated} aktualisiert, ${r.removed} entfernt.`);
+    toast.ok(tr("Synchronisiert: {usersScanned} Personen geprüft, {imported} Keys neu übernommen, {updated} aktualisiert, {removed} entfernt.", { usersScanned: r.usersScanned, imported: r.imported, updated: r.updated, removed: r.removed }));
     setData(await api.get<Tenant>('/api/tenants/' + t.id));
   });
 
@@ -37,23 +38,23 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
     <>
       <PageHeader
         title={t.displayName}
-        subtitle={<><Link to="/tenants">Tenants</Link> · {t.defaultDomain} · <span className="mono small">{t.entraTenantId}</span></>}
+        subtitle={<><Link to="/tenants">{tr("Tenants")}</Link> · {t.defaultDomain} · <span className="mono small">{t.entraTenantId}</span></>}
         actions={active && <>
-          {can('SyncTenants') && <button disabled={act.busy} onClick={sync}>Jetzt synchronisieren</button>}
-          {can('ManageTenants') && <button onClick={() => download(`/api/tenants/${t.id}/export.zip`)}>Daten exportieren</button>}
+          {can('SyncTenants') && <button disabled={act.busy} onClick={sync}>{tr("Jetzt synchronisieren")}</button>}
+          {can('ManageTenants') && <button onClick={() => download(`/api/tenants/${t.id}/export.zip`)}>{tr("Daten exportieren")}</button>}
         </>}
       />
-      {params.get('onboarded') && <Info tone="ok">Der Tenant ist angebunden. Prüfen Sie unten die FIDO2-Einstellungen.</Info>}
-      {t.status === 'Offboarded' && <Info tone="warn">Dieser Tenant wurde am {fmtDate(t.offboardedAt)} offboarded. Die Daten werden am {fmtDate(t.dataDeletionDueAt, false)} gelöscht. Ein erneuter Admin-Consent stellt ihn wieder her.</Info>}
-      {t.status === 'PendingConsent' && <Info tone="warn">Der Admin-Consent für diesen Tenant fehlt noch. Fügen Sie den Tenant unter „Tenants“ erneut hinzu.</Info>}
+      {params.get('onboarded') && <Info tone="ok">{tr("Der Tenant ist angebunden. Prüfen Sie unten die FIDO2-Einstellungen.")}</Info>}
+      {t.status === 'Offboarded' && <Info tone="warn">{tr("Dieser Tenant wurde am {offboardedAt} offboarded. Die Daten werden am {n} gelöscht. Ein erneuter Admin-Consent stellt ihn wieder her.", { offboardedAt: fmtDate(t.offboardedAt), n: fmtDate(t.dataDeletionDueAt, false) })}</Info>}
+      {t.status === 'PendingConsent' && <Info tone="warn">{tr("Der Admin-Consent für diesen Tenant fehlt noch. Fügen Sie den Tenant unter „Tenants“ erneut hinzu.")}</Info>}
       <ErrorBox error={act.error} />
 
       <Card
-        title="Prüfungen"
+        title={tr("Prüfungen")}
         actions={<>
-          <span className="small muted">Zuletzt {fmtDate(t.lastCheckAt)}</span>
-          {active && <button disabled={act.busy} onClick={runChecks}>Erneut prüfen</button>}
-          {active && can('ManageTenants') && fixable.length > 1 && <button className="primary" disabled={act.busy} onClick={() => fix(fixable.map((c) => c.id))}>Alles beheben</button>}
+          <span className="small muted">{tr("Zuletzt {lastCheckAt}", { lastCheckAt: fmtDate(t.lastCheckAt) })}</span>
+          {active && <button disabled={act.busy} onClick={runChecks}>{tr("Erneut prüfen")}</button>}
+          {active && can('ManageTenants') && fixable.length > 1 && <button className="primary" disabled={act.busy} onClick={() => fix(fixable.map((c) => c.id))}>{tr("Alles beheben")}</button>}
         </>}
       >
         <div className="checks">
@@ -64,26 +65,26 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
                 <strong>{c.title}</strong> <span className="small muted">{statusText[c.status]}</span>
                 <div>{c.message}</div>
                 {c.status !== 'Ok' && c.manualInstructions && (
-                  <details><summary className="small">Manuell beheben</summary><p className="small" style={{ whiteSpace: 'pre-wrap' }}>{c.manualInstructions}</p></details>
+                  <details><summary className="small">{tr("Manuell beheben")}</summary><p className="small" style={{ whiteSpace: 'pre-wrap' }}>{c.manualInstructions}</p></details>
                 )}
               </div>
-              {active && c.canFix && c.status !== 'Ok' && can('ManageTenants') && <button className="primary" disabled={act.busy} onClick={() => fix([c.id])}>Jetzt beheben</button>}
+              {active && c.canFix && c.status !== 'Ok' && can('ManageTenants') && <button className="primary" disabled={act.busy} onClick={() => fix([c.id])}>{tr("Jetzt beheben")}</button>}
             </div>
           ))}
-          {t.checks.length === 0 && <p className="muted">Noch nicht geprüft.</p>}
+          {t.checks.length === 0 && <p className="muted">{tr("Noch nicht geprüft.")}</p>}
         </div>
       </Card>
 
       {active && (
         <div className="grid cols-2 mt">
           <SettingsCard tenant={t} onSaved={setData} />
-          <Card title="Synchronisation">
+          <Card title={tr("Synchronisation")}>
             <table>
               <tbody>
-                <tr><th>Letzter Sync</th><td>{fmtDate(t.lastSyncAt)} {t.lastSyncSucceeded === false && <Badge tone="error">Fehler</Badge>}</td></tr>
-                {t.lastSyncMessage && <tr><th>Meldung</th><td className="small">{t.lastSyncMessage}</td></tr>}
-                <tr><th>Personen in Zielgruppe</th><td>{t.targetUserCount ?? '–'}</td></tr>
-                <tr><th>Admin-Consent</th><td>{fmtDate(t.consentedAt)} durch {t.consentedBy}</td></tr>
+                <tr><th>{tr("Letzter Sync")}</th><td>{fmtDate(t.lastSyncAt)} {t.lastSyncSucceeded === false && <Badge tone="error">{tr("Fehler")}</Badge>}</td></tr>
+                {t.lastSyncMessage && <tr><th>{tr("Meldung")}</th><td className="small">{t.lastSyncMessage}</td></tr>}
+                <tr><th>{tr("Personen in Zielgruppe")}</th><td>{t.targetUserCount ?? '–'}</td></tr>
+                <tr><th>{tr("Admin-Consent")}</th><td>{tr("{consentedAt} durch {consentedBy}", { consentedAt: fmtDate(t.consentedAt), consentedBy: t.consentedBy })}</td></tr>
               </tbody>
             </table>
           </Card>
@@ -96,15 +97,15 @@ export default function TenantDetailPage({ id: propId }: { id?: string }) {
       {active && <BrandingCard tenantId={t.id} editable={!!can('ManageTenants')} />}
       {active && <LetterEditorCard tenantId={t.id} editable={!!can('ManageTenants')} />}
       {active && can('ManageApiKeys') && (
-        <Card title="API-Schlüssel" className="mt">
-          <p className="muted small" style={{ margin: 0 }}>API-Schlüssel werden jetzt plattformweit verwaltet und gelten für alle Tenants oder nur für ausgewählte. <Link to="/platform#api">Zur API-Verwaltung</Link></p>
+        <Card title={tr("API-Schlüssel")} className="mt">
+          <p className="muted small" style={{ margin: 0 }}>{tr("API-Schlüssel werden jetzt plattformweit verwaltet und gelten für alle Tenants oder nur für ausgewählte.")} <Link to="/platform#api">{tr("Zur API-Verwaltung")}</Link></p>
         </Card>
       )}
 
       {active && can('ManageTenants') && (
-        <Card title="Offboarding" className="mt">
-          <p>Die Plattform nutzt den Tenant danach nicht mehr, API-Schlüssel verlieren den Zugriff auf ihn und die Daten werden nach der Aufbewahrungsfrist gelöscht. Registrierte Keys in Entra ID bleiben unverändert.</p>
-          <button className="danger" onClick={() => setOffboarding(true)}>Tenant offboarden</button>
+        <Card title={tr("Offboarding")} className="mt">
+          <p>{tr("Die Plattform nutzt den Tenant danach nicht mehr, API-Schlüssel verlieren den Zugriff auf ihn und die Daten werden nach der Aufbewahrungsfrist gelöscht. Registrierte Keys in Entra ID bleiben unverändert.")}</p>
+          <button className="danger" onClick={() => setOffboarding(true)}>{tr("Tenant offboarden")}</button>
         </Card>
       )}
       {offboarding && <OffboardModal tenant={t} onClose={() => setOffboarding(false)} />}
@@ -134,48 +135,48 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
     onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude, requireBreakglassApproval: fourEyes, requireBreakglassRemovalApproval: fourEyesRemoval,
       ...(protectionEditable ? { protectAdmins, protectedGroups } : {}) }));
     setSaved(true);
-    toast.ok('Einstellungen gespeichert.');
+    toast.ok(tr("Einstellungen gespeichert."));
   });
 
   return (
-    <Card title="Einstellungen">
-      <Field label="Anzeigename"><input value={name} disabled={!editable} onChange={(e) => { setName(e.target.value); changed(); }} /></Field>
+    <Card title={tr("Einstellungen")}>
+      <Field label={tr("Anzeigename")}><input value={name} disabled={!editable} onChange={(e) => { setName(e.target.value); changed(); }} /></Field>
 
       <div className="field-group">
-        <span className="field-label">Zielgruppe</span>
-        <p className="field-hint" style={{ margin: '0 0 6px' }}>Personen, die einen YubiKey bekommen sollen. Grundlage für die Abdeckung im Dashboard und für die Prüfung der FIDO2-Richtlinie.</p>
-        <div className="small"><strong>Einschließen</strong></div>
-        <GroupChips groups={include} empty="Keine Gruppe gewählt: alle aktiven Benutzer des Tenants." onRemove={editable ? (id) => { setInclude(include.filter((g) => g.id !== id)); changed(); } : undefined} />
-        {editable && <GroupSearch tenantId={tenant.id} exclude={used} placeholder="Gruppe suchen …" onPick={(g) => { setInclude([...include, g]); changed(); }} />}
-        <div className="small" style={{ marginTop: 10 }}><strong>Ausschließen</strong></div>
-        <GroupChips groups={exclude} empty="Keine Ausschlussgruppe." onRemove={editable ? (id) => { setExclude(exclude.filter((g) => g.id !== id)); changed(); } : undefined} />
-        {editable && <GroupSearch tenantId={tenant.id} exclude={used} placeholder="z. B. Dienstkonten" onPick={(g) => { setExclude([...exclude, g]); changed(); }} />}
-        <p className="field-hint" style={{ margin: '6px 0 0' }}>Zielgruppe = Mitglieder aller Einschlussgruppen ohne die Mitglieder der Ausschlussgruppen. Ausschlussgruppen werden in der FIDO2-Richtlinie nicht gesperrt, sie zählen nur nicht zur Abdeckung.</p>
+        <span className="field-label">{tr("Zielgruppe")}</span>
+        <p className="field-hint" style={{ margin: '0 0 6px' }}>{tr("Personen, die einen YubiKey bekommen sollen. Grundlage für die Abdeckung im Dashboard und für die Prüfung der FIDO2-Richtlinie.")}</p>
+        <div className="small"><strong>{tr("Einschließen")}</strong></div>
+        <GroupChips groups={include} empty={tr("Keine Gruppe gewählt: alle aktiven Benutzer des Tenants.")} onRemove={editable ? (id) => { setInclude(include.filter((g) => g.id !== id)); changed(); } : undefined} />
+        {editable && <GroupSearch tenantId={tenant.id} exclude={used} placeholder={tr("Gruppe suchen …")} onPick={(g) => { setInclude([...include, g]); changed(); }} />}
+        <div className="small" style={{ marginTop: 10 }}><strong>{tr("Ausschließen")}</strong></div>
+        <GroupChips groups={exclude} empty={tr("Keine Ausschlussgruppe.")} onRemove={editable ? (id) => { setExclude(exclude.filter((g) => g.id !== id)); changed(); } : undefined} />
+        {editable && <GroupSearch tenantId={tenant.id} exclude={used} placeholder={tr("z. B. Dienstkonten")} onPick={(g) => { setExclude([...exclude, g]); changed(); }} />}
+        <p className="field-hint" style={{ margin: '6px 0 0' }}>{tr("Zielgruppe = Mitglieder aller Einschlussgruppen ohne die Mitglieder der Ausschlussgruppen. Ausschlussgruppen werden in der FIDO2-Richtlinie nicht gesperrt, sie zählen nur nicht zur Abdeckung.")}</p>
       </div>
 
-      <Field label="Sync-Intervall (Minuten)"><input type="number" min={5} max={1440} value={interval} disabled={!editable} onChange={(e) => { setInterval(Number(e.target.value)); changed(); }} /></Field>
+      <Field label={tr("Sync-Intervall (Minuten)")}><input type="number" min={5} max={1440} value={interval} disabled={!editable} onChange={(e) => { setInterval(Number(e.target.value)); changed(); }} /></Field>
       <label className="check" style={{ marginBottom: 12 }}>
         <input type="checkbox" checked={fourEyes} disabled={!editable} onChange={(e) => { setFourEyes(e.target.checked); changed(); }} />
-        <span>Vier-Augen-Freigabe für Breakglass-Registrierungen<br /><span className="small muted">Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss jede Breakglass-Registrierung vorab freigeben (gilt 24 Stunden für einen Durchlauf).</span></span>
+        <span>{tr("Vier-Augen-Freigabe für Breakglass-Registrierungen")}<br /><span className="small muted">{tr("Ein zweiter Admin mit dem Recht „Breakglass freigeben“ muss jede Breakglass-Registrierung vorab freigeben (gilt 24 Stunden für einen Durchlauf).")}</span></span>
       </label>
       <label className="check" style={{ marginBottom: 12 }}>
         <input type="checkbox" checked={fourEyesRemoval} disabled={!editable || (fourEyesRemoval && !can('ManageProtectedAccounts'))} onChange={(e) => { setFourEyesRemoval(e.target.checked); changed(); }} />
-        <span>Breakglass-Keys nur mit Vier-Augen-Freigabe sperren oder entfernen (empfohlen)<br /><span className="small muted">Sperren, Zurücksetzen und Konto entfernen bei einem aktiven Breakglass-Key braucht die Freigabe eines zweiten Admins. Über die API lassen sich Breakglass-Keys dann nicht sperren. Abschalten darf nur, wer „Geschützte Konten bearbeiten“ hat.</span></span>
+        <span>{tr("Breakglass-Keys nur mit Vier-Augen-Freigabe sperren oder entfernen (empfohlen)")}<br /><span className="small muted">{tr("Sperren, Zurücksetzen und Konto entfernen bei einem aktiven Breakglass-Key braucht die Freigabe eines zweiten Admins. Über die API lassen sich Breakglass-Keys dann nicht sperren. Abschalten darf nur, wer „Geschützte Konten bearbeiten“ hat.")}</span></span>
       </label>
       <div className="field-group">
-        <span className="field-label">Geschützte Konten</span>
-        <p className="field-hint" style={{ margin: '0 0 6px' }}>Für diese Konten dürfen nur Admins mit dem Recht „Geschützte Konten bearbeiten“ (standardmäßig Owner) einen TAP erzeugen, Anmeldemethoden entfernen oder Keys registrieren. So kann niemand mit Operator-Rechten das Konto eines Administrators übernehmen.</p>
+        <span className="field-label">{tr("Geschützte Konten")}</span>
+        <p className="field-hint" style={{ margin: '0 0 6px' }}>{tr("Für diese Konten dürfen nur Admins mit dem Recht „Geschützte Konten bearbeiten“ (standardmäßig Owner) einen TAP erzeugen, Anmeldemethoden entfernen oder Keys registrieren. So kann niemand mit Operator-Rechten das Konto eines Administrators übernehmen.")}</p>
         <label className="check" style={{ marginBottom: 8 }}>
           <input type="checkbox" checked={protectAdmins} disabled={!protectionEditable} onChange={(e) => { setProtectAdmins(e.target.checked); changed(); }} />
-          <span>Konten mit Entra-Admin-Rolle schützen<br /><span className="small muted">Erkennung über den Registrierungsbericht, dafür braucht der Tenant Entra ID P1. Ohne P1 bitte die Admins zusätzlich über eine Gruppe schützen.</span></span>
+          <span>{tr("Konten mit Entra-Admin-Rolle schützen")}<br /><span className="small muted">{tr("Erkennung über den Registrierungsbericht, dafür braucht der Tenant Entra ID P1. Ohne P1 bitte die Admins zusätzlich über eine Gruppe schützen.")}</span></span>
         </label>
-        <div className="small"><strong>Geschützte Gruppen</strong></div>
-        <GroupChips groups={protectedGroups} empty="Keine Gruppe gewählt." onRemove={protectionEditable ? (id) => { setProtectedGroups(protectedGroups.filter((g) => g.id !== id)); changed(); } : undefined} />
-        {protectionEditable && <GroupSearch tenantId={tenant.id} exclude={protectedGroups.map((g) => g.id)} placeholder="z. B. Breakglass, Admins, Geschäftsführung" onPick={(g) => { setProtectedGroups([...protectedGroups, g]); changed(); }} />}
-        {editable && !protectionEditable && <p className="field-hint" style={{ margin: '6px 0 0' }}>Ändern darf das nur, wer „Geschützte Konten bearbeiten“ hat.</p>}
+        <div className="small"><strong>{tr("Geschützte Gruppen")}</strong></div>
+        <GroupChips groups={protectedGroups} empty={tr("Keine Gruppe gewählt.")} onRemove={protectionEditable ? (id) => { setProtectedGroups(protectedGroups.filter((g) => g.id !== id)); changed(); } : undefined} />
+        {protectionEditable && <GroupSearch tenantId={tenant.id} exclude={protectedGroups.map((g) => g.id)} placeholder={tr("z. B. Breakglass, Admins, Geschäftsführung")} onPick={(g) => { setProtectedGroups([...protectedGroups, g]); changed(); }} />}
+        {editable && !protectionEditable && <p className="field-hint" style={{ margin: '6px 0 0' }}>{tr("Ändern darf das nur, wer „Geschützte Konten bearbeiten“ hat.")}</p>}
       </div>
       <ErrorBox error={error} />
-      {editable && <button className="primary" disabled={busy} onClick={save}>{saved ? 'Gespeichert' : 'Speichern'}</button>}
+      {editable && <button className="primary" disabled={busy} onClick={save}>{saved ? tr("Gespeichert") : tr("Speichern")}</button>}
     </Card>
   );
 }
@@ -202,42 +203,41 @@ function GroupProfilesCard({ tenantId, editable }: { tenantId: string; editable:
   });
 
   return (
-    <Card title="Profile nach Gruppe" className="mt">
+    <Card title={tr("Profile nach Gruppe")} className="mt">
       <p className="muted small" style={{ marginTop: 0 }}>
-        Gruppenebene: Ist eine Person Mitglied einer dieser Entra-Gruppen, schlägt der Registrierungs-Assistent das zugeordnete Profil vor.
-        Bei mehreren Treffern gewinnt die obere Zeile. Ohne Treffer gilt das Standardprofil.
+        {tr("Gruppenebene: Ist eine Person Mitglied einer dieser Entra-Gruppen, schlägt der Registrierungs-Assistent das zugeordnete Profil vor. Bei mehreren Treffern gewinnt die obere Zeile. Ohne Treffer gilt das Standardprofil.")}
       </p>
       {list.length > 0 && (
         <table>
-          <thead><tr><th>Reihenfolge</th><th>Gruppe</th><th>Profil</th><th /></tr></thead>
+          <thead><tr><th>{tr("Reihenfolge")}</th><th>{tr("Gruppe")}</th><th>{tr("Profil")}</th><th /></tr></thead>
           <tbody>
             {list.map((r, i) => (
               <tr key={r.groupId}>
                 <td>
                   {i + 1}
-                  {editable && <> <button className="link" disabled={i === 0} onClick={() => move(i, -1)} aria-label="nach oben">▲</button> <button className="link" disabled={i === list.length - 1} onClick={() => move(i, 1)} aria-label="nach unten">▼</button></>}
+                  {editable && <> <button className="link" disabled={i === 0} onClick={() => move(i, -1)} aria-label={tr("nach oben")}>▲</button> <button className="link" disabled={i === list.length - 1} onClick={() => move(i, 1)} aria-label={tr("nach unten")}>▼</button></>}
                 </td>
                 <td>{r.groupName}</td>
                 <td>
                   <select value={r.profileId} disabled={!editable} onChange={(e) => setDraft(list.map((x, j) => (j === i ? { ...x, profileId: e.target.value } : x)))}>
-                    {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.tenantId ? '' : ' (alle Tenants)'}</option>)}
+                    {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.tenantId ? '' : tr(" (alle Tenants)")}</option>)}
                   </select>
                 </td>
-                <td>{editable && <button className="link" onClick={() => setDraft(list.filter((_, j) => j !== i))}>Entfernen</button>}</td>
+                <td>{editable && <button className="link" onClick={() => setDraft(list.filter((_, j) => j !== i))}>{tr("Entfernen")}</button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
-      {list.length === 0 && <p className="muted">Keine Zuordnung. Alle Personen bekommen das Standardprofil vorgeschlagen.</p>}
+      {list.length === 0 && <p className="muted">{tr("Keine Zuordnung. Alle Personen bekommen das Standardprofil vorgeschlagen.")}</p>}
       {editable && firstProfile && (
         <div style={{ marginTop: 10 }}>
-          <GroupSearch tenantId={tenantId} exclude={list.map((r) => r.groupId)} placeholder="Gruppe suchen …"
+          <GroupSearch tenantId={tenantId} exclude={list.map((r) => r.groupId)} placeholder={tr("Gruppe suchen …")}
             onPick={(g) => setDraft([...list, { groupId: g.id, groupName: g.name, profileId: firstProfile }])} />
         </div>
       )}
       <ErrorBox error={error} />
-      {draft && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => setDraft(null)}>Verwerfen</button><button className="primary" disabled={busy} onClick={save}>Zuordnungen speichern</button></div>}
+      {draft && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => setDraft(null)}>{tr("Verwerfen")}</button><button className="primary" disabled={busy} onClick={save}>{tr("Zuordnungen speichern")}</button></div>}
     </Card>
   );
 }
@@ -245,14 +245,14 @@ function GroupProfilesCard({ tenantId, editable }: { tenantId: string; editable:
 export function FieldExplanation() {
   return (
     <details style={{ margin: '0 0 12px' }}>
-      <summary>Was bedeuten die Spalten?</summary>
+      <summary>{tr("Was bedeuten die Spalten?")}</summary>
       <dl className="explain" style={{ marginTop: 8 }}>
-        <dt>Bezeichnung</dt><dd>Name des Feldes, wie er im Inventar und in den Formularen angezeigt wird. Kann jederzeit geändert werden.</dd>
-        <dt>Schlüssel</dt><dd>Technischer Name des Feldes. Er ist der Spaltenname im CSV-Export und CSV-Import und der Name unter <code>customFields</code> in der API. Erlaubt sind Buchstaben, Ziffern, _ und -. Nach dem Speichern nicht mehr änderbar, damit gespeicherte Werte und angebundene Tools weiter passen.</dd>
-        <dt>Typ</dt><dd>Text, Zahl, Datum (JJJJ-MM-TT), Auswahl aus festen Optionen oder Ja/Nein. Die Eingabe wird beim Speichern geprüft.</dd>
-        <dt>Optionen</dt><dd>Nur bei Typ „Auswahl“: die erlaubten Werte, mit Komma getrennt.</dd>
-        <dt>Pflicht</dt><dd>Das Feld muss bei jedem Key ausgefüllt werden, auch beim Lagerzugang und beim CSV-Import.</dd>
-        <dt>Herkunft</dt><dd>„Global“ wird auf Plattformebene angelegt und an alle Tenants vererbt. Ein Tenant kann ein globales Feld für sich verändern (Bezeichnung, Pflicht, Optionen) oder deaktivieren. „Lokal“ gibt es nur in diesem Tenant.</dd>
+        <dt>{tr("Bezeichnung")}</dt><dd>{tr("Name des Feldes, wie er im Inventar und in den Formularen angezeigt wird. Kann jederzeit geändert werden.")}</dd>
+        <dt>{tr("Schlüssel")}</dt><dd>{tr("Technischer Name des Feldes. Er ist der Spaltenname im CSV-Export und CSV-Import und der Name unter")} <code>{tr("customFields")}</code> {tr("in der API. Erlaubt sind Buchstaben, Ziffern, _ und -. Nach dem Speichern nicht mehr änderbar, damit gespeicherte Werte und angebundene Tools weiter passen.")}</dd>
+        <dt>{tr("Typ")}</dt><dd>{tr("Text, Zahl, Datum (JJJJ-MM-TT), Auswahl aus festen Optionen oder Ja/Nein. Die Eingabe wird beim Speichern geprüft.")}</dd>
+        <dt>{tr("Optionen")}</dt><dd>{tr("Nur bei Typ „Auswahl“: die erlaubten Werte, mit Komma getrennt.")}</dd>
+        <dt>{tr("Pflicht")}</dt><dd>{tr("Das Feld muss bei jedem Key ausgefüllt werden, auch beim Lagerzugang und beim CSV-Import.")}</dd>
+        <dt>{tr("Herkunft")}</dt><dd>{tr("„Global“ wird auf Plattformebene angelegt und an alle Tenants vererbt. Ein Tenant kann ein globales Feld für sich verändern (Bezeichnung, Pflicht, Optionen) oder deaktivieren. „Lokal“ gibt es nur in diesem Tenant.")}</dd>
       </dl>
     </details>
   );
@@ -291,17 +291,17 @@ function FieldsCard({ tenantId, editable }: { tenantId: string; editable: boolea
   });
 
   return (
-    <Card title="Zusatzfelder für Keys" className="mt" actions={editable && <button onClick={() => setLocal([...localList, { key: '', label: '', type: 'Text', required: false, options: [] }])}>Lokales Feld hinzufügen</button>}>
-      <div className="hierarchy" aria-label="Vererbung">
-        <span className="level">Plattform (global)</span><span aria-hidden>→</span><span className="level current">Tenant</span>
-        <span className="muted">Globale Felder pflegen Sie unter <Link to="/platform#fields">Plattform</Link>.</span>
+    <Card title={tr("Zusatzfelder für Keys")} className="mt" actions={editable && <button onClick={() => setLocal([...localList, { key: '', label: '', type: 'Text', required: false, options: [] }])}>{tr("Lokales Feld hinzufügen")}</button>}>
+      <div className="hierarchy" aria-label={tr("Vererbung")}>
+        <span className="level">{tr("Plattform (global)")}</span><span aria-hidden>→</span><span className="level current">{tr("Tenant")}</span>
+        <span className="muted">{tr("Globale Felder pflegen Sie unter")} <Link to="/platform#fields">{tr("Plattform")}</Link>.</span>
       </div>
-      <p className="muted small" style={{ marginTop: 0 }}>Eigene Merkmale für jeden Key, z. B. Kostenstelle, Standort oder Inventarnummer. Sie erscheinen im Inventar, beim Lagerzugang, im Export und in der API.</p>
+      <p className="muted small" style={{ marginTop: 0 }}>{tr("Eigene Merkmale für jeden Key, z. B. Kostenstelle, Standort oder Inventarnummer. Sie erscheinen im Inventar, beim Lagerzugang, im Export und in der API.")}</p>
       <FieldExplanation />
-      {globals.length === 0 && localList.length === 0 && <p className="muted">Keine Zusatzfelder.</p>}
+      {globals.length === 0 && localList.length === 0 && <p className="muted">{tr("Keine Zusatzfelder.")}</p>}
       {(globals.length > 0 || localList.length > 0) && (
         <div style={{ overflowX: 'auto' }}><table>
-          <thead><tr><th>Bezeichnung und Herkunft</th><th>Schlüssel</th><th>Typ</th><th>Optionen</th><th>Pflicht</th><th /></tr></thead>
+          <thead><tr><th>{tr("Bezeichnung und Herkunft")}</th><th>{tr("Schlüssel")}</th><th>{tr("Typ")}</th><th>{tr("Optionen")}</th><th>{tr("Pflicht")}</th><th /></tr></thead>
           <tbody>
             {globals.map((f) => {
               const o = ov(f);
@@ -311,7 +311,7 @@ function FieldsCard({ tenantId, editable }: { tenantId: string; editable: boolea
                   <td>
                     <div style={{ marginBottom: 4 }}><OriginBadge origin="Global" state={st} /></div>
                     <input value={o.label} disabled={!editable || o.disabled} onChange={(e) => setOv(f, { label: e.target.value })} />
-                    {st === 'Modified' && o.label.trim() !== f.inherited!.label && <div className="small muted">Global: {f.inherited!.label}</div>}
+                    {st === 'Modified' && o.label.trim() !== f.inherited!.label && <div className="small muted">{tr("Global: {label}", { label: f.inherited!.label })}</div>}
                   </td>
                   <td className="mono">{f.key}</td>
                   <td>{fieldTypes[f.type]}</td>
@@ -320,8 +320,8 @@ function FieldsCard({ tenantId, editable }: { tenantId: string; editable: boolea
                   <td>
                     {editable && (
                       <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start', gap: 4 }}>
-                        <button className="link" onClick={() => setOv(f, { disabled: !o.disabled })}>{o.disabled ? 'Aktivieren' : 'Deaktivieren'}</button>
-                        {st !== 'Inherited' && <button className="link" onClick={() => reset(f)} title="Vererbung wiederherstellen: wieder unverändert von der Plattform übernehmen">Zurücksetzen</button>}
+                        <button className="link" onClick={() => setOv(f, { disabled: !o.disabled })}>{o.disabled ? tr("Aktivieren") : tr("Deaktivieren")}</button>
+                        {st !== 'Inherited' && <button className="link" onClick={() => reset(f)} title={tr("Vererbung wiederherstellen: wieder unverändert von der Plattform übernehmen")}>{tr("Zurücksetzen")}</button>}
                       </span>
                     )}
                   </td>
@@ -332,24 +332,24 @@ function FieldsCard({ tenantId, editable }: { tenantId: string; editable: boolea
               <tr key={'l' + i}>
                 <td>
                   <div style={{ marginBottom: 4 }}><OriginBadge origin="Tenant" /></div>
-                  <input value={f.label} disabled={!editable} placeholder="z. B. Raum" onChange={(e) => updateLocal(i, { label: e.target.value, key: f.id ? f.key : keyFromLabel(e.target.value) })} />
+                  <input value={f.label} disabled={!editable} placeholder={tr("z. B. Raum")} onChange={(e) => updateLocal(i, { label: e.target.value, key: f.id ? f.key : keyFromLabel(e.target.value) })} />
                 </td>
-                <td><input value={f.key} disabled={!editable || !!f.id} onChange={(e) => updateLocal(i, { key: e.target.value })} className="mono" title={f.id ? 'Der Schlüssel kann nach dem Speichern nicht mehr geändert werden.' : 'Wird aus der Bezeichnung vorgeschlagen.'} /></td>
+                <td><input value={f.key} disabled={!editable || !!f.id} onChange={(e) => updateLocal(i, { key: e.target.value })} className="mono" title={f.id ? tr("Der Schlüssel kann nach dem Speichern nicht mehr geändert werden.") : tr("Wird aus der Bezeichnung vorgeschlagen.")} /></td>
                 <td>
                   <select value={f.type} disabled={!editable} onChange={(e) => updateLocal(i, { type: e.target.value as CustomField['type'] })}>
                     {Object.entries(fieldTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </td>
-                <td>{f.type === 'Select' && <input value={f.options.join(', ')} disabled={!editable} placeholder="A, B, C" onChange={(e) => updateLocal(i, { options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean) })} />}</td>
+                <td>{f.type === 'Select' && <input value={f.options.join(', ')} disabled={!editable} placeholder={tr("A, B, C")} onChange={(e) => updateLocal(i, { options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean) })} />}</td>
                 <td><input type="checkbox" checked={f.required} disabled={!editable} onChange={(e) => updateLocal(i, { required: e.target.checked })} /></td>
-                <td>{editable && <button className="link" onClick={() => setLocal(localList.filter((_, j) => j !== i))}>Entfernen</button>}</td>
+                <td>{editable && <button className="link" onClick={() => setLocal(localList.filter((_, j) => j !== i))}>{tr("Entfernen")}</button>}</td>
               </tr>
             ))}
           </tbody>
         </table></div>
       )}
       <ErrorBox error={error} />
-      {dirty && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => { setLocal(null); setOverrides(null); }}>Verwerfen</button><button className="primary" disabled={busy} onClick={save}>Felder speichern</button></div>}
+      {dirty && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => { setLocal(null); setOverrides(null); }}>{tr("Verwerfen")}</button><button className="primary" disabled={busy} onClick={save}>{tr("Felder speichern")}</button></div>}
     </Card>
   );
 }
@@ -362,16 +362,16 @@ function OffboardModal({ tenant, onClose }: { tenant: Tenant; onClose: () => voi
   const go = () => run(async () => setResult(await api.post(`/api/tenants/${tenant.id}/offboard`, { confirm: true })));
   if (result) {
     return (
-      <Modal title="Tenant offboarded" onClose={() => navigate('/tenants')} footer={<button className="primary" onClick={() => navigate('/tenants')}>Fertig</button>}>
+      <Modal title={tr("Tenant offboarded")} onClose={() => navigate('/tenants')} footer={<button className="primary" onClick={() => navigate('/tenants')}>{tr("Fertig")}</button>}>
         <p>{result.instructions}</p>
-        <a className="btn" href={result.removeServicePrincipalUrl} target="_blank" rel="noreferrer">Unternehmensanwendung im Entra Admin Center öffnen</a>
+        <a className="btn" href={result.removeServicePrincipalUrl} target="_blank" rel="noreferrer">{tr("Unternehmensanwendung im Entra Admin Center öffnen")}</a>
       </Modal>
     );
   }
   return (
-    <Modal title="Tenant offboarden" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="danger" disabled={confirmName !== tenant.displayName || busy} onClick={go}>Offboarden</button></>}>
-      <Info tone="warn">Exportieren Sie die Daten vorher, wenn Sie sie aufbewahren müssen.</Info>
-      <Field label={`Zur Bestätigung den Namen „${tenant.displayName}“ eingeben`}><input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} /></Field>
+    <Modal title={tr("Tenant offboarden")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="danger" disabled={confirmName !== tenant.displayName || busy} onClick={go}>{tr("Offboarden")}</button></>}>
+      <Info tone="warn">{tr("Exportieren Sie die Daten vorher, wenn Sie sie aufbewahren müssen.")}</Info>
+      <Field label={tr("Zur Bestätigung den Namen „{displayName}“ eingeben", { displayName: tenant.displayName })}><input value={confirmName} onChange={(e) => setConfirmName(e.target.value)} /></Field>
       <ErrorBox error={error} />
     </Modal>
   );
