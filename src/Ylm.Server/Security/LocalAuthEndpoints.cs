@@ -34,6 +34,7 @@ public static class LocalAuthEndpoints
                 emergency = await db.PlatformUsers.AnyAsync(u => u.LoginKind == UserLoginKind.Emergency && u.PasswordHash != null),
                 recovery = await db.RecoveryCodes.AnyAsync(c => c.UsedAt == null),
                 development = AuthEndpoints.IsDevAuth(env, options.Value),
+                demo = options.Value.DemoMode,
             });
         }).AllowAnonymous();
 

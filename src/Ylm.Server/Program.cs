@@ -13,6 +13,7 @@ using Ylm.Contracts;
 using Ylm.Server.Agents;
 using Ylm.Server.Audit;
 using Ylm.Server.Data;
+using Ylm.Server.Demo;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Inventory;
@@ -95,6 +96,12 @@ builder.Services.AddScoped<Ylm.Server.Rollout.RolloutService>();
 builder.Services.AddSingleton<Ylm.Server.Protection.ProtectedAccountService>();
 builder.Services.AddScoped<Ylm.Server.Setup.BrandingService>();
 builder.Services.AddHostedService<BackgroundJobs>();
+// Demo-Modus (docker-compose.demo.yml): erfundene Tenants statt Microsoft Graph, keine Mails, Anmeldung per Rollenwahl.
+if (ylm.DemoMode)
+{
+    builder.Services.AddDemoServices();
+    builder.Services.AddScoped<DemoSeeder>();
+}
 
 builder.Services.AddSingleton<IConfigureOptions<OpenIdConnectOptions>, EntraOidcOptionsSetup>();
 builder.Services.AddAuthentication(AuthSchemes.Cookie)
@@ -207,6 +214,7 @@ app.UseMiddleware<CsrfHeaderMiddleware>();
 app.MapGet("/healthz", () => Results.Ok(new { status = "ok" })).AllowAnonymous();
 app.MapAuth(app.Environment, ylm);
 app.MapLocalAuth();
+if (ylm.DemoMode) app.MapDemo();
 Ylm.Server.Updates.UpdateEndpoints.MapUpdates(app);
 Ylm.Server.Updates.HostingEndpoints.MapHosting(app);
 app.MapSetup();
@@ -242,11 +250,13 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<YlmDbContext>();
     await db.Database.MigrateAsync();
+    await DemoMode.GuardAsync(db, dataDir, ylm.DemoMode);
     if (!await db.Profiles.AnyAsync())
     {
         db.Profiles.Add(ProfileEndpoints.CreateStandard());
         await db.SaveChangesAsync();
     }
+    if (ylm.DemoMode) await scope.ServiceProvider.GetRequiredService<DemoSeeder>().SeedAsync(dataDir);
     await scope.ServiceProvider.GetRequiredService<SetupService>().EnsureSetupTokenAsync();
 }
 

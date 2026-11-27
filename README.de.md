@@ -1,5 +1,7 @@
 # Yubikey-Lifecycle-Manager
 
+[English](README.md) · **Deutsch**
+
 Selbst hostbare Plattform, mit der IT-Administratoren allein oder im Team den Lebenszyklus von YubiKeys in **Microsoft Entra ID** verwalten.
 
 ## Funktionen
@@ -19,6 +21,18 @@ Selbst hostbare Plattform, mit der IT-Administratoren allein oder im Team den Le
 | Windows-Agent + Tray-App | Zugriff auf den lokal eingesteckten YubiKey (PIN, Registrierung, Auslesen). Status in der Taskleiste. |
 
 Ein reiner Browser kann die Registrierung on Behalf nicht durchführen. Die Begründung steht in der Planung.
+
+## Ausprobieren ohne Entra (Demo)
+
+Mit Docker in einer Minute, mit erfundenen Beispieldaten und ohne Verbindung zu Microsoft:
+
+```bash
+git clone https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager.git
+cd Yubikey-Lifecycle-Manager
+docker compose -f docker-compose.demo.yml up -d
+```
+
+Danach `http://localhost:8099` öffnen und eine Rolle wählen. Details: [Demo](docs/DEMO.md).
 
 ## Installation
 
@@ -60,6 +74,7 @@ Unter **Globale Einstellungen → Version und Updates** zeigt die Plattform neue
 
 ## Dokumentation
 
+- [Demo mit Beispieldaten](docs/DEMO.md)
 - [Projektplanung](docs/PLANUNG.md)
 - [Betrieb und Installation](docs/BETRIEB.md)
 - [Testanleitung V1 (Praxistest mit Tenant und YubiKey)](docs/TESTANLEITUNG-V1.md)
@@ -101,6 +116,10 @@ Rollen:
 Änderungen von außen kommen nur per Pull Request und werden vor dem Merge geprüft. Für GitHub und SignPath ist Mehr-Faktor-Anmeldung Pflicht.
 
 Datenschutz: This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Der Agent spricht nur mit dem Server, mit dem er gekoppelt wurde. Der Server spricht mit den Microsoft-Entra-Tenants, Mail-Servern, Webhooks und Ticketsystemen, die der Betreiber einrichtet, und fragt täglich bei der GitHub-API nach neuen Versionen (abschaltbar mit `Ylm__UpdateCheckEnabled=false`, siehe [Betrieb](docs/BETRIEB.md)).
+
+## Mitmachen und Sicherheit
+
+Fehler und Ideen gern als [Issue](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/issues), Beiträge als Pull Request: siehe [CONTRIBUTING.md](CONTRIBUTING.md). Sicherheitslücken bitte **nicht** öffentlich melden, sondern wie in [SECURITY.md](SECURITY.md) beschrieben. Es gilt der [Verhaltenskodex](CODE_OF_CONDUCT.md).
 
 ## Lizenz
 

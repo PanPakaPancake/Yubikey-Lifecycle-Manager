@@ -14,10 +14,10 @@ public static class SetupEndpoints
 
     public static void MapSetup(this IEndpointRouteBuilder app)
     {
-        app.MapGet("/api/setup/status", async (SetupService setup, HttpRequest req) =>
+        app.MapGet("/api/setup/status", async (SetupService setup, HttpRequest req, Microsoft.Extensions.Options.IOptions<Infrastructure.YlmOptions> options) =>
         {
             var s = await setup.GetSettingsAsync();
-            return Results.Ok(new { setupComplete = s.IsSetupComplete, organizationName = s.OrganizationName, suggestedBaseUrl = setup.BaseUrl(s, req) });
+            return Results.Ok(new { setupComplete = s.IsSetupComplete, organizationName = s.OrganizationName, suggestedBaseUrl = setup.BaseUrl(s, req), demo = options.Value.DemoMode });
         }).AllowAnonymous();
 
         // Rücksprung der interaktiven Anmeldung. Ohne Setup-Token: Die Seite auf http://localhost wird in einem neuen Tab
