@@ -15,15 +15,16 @@ jobs:
   agent:
     name: Agent-MSI
     runs-on: windows-latest
-    # Umgebung "release": Azure vertraut per Federated Credential genau diesem Job (Subject ...:environment:release).
-    environment: release
-    # Signierung mit Azure Artifact Signing (früher Trusted Signing), sobald die Variable SIGNING_ENDPOINT gesetzt ist.
-    # Einrichtung: docs/SIGNIERUNG.md. Ohne die Variable entsteht wie bisher ein unsigniertes MSI.
+    # Signierung über die SignPath Foundation (kostenlos für Open Source), sobald die Variable
+    # SIGNPATH_ORGANIZATION_ID gesetzt ist. Einrichtung: docs/SIGNIERUNG.md. Ohne die Variable entsteht wie bisher
+    # ein unsigniertes MSI. Jede Signierung muss in SignPath von Hand freigegeben werden (Vorgabe der Foundation),
+    # der Lauf wartet darauf bis zu einer Stunde je Schritt.
     permissions:
       contents: read
-      id-token: write
+      actions: read
     env:
-      SIGN: ${{ vars.SIGNING_ENDPOINT != '' }}
+      SIGN: ${{ vars.SIGNPATH_ORGANIZATION_ID != '' }}
+      VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -31,71 +32,72 @@ jobs:
           dotnet-version: 10.0.x
       - name: Programmdateien bauen
         shell: pwsh
-        run: ./installer/build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v') -Stage publish
-      - name: Bei Azure anmelden (OIDC, ohne gespeichertes Passwort)
+        run: ./installer/build.ps1 -Version $env:VERSION.TrimStart('v') -Stage publish
+      - name: Version für SignPath
+        id: v
+        shell: pwsh
+        run: '"version=$($env:VERSION.TrimStart(''v''))" >> $env:GITHUB_OUTPUT'
+      - name: Unsignierte Programmdateien hochladen
         if: env.SIGN == 'true'
-        uses: azure/login@v2
+        id: exe-unsigned
+        uses: actions/upload-artifact@v4
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-      - name: Agent und Tray signieren
+          name: agent-exe-unsigned
+          path: installer/publish/
+          if-no-files-found: error
+      - name: Agent und Tray signieren (SignPath)
         if: env.SIGN == 'true'
-        uses: azure/artifact-signing-action@v2
+        uses: signpath/github-action-submit-signing-request@v3
         with:
-          endpoint: ${{ vars.SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
-          files-folder: ${{ github.workspace }}\installer\publish
-          files-folder-filter: exe
-          files-folder-recurse: true
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          exclude-environment-credential: true
-          exclude-workload-identity-credential: true
-          exclude-managed-identity-credential: true
-          exclude-shared-token-cache-credential: true
-          exclude-visual-studio-credential: true
-          exclude-visual-studio-code-credential: true
-          exclude-azure-cli-credential: false
-          exclude-azure-powershell-credential: true
-          exclude-azure-developer-cli-credential: true
-          exclude-interactive-browser-credential: true
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'Yubikey-Lifecycle-Manager' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: agent-exe
+          github-artifact-id: ${{ steps.exe-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: installer/publish
+          parameters: |
+            version: ${{ toJSON(steps.v.outputs.version) }}
       - name: MSI bauen
         shell: pwsh
-        run: ./installer/build.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v') -Stage package
-      - name: MSI signieren
+        run: ./installer/build.ps1 -Version $env:VERSION.TrimStart('v') -Stage package
+      - name: Unsigniertes MSI hochladen
         if: env.SIGN == 'true'
-        uses: azure/artifact-signing-action@v2
+        id: msi-unsigned
+        uses: actions/upload-artifact@v4
         with:
-          endpoint: ${{ vars.SIGNING_ENDPOINT }}
-          signing-account-name: ${{ vars.SIGNING_ACCOUNT }}
-          certificate-profile-name: ${{ vars.SIGNING_PROFILE }}
-          files-folder: ${{ github.workspace }}\installer\out
-          files-folder-filter: msi
-          file-digest: SHA256
-          timestamp-rfc3161: http://timestamp.acs.microsoft.com
-          timestamp-digest: SHA256
-          exclude-environment-credential: true
-          exclude-workload-identity-credential: true
-          exclude-managed-identity-credential: true
-          exclude-shared-token-cache-credential: true
-          exclude-visual-studio-credential: true
-          exclude-visual-studio-code-credential: true
-          exclude-azure-cli-credential: false
-          exclude-azure-powershell-credential: true
-          exclude-azure-developer-cli-credential: true
-          exclude-interactive-browser-credential: true
+          name: agent-msi-unsigned
+          path: installer/out/*.msi
+          if-no-files-found: error
+      - name: MSI signieren (SignPath)
+        if: env.SIGN == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG || 'Yubikey-Lifecycle-Manager' }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
+          artifact-configuration-slug: agent-msi
+          github-artifact-id: ${{ steps.msi-unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          wait-for-completion-timeout-in-seconds: 3600
+          output-artifact-directory: installer/out
       - name: Signaturen prüfen
         if: env.SIGN == 'true'
         shell: pwsh
+        env:
+          POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG || 'release-signing' }}
         run: |
           $files = @(Get-ChildItem installer/publish -Recurse -Filter *.exe) + @(Get-ChildItem installer/out -Filter *.msi)
           foreach ($f in $files) {
             $s = Get-AuthenticodeSignature $f.FullName
             Write-Host "$($f.Name): $($s.Status) $($s.SignerCertificate.Subject)"
-            if ($s.Status -ne 'Valid') { throw "$($f.Name) ist nicht gültig signiert." }
+            if ($s.Status -eq 'Valid') { continue }
+            # Testsignierung (selbstsigniertes Zertifikat von SignPath) ist nicht vertrauenswürdig, das ist dort erwartet.
+            if ($env:POLICY -eq 'test-signing') { Write-Host "::warning::$($f.Name): Testsignatur ($($s.Status))." }
+            else { throw "$($f.Name) ist nicht gültig signiert." }
           }
       - uses: actions/upload-artifact@v4
         with:

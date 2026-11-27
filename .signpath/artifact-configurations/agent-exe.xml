@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath-Artefaktkonfiguration "agent-exe": signiert die beiden Programmdateien des Agents.
+  Eingabe: das GitHub-Artefakt "agent-exe-unsigned" aus .github/workflows/release.yml (Inhalt von installer/publish).
+  In SignPath unter Projekt -> Artifact Configurations mit dem Slug "agent-exe" anlegen und diesen Text einfügen.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <parameters>
+    <parameter name="version" required="true" />
+  </parameters>
+  <zip-file>
+    <pe-file-set product-name="Yubikey Lifecycle Manager" product-version="${version}">
+      <include path="agent/YlmAgent.exe" />
+      <include path="tray/YlmTray.exe" />
+      <for-each>
+        <authenticode-sign />
+      </for-each>
+    </pe-file-set>
+  </zip-file>
+</artifact-configuration>
