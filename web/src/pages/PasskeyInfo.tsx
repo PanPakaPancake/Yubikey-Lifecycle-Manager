@@ -86,7 +86,12 @@ export default function PasskeyInfoPage({ authenticated, embedded = false }: { a
   useEffect(() => {
     document.title = (tech ? 'Passkeys für Techniker' : 'Was ist ein Passkey?') + (brand?.companyName ? ' · ' + brand.companyName : '');
   }, [tech, brand?.companyName]);
-  useEffect(() => { window.scrollTo(0, 0); }, [view]);
+  // Sprungmarken wie /passkey#verleihen (z. B. aus dem PIN-Brief) öffnen direkt den Abschnitt.
+  useEffect(() => {
+    const id = window.location.hash.slice(1);
+    const target = id ? document.getElementById(decodeURIComponent(id)) : null;
+    if (target) setTimeout(() => target.scrollIntoView({ block: 'start' }), 60); else window.scrollTo(0, 0);
+  }, [view]);
   const [copied, setCopied] = useState(false);
   const publicUrl = window.location.origin + '/passkey' + (tech ? '?ansicht=techniker' : '');
   const copyLink = () => { void navigator.clipboard?.writeText(publicUrl).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1800); }); };
@@ -360,6 +365,7 @@ function EndUser({ brand, onSwitch }: { brand: PublicBrand | null; onSwitch: () 
     { id: 'handy', label: 'Am Handy anmelden', icon: 'share' as const },
     { id: 'pin', label: 'PIN selbst ändern', icon: 'settings' as const },
     { id: 'regeln', label: 'Sicher aufbewahren', icon: 'shield' as const },
+    { id: 'verleihen', label: 'Warum man den Key nicht verleiht', icon: 'users' as const },
     { id: 'hilfe', label: 'Es klappt nicht', icon: 'alert' as const },
   ];
   return (
@@ -467,12 +473,34 @@ function EndUser({ brand, onSwitch }: { brand: PublicBrand | null; onSwitch: () 
           </div>
           <div className="pk-card bad">
             <strong><Icon name="x" size={16} /> Lieber nicht</strong>
-            <ul><li>PIN auf einen Zettel am Key schreiben</li><li>Key dauerhaft im Firmen-PC stecken lassen</li><li>Key an Kollegen verleihen</li></ul>
+            <ul><li>PIN auf einen Zettel am Key schreiben</li><li>Key dauerhaft im Firmen-PC stecken lassen</li><li>Key an Kollegen verleihen (<a href="#verleihen" onClick={(e) => { e.preventDefault(); document.getElementById('verleihen')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }}>warum?</a>)</li></ul>
           </div>
         </div>
       </Section>
 
-      <Section id="hilfe" n={10} title="Es klappt nicht">
+      <Section id="verleihen" n={10} title="Warum Sie Ihren Key nicht verleihen">
+        <p>
+          „Kannst du mir kurz deinen Key leihen?“ Das ist schnell gesagt und gut gemeint. Trotzdem: Ihr YubiKey ist wie Ihr Haustürschlüssel.
+          Den geben Sie auch guten Freunden nicht einfach so, selbst wenn Sie ihnen vertrauen.
+        </p>
+        <KeyCompare />
+        <h3>Was beim Ausleihen wirklich passiert</h3>
+        <p>Für Microsoft gibt es nur eine Wahrheit: Wer mit Ihrem Key und Ihrer PIN kommt, ist Sie. Alles, was der Kollege tut, steht unter Ihrem Namen.</p>
+        <LendLog />
+        <div className="pk-cards four">
+          <Card icon="user" title="Der Key ist Ihre Identität">Er öffnet nicht ein Programm, sondern Ihr ganzes Konto: E-Mails, Dateien, Teams und alles, was daran hängt.</Card>
+          <Card icon="history" title="Alles unter Ihrem Namen">Jede Anmeldung und jede Aktion wird protokolliert. Ob Sie es waren oder jemand mit Ihrem Key, sieht dort niemand.</Card>
+          <Card icon="key" title="Die PIN schützt dann nicht">Die PIN hält Fremde ab, die den Key finden. Wer sie von Ihnen bekommt, ist für den Key kein Fremder mehr.</Card>
+          <Card icon="alert" title="Verliehen, vergessen, verloren">Der Key bleibt irgendwo liegen, geht verloren oder die PIN spricht sich herum. Passiert so etwas, melden Sie es sofort der IT.</Card>
+        </div>
+        <Note kind="ok" title="Jemand muss Sie vertreten?">
+          Dafür gibt es saubere Wege, ohne dass jemand Ihren Key braucht: Ihre IT kann der Vertretung Zugriff auf Postfach oder Ordner geben,
+          einen eigenen Key einrichten oder für besondere Fälle einen gemeinsamen Key mit klarer Verantwortung ausgeben.
+          Fragen Sie einfach bei der IT nach{brand?.contact ? <>: <strong>{brand.contact}</strong></> : '.'}
+        </Note>
+      </Section>
+
+      <Section id="hilfe" n={11} title="Es klappt nicht">
         <div className="pk-faq">
           {[
             ['Der Key blinkt nicht.', 'Ziehen Sie den Key ab und stecken Sie ihn erneut ein, gern in einen anderen Anschluss. Bei USB-Hubs und Dockingstationen hilft oft ein Anschluss direkt am Gerät.'],
@@ -497,6 +525,61 @@ function EndUser({ brand, onSwitch }: { brand: PublicBrand | null; onSwitch: () 
         <button type="button" className="primary" onClick={onSwitch}><Icon name="settings" size={16} />Zur Techniker-Ansicht</button>
       </div>
     </>
+  );
+}
+
+/* ---------- Grafik: Haustürschlüssel und YubiKey ---------- */
+
+function HouseKeyArt({ size = 120 }: { size?: number }) {
+  return (
+    <svg className="pk-housekey" width={size} height={size * 0.42} viewBox="0 0 100 42" aria-hidden>
+      <circle cx="18" cy="21" r="15" fill="#c9a24a" />
+      <circle cx="18" cy="21" r="5.5" fill="var(--surface)" />
+      <path d="M32 17h62v8h-6v6h-5v-6h-4v8h-5v-8h-4v5h-5v-5H32Z" fill="#c9a24a" />
+      <path d="M38 20h52" stroke="#a7842f" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+function KeyCompare() {
+  return (
+    <div className="pk-compare pk-reveal">
+      <div className="pk-compare-side">
+        <div className="pk-compare-art"><HouseKeyArt size={150} /></div>
+        <div className="pk-compare-arrow" aria-hidden><span /></div>
+        <div className="pk-compare-target"><Icon name="home" size={26} /><span>Ihre Wohnung</span></div>
+        <p>Wer ihn hat, kommt rein, auch wenn Sie nicht da sind. Deshalb hat ihn nicht jeder.</p>
+      </div>
+      <div className="pk-compare-eq" aria-hidden>=</div>
+      <div className="pk-compare-side">
+        <div className="pk-compare-art"><KeyArt size={150} /></div>
+        <div className="pk-compare-arrow" aria-hidden><span /></div>
+        <div className="pk-compare-target"><Icon name="user" size={26} /><span>Ihr Firmenkonto</span></div>
+        <p>Wer ihn und Ihre PIN hat, ist für Microsoft Sie. Mit allen Ihren Rechten.</p>
+      </div>
+    </div>
+  );
+}
+
+const lendLog = [
+  ['08:52', 'haben sich angemeldet', false],
+  ['09:14', 'haben das Angebot an Kunde Meier verschickt', true],
+  ['09:31', 'haben den Ordner „Projekt Nord“ gelöscht', true],
+  ['09:40', 'haben sich abgemeldet', false],
+] as const;
+
+function LendLog() {
+  return (
+    <div className="pk-lendlog pk-reveal" aria-label="Beispiel aus einem Protokoll">
+      <div className="pk-lendlog-head"><Icon name="history" size={16} /><b>Protokoll</b><span className="muted small">so sieht es die IT</span></div>
+      {lendLog.map(([t, what, colleague], i) => (
+        <div key={t} className={'pk-lendlog-row' + (colleague ? ' lent' : '')} style={{ animationDelay: i * 260 + 'ms' }}>
+          <span className="pk-lendlog-time">{t}</span>
+          <span><strong>Sie</strong> {what}</span>
+          {colleague && <span className="pk-lendlog-tag">eigentlich: Ihr Kollege</span>}
+        </div>
+      ))}
+    </div>
   );
 }
 
