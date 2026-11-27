@@ -125,7 +125,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
-          {can('ReadReports') && item('/rollout', 'target', 'Passkey-Rollout')}
+          {can('ReadReports') && item('/rollout', 'target', 'Rollout Übersicht')}
           {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" /><span className="nav-label">Registrieren</span></NavLink>}
           {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
           {fourEyes && item('/approvals', 'shield', 'Freigaben')}
