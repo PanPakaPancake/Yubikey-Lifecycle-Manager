@@ -276,7 +276,7 @@
 }
 @media (max-width: 620px) {
   .pk-main { padding: 0 16px 32px; }
-  .pk-section { padding: 20px 18px; border-radius: 14px; }
+  .pk-section { padding: 20px 18px; border-radius: 14px; scroll-margin-top: 120px; }
   .pk-cards, .pk-cards.four, .pk-cards.two, .pk-steps { grid-template-columns: 1fr; }
   .pk-pair { grid-template-columns: 1fr; }
   .pk-pair-link { flex-direction: column; height: 40px; width: 4px; margin: 0 auto; }
@@ -304,3 +304,28 @@
 .pk-embedded-head .actions { align-items: center; }
 .pk-embedded-head .pk-tabs { margin: 0; }
 .pk-embedded .pk-section { scroll-margin-top: 90px; }
+
+/* Nicht verleihen: Haustürschlüssel und YubiKey, Beispielprotokoll */
+.pk-compare { display: grid; grid-template-columns: 1fr 48px 1fr; align-items: stretch; gap: 10px; margin: 18px 0 22px; }
+.pk-compare-side { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px; padding: 20px 18px; border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line); }
+.pk-compare-side p { margin: 4px 0 0; color: var(--muted); font-size: .92rem; }
+.pk-compare-art { height: 66px; display: grid; place-items: center; }
+.pk-compare-arrow { width: 4px; height: 26px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.pk-compare-arrow span { display: block; width: 100%; height: 40%; border-radius: 4px; background: var(--pk-accent); animation: pk-flowbar-v 1.6s ease-in-out infinite; }
+.pk-compare-target { display: flex; align-items: center; gap: 8px; padding: 8px 14px; border-radius: 12px; background: var(--pk-accent-soft); color: var(--pk-accent); font-weight: 650; }
+.pk-compare-eq { align-self: center; text-align: center; font-size: 2rem; font-weight: 700; color: var(--pk-accent); }
+.pk-lendlog { margin: 14px 0 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); padding: 12px 14px; font-size: .93rem; }
+.pk-lendlog-head { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; margin-bottom: 4px; border-bottom: 1px solid var(--line); }
+.pk-lendlog-head svg { color: var(--pk-accent); }
+.pk-lendlog-head .muted { margin-left: auto; }
+.pk-lendlog-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; padding: 7px 4px; border-radius: 8px; }
+.pk-reveal.in .pk-lendlog-row { animation: pk-logrow .5s ease-out both; }
+.pk-lendlog-row.lent { background: color-mix(in srgb, var(--gold) 12%, transparent); }
+.pk-lendlog-time { font-variant-numeric: tabular-nums; color: var(--muted); min-width: 44px; }
+.pk-lendlog-tag { margin-left: auto; font-size: .78rem; font-weight: 650; padding: 2px 8px; border-radius: 999px; border: 1px dashed color-mix(in srgb, var(--gold) 70%, var(--line)); color: var(--ink); }
+@keyframes pk-logrow { from { opacity: 0; transform: translateX(-8px); } to { opacity: 1; transform: none; } }
+@media (max-width: 620px) {
+  .pk-compare { grid-template-columns: 1fr; }
+  .pk-compare-eq { font-size: 1.6rem; }
+  .pk-lendlog-tag { margin-left: 56px; }
+}
