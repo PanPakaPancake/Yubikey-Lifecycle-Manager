@@ -8,6 +8,7 @@ import { Icon, type IconName } from '../icons';
 import { useTenant } from '../tenant';
 import type { CertificateStatus } from './Platform';
 import type { UpdateSummary } from '../changelog';
+import { reminderKinds, type ReminderKind } from './Reminders';
 
 interface DashboardData {
   generatedAt: string; byStatus: Record<string, number>; inStock: number; total: number; needsDetails: number;
@@ -16,6 +17,8 @@ interface DashboardData {
   firmware: { firmware: string; count: number; advisories: string[]; vulnerable: boolean }[];
   vulnerableKeys: number; forcePinChangeUnsupported: number;
   advisories?: { id: string; title: string; severity: string; affectsFido: boolean; keys: number }[]; openTodos: number; pendingApprovals: number;
+  /** Nur wenn ein Tenant Erinnerungen eingeschaltet hat. */
+  reminders?: { kind: ReminderKind; count: number }[] | null;
   tenants: { id: string; displayName: string; lastSyncAt?: string; lastSyncSucceeded?: boolean; targetUserCount?: number; active: number; inStock: number; usersWithKey: number; checksFailed: number }[];
 }
 
@@ -148,7 +151,8 @@ function DashHero({ data, cert, update }: { data: DashboardData; cert?: Certific
   const hello = h < 11 ? 'Guten Morgen' : h < 18 ? 'Guten Tag' : 'Guten Abend';
   const first = me.user?.displayName?.split(/\s+/)[0];
   const todo = data.tenants.reduce((n, t) => n + (t.checksFailed > 0 ? 1 : 0) + (t.lastSyncSucceeded === false ? 1 : 0), 0)
-    + (cert && cert.state !== 'ok' && cert.state !== 'missing' ? 1 : 0) + (data.byStatus.Locked ? 1 : 0) + (data.vulnerableKeys ? 1 : 0) + (data.pendingApprovals ? 1 : 0) + (data.openTodos ? 1 : 0) + (data.needsDetails ? 1 : 0) + (update?.updateAvailable && update.canApply ? 1 : 0);
+    + (cert && cert.state !== 'ok' && cert.state !== 'missing' ? 1 : 0) + (data.byStatus.Locked ? 1 : 0) + (data.vulnerableKeys ? 1 : 0) + (data.pendingApprovals ? 1 : 0) + (data.openTodos ? 1 : 0) + (data.needsDetails ? 1 : 0) + (update?.updateAvailable && update.canApply ? 1 : 0)
+    + (data.reminders?.filter((r) => r.count > 0).length ?? 0);
   return (
     <section className="dash-hero">
       <div className="dash-hero-text">
@@ -213,6 +217,11 @@ function ActionItems({ data, keysLink, cert, update }: { data: DashboardData; ke
   if ((data.byStatus.Locked ?? 0) > 0) items.push({ tone: 'warn', text: <>{data.byStatus.Locked} gesperrte(r) Key(s)</>, to: keysLink('Locked'), cta: 'Im Inventar' });
   if (data.vulnerableKeys > 0) items.push({ tone: 'warn', text: <>{data.vulnerableKeys} Key(s) von einem Yubico-Sicherheitshinweis zu Passkeys betroffen</>, to: '/sicherheitshinweise', cta: 'Betroffene Keys' });
   if (data.pendingApprovals > 0) items.push({ tone: 'warn', text: <>{data.pendingApprovals} Breakglass-Antrag/Anträge warten auf Freigabe</>, to: '/approvals', cta: 'Freigaben' });
+  // Optionale Lebenszyklus-Erinnerungen, je Art eine Zeile.
+  for (const k of reminderKinds) {
+    const n = data.reminders?.find((r) => r.kind === k.kind)?.count ?? 0;
+    if (n > 0) items.push({ tone: k.kind === 'Leaver' || k.kind === 'RetiredWithPasskey' ? 'warn' : 'info', text: <>{k.action(n)}</>, to: '/erinnerungen#' + k.id, cta: 'Erinnerungen' });
+  }
   if (data.openTodos > 0) items.push({ tone: 'info', text: <>{data.openTodos} offene(s) ToDo(s): Personen, die einen Key bekommen sollen</>, to: '/todos', cta: 'ToDo-Liste' });
   if (update?.updateAvailable && update.canApply) items.push({ tone: 'info', text: <>Version {update.latestVersion} ist verfügbar (installiert: {update.currentVersion})</>, to: '/versionen', cta: 'Was ist neu' });
   if (data.needsDetails > 0) items.push({ tone: 'info', text: <>{data.needsDetails} selbst registrierte Key(s) ohne Seriennummer/Firmware</>, to: '/keys/identify', cta: 'Nacherfassen' });

@@ -90,6 +90,12 @@ public static class AuditActions
     public const string AppCertificateExpiring = "platform.certificate_expiring";
     public const string AppCertificateRenewed = "platform.certificate_renewed";
     public const string AppCertificateRenewalFailed = "platform.certificate_renewal_failed";
+    public const string ReminderUnusedKeys = "reminder.unused_keys";
+    public const string ReminderNoSpareKey = "reminder.no_spare_key";
+    public const string ReminderLeavers = "reminder.leavers";
+    public const string ReminderRetiredWithPasskey = "reminder.retired_with_passkey";
+    public const string ReminderDismissed = "reminder.dismissed";
+    public const string ReminderRestored = "reminder.restored";
 }
 
 public sealed record AuditActor(ActorType Type, Guid? Id, string? Name);
