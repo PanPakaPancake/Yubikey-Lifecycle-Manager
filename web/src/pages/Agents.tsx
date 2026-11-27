@@ -25,7 +25,7 @@ export default function AgentsPage() {
         <Card title="Agent installieren und koppeln">
           <ol>
             <li>Installieren Sie <strong>YubikeyLifecycleManager-Agent.msi</strong> (einmalig, mit Adminrechten). Der Agent läuft danach als Windows-Dienst; das Tray-Symbol startet bei der Anmeldung. Neue Versionen installiert der Agent danach selbst (abschaltbar im Tray unter <strong>Einstellungen</strong>).</li>
-            <li>Klicken Sie im Tray-Symbol auf <strong>„Agent koppeln“</strong> und geben Sie die Adresse dieser Plattform und den Kopplungscode ein.</li>
+            <li>Klicken Sie mit der rechten Maustaste auf das Tray-Symbol, wählen Sie <strong>„Koppeln …“</strong> und geben Sie die Plattform-Adresse (siehe unten, genau so wie im Browser) und den Kopplungscode ein.</li>
           </ol>
           {pkg?.available && pkg.downloadUrl
             ? <p><a className="btn" href={pkg.downloadUrl} download>Agent herunterladen{pkg.version ? ` (Version ${pkg.version})` : ''}</a>{pkg.size ? <span className="small muted"> {(pkg.size / 1024 / 1024).toFixed(1)} MB</span> : null}</p>
