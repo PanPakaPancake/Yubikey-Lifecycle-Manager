@@ -120,7 +120,7 @@ public static class LetterBlocks
         [
             new("title", "Überschrift", "Wichtig"),
             new("items", "Punkte (eine Zeile pro Punkt)",
-                "Geben Sie Ihre PIN niemals weiter. Die IT wird Sie nie danach fragen.\n" +
+                "Key und PIN nie verleihen oder weitergeben. Die IT fragt nie danach.\n" +
                 "Nach 8 Fehleingaben wird der Key gesperrt. Wenden Sie sich dann an die IT{{KontaktMitDoppelpunkt}}.\n" +
                 "Key verloren oder gestohlen? Melden Sie es sofort der IT, damit er gesperrt wird.\n" +
                 "Bewahren Sie diesen Brief nicht zusammen mit dem Key auf und vernichten Sie ihn, sobald Sie die PIN geändert haben.", "multiline"),
