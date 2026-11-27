@@ -10,9 +10,9 @@ Die Plattform läuft als kleiner Docker-Compose-Stapel aus fertigen Images. Geba
 | `db` | PostgreSQL |
 | `backup` | tägliche Datensicherung nach `backups/` (nutzt das PostgreSQL-Image, kein zusätzlicher Download) |
 | `updater` | Update per Klick aus der Oberfläche |
-| `caddy` | nur auf Servern: HTTPS mit interner CA, eigenem Zertifikat oder Let's Encrypt |
+| `caddy` | HTTPS mit interner CA, eigenem Zertifikat oder Let's Encrypt (nicht bei Reverse Proxy / ZTNA und `local`) |
 
-Ressourcen: 1 vCPU, 1 GB RAM und 10 GB Platte reichen für den Anfang. Die Images gibt es für `linux/amd64` und `linux/arm64` (ab dem nächsten Release).
+Ressourcen: 1 vCPU, 1 GB RAM und 10 GB Platte reichen für den Anfang. Die Images liegen öffentlich auf GitHub (`ghcr.io/panpakapancake/yubikey-lifecycle-manager`, `…-updater`, `…-caddy`), jeweils für `linux/amd64` und `linux/arm64`.
 
 ### Welche Variante?
 
@@ -24,7 +24,8 @@ Die Plattform verwaltet Anmeldemethoden in allen angebundenen Tenants. Sie gehö
 | 2 | **Intern, eigenes Zertifikat** (`--mode cert`) | `https://ylm.firma.de` | Zertifikat der Firmen-PKI oder ein gekauftes | wer schon eine PKI hat |
 | 3 | **Reverse Proxy / ZTNA-Connector** (`--mode proxy`) | Adresse des Proxys | macht der Proxy (nginx, Traefik, Cloudflare Tunnel, Entra Private Access, Zscaler …) | wer Zugänge zentral veröffentlicht |
 | 4 | Öffentlich mit Let's Encrypt (`--mode https`) | `https://ylm.example.com` | automatisch | nur wenn der Server bewusst aus dem Internet erreichbar sein soll |
-| 5 | Lokal auf dem Admin-PC (`--mode local`, `install.ps1`) | `http://localhost:8080` | nicht nötig | Ausprobieren, Einzelplatz |
+| 5 | Lokal auf dem Admin-PC (`install.ps1`, Standard) | `https://localhost` | Caddy mit interner CA, Stammzertifikat trägt das Skript in Windows ein | Ausprobieren, Einzelplatz |
+| 6 | Lokal ohne HTTPS (`-Mode local` bzw. `--mode local`) | `http://localhost:8080` | keins | nur zum kurzen Ausprobieren |
 
 Passkeys und Entra funktionieren außerhalb von `localhost` nur über HTTPS mit einem Zertifikat, dem der Browser vertraut. Deshalb gibt es auf einem Server immer HTTPS, auch intern.
 
@@ -42,9 +43,18 @@ Voraussetzung: [Docker Desktop](https://www.docker.com/products/docker-desktop/)
 irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
 ```
 
-Das Skript legt `%USERPROFILE%\YubikeyLifecycleManager` an, erzeugt dort die `.env` mit zufälligem Datenbank-Passwort, Updater-Geheimnis und Passphrase für die Sicherungen, lädt die Images, startet alles und zeigt am Ende die **Passphrase** (in den Passwortmanager übernehmen) und das **Setup-Token**. Der Browser öffnet `http://localhost:8080/setup`; weiter mit [Abschnitt 2](#2-einrichtung-einmalig).
+Das Skript
 
-Anderer Ordner oder andere Variante: `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1))) -Dir D:\ylm -Mode internal -Domain ylm.firma.local` (Varianten wie bei `install.sh`, eigenes Zertifikat mit `-Mode cert -Cert ylm.crt -Key ylm.key`).
+1. legt `%USERPROFILE%\YubikeyLifecycleManager` an und erzeugt dort die `.env` mit zufälligem Datenbank-Passwort, Updater-Geheimnis und Passphrase für die Sicherungen,
+2. lädt `docker-compose.yml` und die Dateien in `deploy/` vom neuesten Release sowie die fertigen Images und startet alles,
+3. trägt das Stammzertifikat der internen Zertifizierungsstelle von Caddy in den Zertifikatspeicher des Computers ein (eine **UAC-Abfrage**, bitte bestätigen). Damit vertrauen Browser und Agent-Dienst der Adresse `https://localhost`. Die Datei liegt zusätzlich als `ylm-root-ca.crt` im Installationsordner.
+4. zeigt am Ende die **Passphrase** (in den Passwortmanager übernehmen) und das **Setup-Token** und öffnet `https://localhost/setup`. Weiter mit [Abschnitt 2](#2-einrichtung-einmalig).
+
+`docker compose ps` im Installationsordner zeigt danach `server`, `db`, `backup`, `updater` und `caddy`. Wurde die UAC-Abfrage abgelehnt, das Zertifikat später als Administrator eintragen: `certutil -addstore Root "$env:USERPROFILE\YubikeyLifecycleManager\ylm-root-ca.crt"`.
+
+Port 8080 ist auch hier nur der interne Port des Servers (`http://localhost:8080`, ohne HTTPS). Für Browser und Agent gilt `https://localhost`.
+
+Anderer Ordner oder andere Variante: `& ([scriptblock]::Create((irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1))) -Dir D:\ylm -Mode internal -Domain ylm.firma.local` (Varianten wie bei `install.sh`, eigenes Zertifikat mit `-Mode cert -Cert ylm.crt -Key ylm.key`, ohne HTTPS mit `-Mode local`, bestimmte Version mit `-Version v0.13.0`).
 
 ### 1.2 Server im internen Netz (empfohlen)
 
@@ -180,7 +190,7 @@ Mit dem App-Zertifikat meldet sich die Plattform in jedem angebundenen Tenant be
 1. Alte Installation: `docker compose exec backup sh /backup.sh now`, Archiv aus `backups\` kopieren.
 2. Neue Installation per Skript anlegen (1.2) und das Archiv nach `/opt/ylm/backups/` kopieren. Bei verschlüsselten Sicherungen die alte Passphrase bereithalten.
 3. Wiederherstellen wie in 1.6. Die Plattform läuft danach mit allen Daten unter der neuen Adresse aus `YLM_PUBLIC_URL`.
-4. **Entra:** In der App-Registrierung der Plattform (Heim-Tenant → App-Registrierungen → „Yubikey Lifecycle Manager <Organisation>“ → Authentifizierung) die neuen Umleitungs-URIs `https://<neu>/signin-oidc` und `https://<neu>/api/tenants/consent-callback` ergänzen.
+4. **Entra:** In der App-Registrierung der Plattform (Heim-Tenant → App-Registrierungen → „Yubikey Lifecycle Manager …“ → Authentifizierung) die neuen Umleitungs-URIs `https://<neu>/signin-oidc` und `https://<neu>/api/tenants/consent-callback` ergänzen.
 5. **Lokale Benutzer** mit Passkey brauchen einen neuen Einrichtungslink (Passkeys gehören zur Adresse), **Agents** einen neuen Kopplungscode.
 6. Alte Installation stoppen: `docker compose down` (Volumes bleiben erhalten, bis sie mit `down -v` gelöscht werden).
 
@@ -226,11 +236,11 @@ Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services
 
 **Globale Einstellungen → Version und Updates** zeigt die installierte und die neueste Version (GitHub-Releases, Prüfung alle 6 Stunden). Ein Punkt neben „Globale Einstellungen“ weist Owner auf ein Update hin.
 
-- **Update per Klick:** Der Container `updater` holt das neue Server-Image und startet den Server neu (`docker compose pull server` und `up -d server`). Nur dieser Container hat Zugriff auf den Docker-Socket, der Server selbst nicht. Das Installationsskript setzt dafür `UPDATER_TOKEN`; ohne Token nimmt der Updater keine Aufträge an.
-- **Installationsdateien auffrischen:** Neue Versionen können auch `docker-compose.yml` und die Dateien in `deploy/` ändern (z. B. neue Dienste). Dafür das Installationsskript gelegentlich erneut ausführen; es behält `.env` und aktualisiert Dateien und alle Images. Ohne Skript: `docker compose pull && docker compose up -d`.
-- **Agents:** Jedes Server-Image bringt das passende Agent-MSI mit. „Mein Agent“ bietet es zum Download an, und verbundene Agents installieren neue Versionen innerhalb von 4 Stunden selbst (still per msiexec, Prüfsumme wird geprüft). Vor der Installation beendet der Dienst die Tray-Apps und startet sie danach in denselben Benutzersitzungen neu.
+- **Update per Klick:** Der Container `updater` holt das neue Server-Image, startet den Server neu und bringt danach auch Updater, Caddy und Datensicherung auf denselben Stand. Das Protokoll steht in der Oberfläche. Nur dieser Container hat Zugriff auf den Docker-Socket, der Server selbst nicht. Das Installationsskript setzt dafür `UPDATER_TOKEN`; ohne Token nimmt der Updater keine Aufträge an.
+- **Installationsdateien auffrischen:** Das Update per Klick tauscht nur Images aus. Neue Versionen können aber auch `docker-compose.yml` und die Dateien in `deploy/` ändern (z. B. neue Dienste). Dafür das Installationsskript gelegentlich mit demselben Befehl wie bei der Installation erneut ausführen; es behält `.env` und alle Daten und aktualisiert Dateien und Images. Ohne Skript: neue Dateien wie in [1.4](#14-ohne-skript-installieren) laden, dann `docker compose pull && docker compose up -d`.
+- **Agents:** Jedes Server-Image bringt das passende Agent-MSI mit. „Mein Agent“ bietet es zum Download an (dasselbe MSI hängt am GitHub-Release), und verbundene Agents installieren neue Versionen innerhalb von 4 Stunden selbst (still per msiexec, Prüfsumme wird geprüft). Vor der Installation beendet der Dienst die Tray-Apps und startet sie danach in denselben Benutzersitzungen neu.
   - **Vorgabe:** Globale Einstellungen → Version und Updates → **Agent-Updates**: „Automatisch, am PC abschaltbar“ (Standard), „Immer automatisch“ oder „Keine automatischen Updates“. Darunter steht die Liste aller Agents mit Version, Auto-Update und letztem Fehler.
-  - **Am PC:** Tray → **Einstellungen**: „Mit Windows starten“ (pro Benutzer), „Updates automatisch installieren“ (für den PC, nur lokale Administratoren), „Jetzt nach Updates suchen“. „Jetzt aktualisieren“ gibt es auch unter **Agent** in der Weboberfläche.
+  - **Am PC:** Tray → **Einstellungen**: „Mit Windows starten“ (pro Benutzer), „Updates automatisch installieren“ (für den PC, nur lokale Administratoren), „Jetzt nach Updates suchen“. „Jetzt aktualisieren“ gibt es auch unter **Mein Agent** in der Weboberfläche.
   - **Fehlersuche:** Jede Prüfung steht im Agent-Log (`Update: …`), das msiexec-Protokoll unter `C:\ProgramData\YubikeyLifecycleManager\Agent\updates\install-<Version>.log` (nur für Administratoren lesbar). Nach einem Fehler versucht der Agent es nach 30 Minuten erneut.
   - `"Agent": { "AutoUpdate": false }` in der `appsettings.json` des Agents setzt den Standard der lokalen Einstellung auf „aus“ (z. B. für Images).
 - **Sicherheitsupdates der Container:** Unabhängig von neuen Versionen lädt der Updater täglich um `YLM_AUTO_REFRESH` (Standard 04:00, nach der Sicherung) alle Images der installierten Version neu und erstellt geänderte Container neu, auch sich selbst (über einen kurzlebigen Hilfscontainer `<projekt>-refresh`). Die Plattform ist dabei kurz nicht erreichbar. „Jetzt einspielen“ unter **Version und Updates** startet es sofort; dort stehen Zeitpunkt und Ergebnis des letzten Laufs.
@@ -258,13 +268,30 @@ Weitere Einstellungen des Servers über `docker-compose.override.yml` (`services
 
 ### 1.11 Alte Installation aus einem Git-Checkout
 
-Wer bisher im geklonten Repository installiert hat, kann dort bleiben: `git pull`, dann `docker compose up -d`. Damit kommen die Datensicherung und (bei Bedarf) Caddy dazu. Eigene Änderungen an `docker-compose.yml` vorher in `docker-compose.override.yml` bzw. `.env` verschieben (`git stash` hilft beim Aufräumen). Für einen Wechsel in einen eigenen Ordner wie oben: sichern, per Skript neu installieren, wiederherstellen (1.7, Schritte 1 bis 3; Adresse und Entra bleiben gleich).
+Frühe Versionen wurden direkt im geklonten Repository installiert. Das wird nicht mehr empfohlen. Wer so installiert hat, kann dort bleiben: `git pull`, dann `docker compose up -d`. Damit kommen die Datensicherung und (bei Bedarf) Caddy dazu. Eigene Änderungen an `docker-compose.yml` vorher in `docker-compose.override.yml` bzw. `.env` verschieben (`git stash` hilft beim Aufräumen). Für einen Wechsel in einen eigenen Ordner wie oben: sichern, per Skript neu installieren, wiederherstellen (1.7, Schritte 1 bis 3; Adresse und Entra bleiben gleich).
+
+### 1.12 Deinstallieren oder neu anfangen
+
+```powershell
+cd $HOME\YubikeyLifecycleManager          # bzw. /opt/ylm
+docker compose exec backup sh /backup.sh now   # optional: letzte Sicherung, Archiv aus backups\ wegkopieren
+docker compose --profile https down -v --remove-orphans
+cd $HOME; Remove-Item -Recurse -Force .\YubikeyLifecycleManager   # unter Linux: sudo rm -rf /opt/ylm
+```
+
+`down -v` löscht Datenbank, App-Zertifikat und Schlüssel **unwiderruflich**. Danach:
+
+- **Agent:** unter Windows-Einstellungen → Apps „Yubikey Lifecycle Manager Agent“ deinstallieren. Für eine Neuinstallation der Plattform kann er bleiben; er braucht dann nur einen neuen Kopplungscode.
+- **Stammzertifikat** (nur Windows-Standardinstallation): `certlm.msc` → Vertrauenswürdige Stammzertifizierungsstellen → Zertifikat „Caddy Local Authority …“ löschen.
+- **Entra:** Die App-Registrierung „Yubikey Lifecycle Manager …“ (mit dem Namen der Organisation) im Heim-Tenant unter App-Registrierungen löschen. In angebundenen Kunden-Tenants bleibt die Unternehmensanwendung stehen, bis ein Admin sie dort löscht.
+
+Eine Neuinstallation fängt bei null an: Setup-Assistent, neue App-Registrierung, Tenants neu anbinden. Eine alte Sicherung lässt sich nach der Neuinstallation wie in [1.6](#16-datensicherung-und-wiederherstellung) einspielen; dann läuft die Plattform wieder mit der alten App-Registrierung und den alten Tenants (die neu angelegte App-Registrierung kann dann weg).
 
 ## 2. Einrichtung (einmalig)
 
 1. `https://<adresse>/setup` öffnen und das Setup-Token aus dem Log eingeben.
 2. Organisation und öffentliche Adresse eintragen.
-3. **Bei Microsoft anmelden**: normale Microsoft-Anmeldung im Browser (wie `Connect-MgGraph`, Autorisierungscode mit PKCE) als Globaler Administrator des **Heim-Tenants** (alternativ Anwendungsadministrator plus Privileged Role Administrator). Microsoft leitet danach auf `http://localhost` zurück: Läuft die Plattform auf localhost, geht es automatisch weiter, auf einem Server kopiert man die Adresse aus der Adresszeile in den Assistenten. Die Anmeldung mit Code (Device Code) gibt es nur noch als Ausweichweg, weil sie in vielen Tenants per Conditional Access gesperrt ist. Die Plattform erzeugt dann selbst das App-Zertifikat, legt die mandantenfähige App-Registrierung samt Dienstprinzipal an und erteilt den Admin-Consent. Die Anmeldung läuft über Microsofts App „Microsoft Graph Command Line Tools“, weil die Installation zu diesem Zeitpunkt noch keine eigene App hat; das Token bleibt nur im Arbeitsspeicher und wird nach dem Abschluss verworfen.
+3. **Bei Microsoft anmelden**: normale Microsoft-Anmeldung im Browser (wie `Connect-MgGraph`, Autorisierungscode mit PKCE) als Globaler Administrator des **Heim-Tenants** (alternativ Anwendungsadministrator plus Privileged Role Administrator). Microsoft leitet danach auf `http://localhost` zurück: Läuft die Plattform auf demselben PC, geht es in der Regel automatisch weiter. Auf einem Server zeigt der Browser „Seite nicht erreichbar“; dann die komplette Adresse aus der Adresszeile (`http://localhost/?code=…`) in den Assistenten kopieren. Die Anmeldung mit Code (Device Code) gibt es nur noch als Ausweichweg, weil sie in vielen Tenants per Conditional Access gesperrt ist. Die Plattform erzeugt dann selbst das App-Zertifikat, legt die mandantenfähige App-Registrierung samt Dienstprinzipal an und erteilt den Admin-Consent. Die Anmeldung läuft über Microsofts App „Microsoft Graph Command Line Tools“, weil die Installation zu diesem Zeitpunkt noch keine eigene App hat; das Token bleibt nur im Arbeitsspeicher und wird nach dem Abschluss verworfen.
 4. Im Abschluss den ersten Owner bestätigen (vorausgefüllt mit dem angemeldeten Konto) und wählen, ob der Heim-Tenant gleich als erster Tenant angebunden wird (Standard: ja).
 5. Mit dem Konto des ersten Owners anmelden (mit YubiKey).
 
@@ -274,7 +301,7 @@ Benötigte Anwendungsberechtigungen (Microsoft Graph): `UserAuthenticationMethod
 
 ### Neue Version veröffentlichen (Entwicklung)
 
-Tag setzen und pushen, z. B. `git tag v0.2.0 && git push origin v0.2.0`. Der Workflow `Release` baut das Agent-MSI, legt es ins Server-Image, veröffentlicht `ghcr.io/panpakapancake/yubikey-lifecycle-manager` und das Updater-Image auf GHCR und erstellt das GitHub-Release mit dem MSI. Die Pakete auf GHCR müssen einmalig auf „Public“ gestellt werden, damit Installationen sie ohne Anmeldung laden können.
+Vorher in `web/src/changelog.md` einen Abschnitt für die neue Version ergänzen (daraus entstehen Versionsverlauf und Release-Notes). Dann Tag setzen und pushen, z. B. `git tag v0.14.0 && git push origin v0.14.0`. Der Workflow `Release` baut das Agent-MSI, legt es ins Server-Image, veröffentlicht `ghcr.io/panpakapancake/yubikey-lifecycle-manager` und das Updater-Image auf GHCR und erstellt das GitHub-Release mit dem MSI. In einem Fork müssen die Pakete auf GHCR einmalig auf „Public“ gestellt werden, damit Installationen sie ohne Anmeldung laden können.
 
 ### Benutzer und Anmeldung
 
@@ -312,17 +339,48 @@ Beim Offboarding entfernt die Plattform ihre Daten nach der Aufbewahrungsfrist. 
 
 ## 4. Agent auf dem Admin-PC (Windows)
 
-1. `YubikeyLifecycleManager-Agent.msi` installieren (Adminrechte). Das MSI entsteht in der CI (Artefakt `agent-msi`) oder lokal mit `pwsh installer/build.ps1`.
-   - Dienst `YubikeyLifecycleManagerAgent` (LocalSystem, Autostart). Adminrechte sind nötig, weil Windows den direkten FIDO-Zugriff (PIN setzen, Reset) sonst sperrt.
-   - Tray-App `YlmTray.exe` startet bei jeder Anmeldung.
-2. In der Web-Oberfläche unter „Agent“ einen Kopplungscode erzeugen.
-3. Im Tray-Symbol „Agent koppeln“ wählen, Adresse und Code eingeben. Koppeln und Entkoppeln dürfen nur Mitglieder der lokalen Gruppe „Administratoren“ (ohne erhöhte Rechte reicht), weil der Agent-Dienst als SYSTEM Updates vom gekoppelten Server installiert.
+Der Agent greift auf den eingesteckten YubiKey zu (PIN, Registrierung, Seriennummer und Firmware auslesen). Er besteht aus einem Windows-Dienst und einer Tray-App und verbindet sich ausgehend mit der Plattform. Voraussetzung: Windows 10 oder 11 (x64) und ein Konto, das lokaler Administrator ist.
 
-Protokolle: `C:\ProgramData\YubikeyLifecycleManager\Agent\logs`. Update: neueres MSI installieren.
+### 4.1 Installieren
 
-Signatur: Release-MSIs werden signiert, sobald Azure Artifact Signing eingerichtet ist ([SIGNIERUNG.md](SIGNIERUNG.md)). Ein signierter Agent installiert nur Updates vom selben Unterzeichner.
+1. MSI besorgen, am besten in der Weboberfläche unter **Mein Agent → Agent herunterladen**: Diese Version passt immer zum Server. Alternativ `YubikeyLifecycleManager-Agent.msi` von der [Release-Seite](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/releases/latest).
+2. MSI per Doppelklick installieren und die UAC-Abfrage bestätigen. Ist das MSI noch nicht signiert (siehe unten), warnt SmartScreen: „Weitere Informationen“ → „Trotzdem ausführen“. Bei Problemen mit Protokoll installieren: `msiexec /i YubikeyLifecycleManager-Agent.msi /l*v "$env:TEMP\ylm-msi.log"`.
 
-Für Tests ohne Key: `YlmAgent.exe --simulate` startet den Agent mit einem simulierten YubiKey.
+Das MSI richtet ein:
+
+- den Dienst `YubikeyLifecycleManagerAgent` (LocalSystem, startet automatisch). Er braucht diese Rechte, weil Windows den direkten FIDO-Zugriff (PIN setzen, Reset) sonst sperrt.
+- die Tray-App `YlmTray.exe` mit Autostart für alle Benutzer (`HKLM\…\Run`). Wer das Tray-Symbol nicht möchte, schaltet unter Tray → **Einstellungen** „Mit Windows starten“ für sich ab. Starten lässt sie sich dann weiterhin über das Startmenü.
+
+Dateien liegen unter `C:\Program Files\Yubikey Lifecycle Manager\Agent\`, Einstellungen, Kopplung und Protokolle unter `C:\ProgramData\YubikeyLifecycleManager\Agent\`.
+
+### 4.2 Koppeln
+
+1. Weboberfläche → **Mein Agent** → **Kopplungscode erzeugen** (10 Minuten gültig, einmal verwendbar).
+2. Rechtsklick auf das Tray-Symbol → **Koppeln …** → Server-Adresse und Code eingeben.
+
+Die Server-Adresse ist genau die, die im Browser in der Adresszeile steht (sie steht auch unter „Plattform-Adresse“ auf der Seite **Mein Agent**):
+
+| Installation | Adresse zum Koppeln |
+|---|---|
+| Windows-Standard (`install.ps1`) | `https://localhost` (ohne Port) |
+| Server mit interner CA oder eigenem Zertifikat | z. B. `https://ylm.firma.local` |
+| Hinter Reverse Proxy / ZTNA | die Adresse des Proxys (`YLM_PUBLIC_URL`) |
+| Nur ohne HTTPS installiert (`-Mode local`) | `http://localhost:8080` |
+
+Hinweise:
+
+- Bei HTTPS muss der PC dem Zertifikat vertrauen, und zwar im **Computer**-Speicher, weil der Dienst als SYSTEM läuft. Bei der internen CA also das Stammzertifikat wie in [1.2](#12-server-im-internen-netz-empfohlen) verteilen. Die Windows-Standardinstallation erledigt das für den eigenen PC.
+- Koppeln und Entkoppeln dürfen nur Mitglieder der lokalen Gruppe „Administratoren“ (ein normales, nicht erhöhtes Fenster reicht), weil der Agent-Dienst als SYSTEM Updates vom gekoppelten Server installiert.
+- Wird der Agent in der Weboberfläche entfernt oder die Plattform neu installiert, zeigt der Tray „Kopplung ungültig – neu koppeln“: einfach mit einem neuen Code neu koppeln.
+- Das Agent-Token liegt in `agent.json`, mit DPAPI verschlüsselt (wo Windows das zulässt) und in einer Datei, die nur SYSTEM und Administratoren lesen dürfen.
+
+### 4.3 Updates und Fehlersuche
+
+Neue Versionen installiert der Agent selbst ([1.9](#19-updates)); von Hand geht es mit einem neueren MSI oder unter Tray → **Einstellungen** → „Jetzt nach Updates suchen“. Protokolle: Tray → **Logs öffnen** bzw. `C:\ProgramData\YubikeyLifecycleManager\Agent\logs`.
+
+Signatur: Release-MSIs werden signiert, sobald die Signierung über SignPath eingerichtet ist ([SIGNIERUNG.md](SIGNIERUNG.md)). Ein signierter Agent installiert nur Updates vom selben Unterzeichner.
+
+Für Tests ohne Key: `YlmAgent.exe --simulate` startet den Agent mit einem simulierten YubiKey. Selbst bauen (Windows, .NET 10 SDK): `pwsh installer/build.ps1`, Ergebnis in `installer\out\`.
 
 ## 5. API
 

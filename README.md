@@ -22,19 +22,41 @@ Ein reiner Browser kann die Registrierung on Behalf nicht durchführen. Die Begr
 
 ## Installation
 
-Lokal auf einem Windows-PC mit Docker Desktop (PowerShell):
+Kurz gesagt: Server per Skript in Docker starten, im Browser einrichten, Agent auf dem Admin-PC installieren und koppeln. Ausführlich mit allen Varianten: [Betrieb und Installation](docs/BETRIEB.md).
+
+### 1. Server
+
+**Zum Ausprobieren auf einem Windows-PC** mit [Docker Desktop](https://www.docker.com/products/docker-desktop/) (PowerShell, keine Adminrechte nötig):
 
 ```powershell
 irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
 ```
 
-Auf einem Linux-Server im internen Netz oder hinter ZTNA, mit HTTPS über interne CA, eigenes Zertifikat oder vorhandenen Reverse Proxy:
+Die Plattform läuft danach unter **`https://localhost`**. Das Skript erzeugt dafür eine interne Zertifizierungsstelle und trägt deren Stammzertifikat nach einer UAC-Abfrage in Windows ein, damit Browser und Agent der Adresse vertrauen.
+
+**Für den Betrieb auf einem Linux-Server** im internen Netz oder hinter ZTNA, mit HTTPS über interne CA, eigenes Zertifikat oder vorhandenen Reverse Proxy:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.sh | sudo bash
 ```
 
-Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images, richtet die tägliche, verschlüsselte Datensicherung ein und zeigt am Ende Passphrase und Setup-Token. Die Plattform ist nicht dafür gedacht, offen im Internet zu stehen. Details zu den Varianten, Reverse Proxy/ZTNA, Sicherung und Umzug: [Betrieb und Installation](docs/BETRIEB.md).
+Beide Skripte legen eine `.env` mit Zufallsgeheimnissen an, laden die fertigen Images der neuesten Version von GitHub (`ghcr.io`), richten die tägliche, verschlüsselte Datensicherung ein und zeigen am Ende die **Passphrase der Sicherung** (in den Passwortmanager übernehmen) und das **Setup-Token**. Gebaut wird nichts. Die Plattform ist nicht dafür gedacht, offen im Internet zu stehen.
+
+### 2. Einrichtung
+
+`https://<adresse>/setup` öffnen, Setup-Token eingeben und als Globaler Administrator des eigenen Entra-Tenants bei Microsoft anmelden. Die Plattform legt ihre App-Registrierung, das App-Zertifikat und den Admin-Consent selbst an ([Details](docs/BETRIEB.md#2-einrichtung-einmalig)).
+
+### 3. Agent auf dem Admin-PC
+
+1. In der Weboberfläche unter **Mein Agent** auf **Agent herunterladen** klicken (passt immer zur Server-Version) oder `YubikeyLifecycleManager-Agent.msi` von der [Release-Seite](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/releases/latest) laden und mit Adminrechten installieren.
+2. Unter **Mein Agent** einen Kopplungscode erzeugen.
+3. Rechtsklick auf das Tray-Symbol → **Koppeln …** → die Adresse der Plattform, genau wie im Browser (z. B. `https://localhost`), und den Code eingeben.
+
+Der Tray startet danach mit jeder Windows-Anmeldung, und der Agent installiert neue Versionen selbst ([Details](docs/BETRIEB.md#4-agent-auf-dem-admin-pc-windows)).
+
+### Updates
+
+Unter **Globale Einstellungen → Version und Updates** zeigt die Plattform neue Versionen an; **Update per Klick** aktualisiert alle Container. Gelegentlich das Installationsskript erneut ausführen, damit auch `docker-compose.yml` und die Hilfsdateien aktuell bleiben; die `.env` und alle Daten bleiben dabei erhalten.
 
 ## Dokumentation
 
@@ -56,24 +78,11 @@ Das Skript erzeugt die `.env` mit Zufallsgeheimnissen, lädt die fertigen Images
 
 ## Status
 
-**V1 umgesetzt (Version 0.1.0)**: Einrichtung, Tenant-On-/Offboarding mit Prüfungen und „Jetzt beheben“, Rollen und Zuständigkeiten, Audit-Log mit Hash-Kette, Entra-Sync, Inventar (Lager, Lebenszyklus, Zusatzfelder, Tags, CSV-Import, Wareneingang per Einstecken), Profile mit Firmware-Prüfung, Einzel-Wizard, PIN-PDF, Dashboard mit CSV/PDF-Export, Lese-API.
+Das Projekt ist in aktiver Entwicklung (Versionen 0.x). Was sich in welcher Version geändert hat, steht in der Oberfläche im **Versionsverlauf** (Klick auf die Versionsangabe) und auf der [Release-Seite](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/releases).
 
-**V1.1 umgesetzt**: Stapelregistrierung (Liste aus Entra-Gruppe, CSV oder Suche; Keys der Reihe nach einstecken, optional feste Seriennummer pro Person; alle PIN-Briefe als ein PDF), geteilter Key und Breakglass (mehrere Konten auf einem Key, Pflichtfeld Verwahrer, ein PIN-Brief an den Verwahrer), Nacherfassen selbst registrierter Keys per Einstecken.
+Umgesetzt sind unter anderem: Tenant-On-/Offboarding mit Prüfungen und „Jetzt beheben“, Rollen und Zuständigkeiten, Audit-Log mit Hash-Kette, Entra-Sync, Inventar mit Lager, Partnerlager, Zusatzfeldern, Tags und „Wer hat welchen Key“, Profile mit Firmware-Prüfung, Einzel- und Stapelregistrierung, geteilte Keys und Breakglass mit optionaler Vier-Augen-Freigabe, PIN-Briefe mit eigenem Layout, Passkey-Rollout mit TAP, Yubico-Sicherheitshinweise, Dashboard mit Export, REST-API mit Rechten pro Schlüssel, Webhooks, Mail-Alarme und Mail-Berichte, Whitelabeling sowie Update per Klick für Server und Agent.
 
-**V2 umgesetzt**: ToDo-Liste (von Hand oder per `POST /api/v1/todos` aus dem Ticketsystem, wird mit der Registrierung erledigt), Vier-Augen-Freigabe für Breakglass (pro Tenant), signierte Webhooks und Mail-Alarme mit frei wählbaren Ereignissen, Mail-Berichte per SMTP mit PDF/CSV. NinjaRMM bekommt Ereignisse über die Webhooks (keine eigene Anbindung, Entscheidung 2026-11-19).
-
-**Inventar mit „Wer hat welchen Key“**: alle Keys oder nach Person, pro Tenant oder über alle Tenants, mit Verwahrern geteilter Keys und Auffälligkeiten; Export als Excel, CSV und PDF; in der Lese-API unter `GET /api/v1/assignments`.
-
-**Whitelabeling**: PIN-Briefe, Berichte und PDF-Exporte mit eigenem Firmennamen, Logo, Farbe, Kontakt und Fußzeile; Vorgabe in den globalen Einstellungen, pro Tenant einzeln überschreibbar.
-
-Automatisch getestet sind die Fachlogik und der komplette Ablauf im Backend mit simuliertem YubiKey und simuliertem Microsoft Graph.
-
-**Noch nicht getestet:**
-
-- echte YubiKeys mit dem Yubico SDK (Auslesen, Reset, PIN setzen, Registrierung, PIN-Wechsel erzwingen)
-- ein echter Entra-Tenant: Anmeldung, Admin-Consent, Graph-Aufrufe, insbesondere die Registrierung on Behalf über die Beta-Schnittstelle (`fido2Methods/creationOptions`)
-- die automatische App-Registrierung im Setup-Assistenten (Anmeldung per Code) und das App-Registrierungs-Skript als Ausweichweg
-- MSI-Installation, Windows-Dienst und Tray-App auf Windows (das MSI wird in der CI gebaut, aber nicht installiert)
+Automatisch getestet sind die Fachlogik und der komplette Ablauf im Backend mit simuliertem YubiKey und simuliertem Microsoft Graph. Die Registrierung on Behalf nutzt die Beta-Schnittstelle von Microsoft Graph (`fido2Methods/creationOptions`), die Microsoft noch ändern kann.
 
 Die Liste der YubiKey-AAGUIDs (`src/Ylm.Core/YubicoAaguids.cs`) sollte vor dem produktiven Einsatz mit der von Yubico veröffentlichten Liste abgeglichen werden.
 
