@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { api, ApiError } from '../api';
 import { useConfirm, useToast } from '../feedback';
 import { Icon } from '../icons';
@@ -16,6 +16,8 @@ interface LetterResponse {
   sample: Record<string, string | null>; brand: { companyName?: string | null; accent: string; hasLogo: boolean }; infoUrl?: string | null;
 }
 
+/** Höchstzahl der Seiten, wie im Server (LetterBlocks.MaxPages). */
+const maxPages = 6;
 const newId = () => Math.random().toString(36).slice(2, 10);
 const sameBlocks = (a: LetterBlock[], b: LetterBlock[]) => JSON.stringify(a) === JSON.stringify(b);
 const normalize = (blocks: LetterBlock[]): LetterBlock[] =>
@@ -40,6 +42,7 @@ const blockIcons: Record<string, ReactNode> = {
   callout: <><rect x="3" y="5" width="18" height="14" rx="2" /><path d="M7 5v14" /><path d="M10 10h7M10 14h5" /></>,
   info: <><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1" /><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" /></>,
   divider: <><path d="M3 12h18" /><path d="M8 7h8M8 17h8" opacity=".4" /></>,
+  pageBreak: <><path d="M6 3v5h12V3" /><path d="M6 21v-5h12v5" /><path d="M3 12h3M9 12h2M13 12h2M18 12h3" /></>,
   spacer: <><path d="M12 4v16" /><path d="m8 8 4-4 4 4M8 16l4 4 4-4" /></>,
 };
 
@@ -146,6 +149,22 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
     change((cur) => [...cur.slice(0, i + 1), copy, ...cur.slice(i + 1)]);
     setSelected(copy.id);
   };
+  /** Seiten: jeder Baustein „Neue Seite“ beginnt eine neue. breakIndex ist die Stelle des Umbruchs (-1 für Seite 1), end exklusiv. */
+  const pages: { start: number; end: number; breakIndex: number }[] = [];
+  {
+    let start = 0, breakIndex = -1;
+    blocks.forEach((b, i) => {
+      if (b.type !== 'pageBreak') return;
+      pages.push({ start, end: i, breakIndex });
+      breakIndex = i; start = i + 1;
+    });
+    pages.push({ start, end: blocks.length, breakIndex });
+  }
+  const addPage = () => {
+    const b = create('pageBreak');
+    change((cur) => [...cur, b]);
+    setSelected(null);
+  };
   const step = (id: string, dir: -1 | 1) => {
     const i = blocks.findIndex((b) => b.id === id);
     const j = i + dir;
@@ -228,6 +247,47 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
   const fill = (text: string) => text.replace(/\{\{\s*([A-Za-zÄÖÜäöüß]+)\s*\}\}/g, (m, name: string) => (name in data.sample ? data.sample[name] ?? '' : m));
   const ctx: SheetCtx = { types, fill, forced, brand: data.brand, logoUrl: '/api/branding/logo?effective=true' + (tenantId ? '&tenantId=' + tenantId : ''), infoUrl: data.infoUrl };
 
+  /** Ein Baustein auf dem Blatt; i ist seine Stelle im gesamten Brief (über alle Seiten). */
+  const renderBlock = (b: LetterBlock, i: number) => {
+    const t = types.get(b.type);
+    const visible = b.show === 'always' || (b.show === 'forced') === forced;
+    const hidden = !visible || (b.type === 'info' && !data.infoUrl);
+    const half = b.width === 'half';
+    const cls = ['lb-block', half ? 'lb-half' : '', hidden ? 'lb-hidden' : '', selected === b.id ? 'lb-selected' : '',
+      drag?.kind === 'move' && drag.id === b.id ? 'lb-dragging' : '',
+      drop === i ? (half ? 'lb-drop-left' : 'lb-drop-top') : '',
+      drop === i + 1 && (i === blocks.length - 1 || blocks[i + 1]?.width !== 'half' || !half) ? (half ? 'lb-drop-right' : 'lb-drop-bottom') : ''].filter(Boolean).join(' ');
+    return (
+      <div key={b.id} className={cls} draggable={editable} tabIndex={0} role="button"
+        aria-label={`${t?.label ?? b.type}${hidden ? ' (in dieser Variante ausgeblendet)' : ''}`}
+        onDragStart={(e) => onDragStartMove(e, b.id)} onDragEnd={endDrag}
+        onDragOver={(e) => onDragOverBlock(e, i, half)}
+        onClick={(e) => { e.stopPropagation(); setSelected(b.id); }}
+        onKeyDown={(e) => {
+          if (!editable || e.target !== e.currentTarget) return;
+          if (e.key === 'Delete' && !t?.required) remove(b.id);
+          if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); step(b.id, -1); }
+          if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); step(b.id, 1); }
+        }}>
+        <span className="lb-tag"><BlockIcon type={b.type} size={12} />{t?.label}{b.show !== 'always' && <em>{b.show === 'forced' ? 'nur Initial-PIN' : 'nur dauerhafte PIN'}</em>}</span>
+        {editable && (
+          <span className="lb-tools" onClick={(e) => e.stopPropagation()}>
+            <button type="button" title="Nach oben (Alt+↑)" aria-label="Nach oben" disabled={i === 0} onClick={() => step(b.id, -1)}>↑</button>
+            <button type="button" title="Nach unten (Alt+↓)" aria-label="Nach unten" disabled={i === blocks.length - 1} onClick={() => step(b.id, 1)}>↓</button>
+            {t?.halfWidth && (
+              <button type="button" title={half ? 'Volle Breite' : 'Halbe Breite (zwei nebeneinander)'} onClick={() => update(b.id, { width: half ? 'full' : 'half' })}>{half ? '▭' : '◫'}</button>
+            )}
+            {!t?.unique && <button type="button" title="Duplizieren" aria-label="Duplizieren" onClick={() => duplicate(b.id)}><Icon name="copy" size={12} /></button>}
+            {!t?.required && <button type="button" title="Entfernen (Entf)" aria-label="Entfernen" onClick={() => remove(b.id)}><Icon name="trash" size={12} /></button>}
+          </span>
+        )}
+        {hidden
+          ? <div className="lb-hidden-note">{b.type === 'info' && !data.infoUrl ? 'Erscheint, sobald die Adresse der Plattform eingetragen ist.' : `In der Variante „${forced ? 'Initial-PIN' : 'Dauerhafte PIN'}“ ausgeblendet.`}</div>
+          : <SheetBlock block={b} ctx={ctx} />}
+      </div>
+    );
+  };
+
   return (
     <Card
       title={<span id="letter">PIN-Brief gestalten</span>}
@@ -238,7 +298,7 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
     >
       <p className="muted small" style={{ marginTop: 0 }}>
         {editable
-          ? 'Ziehen Sie Bausteine aus der Leiste auf das Blatt und verschieben Sie sie per Maus. Ein Klick auf einen Baustein öffnet rechts seine Texte; Platzhalter wie {{Vorname}} werden beim Drucken ersetzt. Zwei halbe Bausteine stehen nebeneinander.'
+          ? 'Ziehen Sie Bausteine aus der Leiste auf das Blatt und verschieben Sie sie per Maus. Ein Klick auf einen Baustein öffnet rechts seine Texte; Platzhalter wie {{Vorname}} werden beim Drucken ersetzt. Zwei halbe Bausteine stehen nebeneinander. Mit „Seite hinzufügen“ oder dem Baustein „Neue Seite“ verteilen Sie den Brief auf mehrere Seiten.'
           : 'So sieht der PIN-Brief aus. Zum Ändern fehlt Ihnen die Berechtigung.'}
         {editable && tenantId && inheriting && ' Sobald Sie hier etwas speichern, bekommt dieser Tenant einen eigenen Brief.'}
       </p>
@@ -274,56 +334,62 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
         )}
 
         <div className="lb-stage" onClick={() => setSelected(null)}>
-          <div className="lb-paper" style={{ ['--lb-accent' as string]: data.brand.accent }}
-            onDragOver={(e) => { if (drag) { e.preventDefault(); if (e.target === e.currentTarget) setDrop(blocks.length); } }}
-            onDrop={onDrop}>
-            <div className="lb-sheet">
-              <div className="lb-pageend" aria-hidden="true"><span>Seitenende (ungefähr)</span></div>
-              {blocks.length === 0 && <div className="lb-empty">Ziehen Sie Bausteine hierher.</div>}
-              {blocks.map((b, i) => {
-                const t = types.get(b.type);
-                const visible = b.show === 'always' || (b.show === 'forced') === forced;
-                const hidden = !visible || (b.type === 'info' && !data.infoUrl);
-                const half = b.width === 'half';
-                const cls = ['lb-block', half ? 'lb-half' : '', hidden ? 'lb-hidden' : '', selected === b.id ? 'lb-selected' : '',
-                  drag?.kind === 'move' && drag.id === b.id ? 'lb-dragging' : '',
-                  drop === i ? (half ? 'lb-drop-left' : 'lb-drop-top') : '',
-                  drop === i + 1 && (i === blocks.length - 1 || blocks[i + 1]?.width !== 'half' || !half) ? (half ? 'lb-drop-right' : 'lb-drop-bottom') : ''].filter(Boolean).join(' ');
-                return (
-                  <div key={b.id} className={cls} draggable={editable} tabIndex={0} role="button"
-                    aria-label={`${t?.label ?? b.type}${hidden ? ' (in dieser Variante ausgeblendet)' : ''}`}
-                    onDragStart={(e) => onDragStartMove(e, b.id)} onDragEnd={endDrag}
-                    onDragOver={(e) => onDragOverBlock(e, i, half)}
-                    onClick={(e) => { e.stopPropagation(); setSelected(b.id); }}
+          {pages.map((pg, pi) => {
+            const brk = pg.breakIndex >= 0 ? blocks[pg.breakIndex] : null;
+            return (
+              <Fragment key={brk?.id ?? 'erste-seite'}>
+                {brk && (
+                  <div style={{ ['--lb-accent' as string]: data.brand.accent }} className={'lb-break' + (selected === brk.id ? ' lb-selected' : '') + (drag?.kind === 'move' && drag.id === brk.id ? ' lb-dragging' : '')}
+                    draggable={editable} tabIndex={0} role="button" aria-label={`Seitenumbruch vor Seite ${pi + 1}`}
+                    onDragStart={(e) => onDragStartMove(e, brk.id)} onDragEnd={endDrag}
+                    onDragOver={(e) => onDragOverBlock(e, pg.breakIndex, false)} onDrop={onDrop}
+                    onClick={(e) => { e.stopPropagation(); setSelected(brk.id); }}
                     onKeyDown={(e) => {
                       if (!editable || e.target !== e.currentTarget) return;
-                      if (e.key === 'Delete' && !t?.required) remove(b.id);
-                      if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); step(b.id, -1); }
-                      if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); step(b.id, 1); }
+                      if (e.key === 'Delete') remove(brk.id);
+                      if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); step(brk.id, -1); }
+                      if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); step(brk.id, 1); }
                     }}>
-                    <span className="lb-tag"><BlockIcon type={b.type} size={12} />{t?.label}{b.show !== 'always' && <em>{b.show === 'forced' ? 'nur Initial-PIN' : 'nur dauerhafte PIN'}</em>}</span>
+                    <span className="lb-break-label">
+                      <BlockIcon type="pageBreak" size={14} />Seite {pi + 1}
+                      {brk.show !== 'always' && <em>{brk.show === 'forced' ? 'Umbruch nur mit Initial-PIN' : 'Umbruch nur mit dauerhafter PIN'}</em>}
+                    </span>
                     {editable && (
-                      <span className="lb-tools" onClick={(e) => e.stopPropagation()}>
-                        <button type="button" title="Nach oben (Alt+↑)" aria-label="Nach oben" disabled={i === 0} onClick={() => step(b.id, -1)}>↑</button>
-                        <button type="button" title="Nach unten (Alt+↓)" aria-label="Nach unten" disabled={i === blocks.length - 1} onClick={() => step(b.id, 1)}>↓</button>
-                        {t?.halfWidth && (
-                          <button type="button" title={half ? 'Volle Breite' : 'Halbe Breite (zwei nebeneinander)'} onClick={() => update(b.id, { width: half ? 'full' : 'half' })}>{half ? '▭' : '◫'}</button>
-                        )}
-                        {!t?.unique && <button type="button" title="Duplizieren" aria-label="Duplizieren" onClick={() => duplicate(b.id)}><Icon name="copy" size={12} /></button>}
-                        {!t?.required && <button type="button" title="Entfernen (Entf)" aria-label="Entfernen" onClick={() => remove(b.id)}><Icon name="trash" size={12} /></button>}
+                      <span className="lb-break-tools" onClick={(e) => e.stopPropagation()}>
+                        <button type="button" title="Seitenumbruch einen Baustein nach oben (Alt+↑)" aria-label="Umbruch nach oben" disabled={pg.breakIndex === 0} onClick={() => step(brk.id, -1)}>↑</button>
+                        <button type="button" title="Seitenumbruch einen Baustein nach unten (Alt+↓)" aria-label="Umbruch nach unten" disabled={pg.breakIndex === blocks.length - 1} onClick={() => step(brk.id, 1)}>↓</button>
+                        <button type="button" title="Seite entfernen: die Bausteine rücken auf die Seite davor" onClick={() => remove(brk.id)}><Icon name="trash" size={12} />Seite entfernen</button>
                       </span>
                     )}
-                    {hidden
-                      ? <div className="lb-hidden-note">{b.type === 'info' && !data.infoUrl ? 'Erscheint, sobald die Adresse der Plattform eingetragen ist.' : `In der Variante „${forced ? 'Initial-PIN' : 'Dauerhafte PIN'}“ ausgeblendet.`}</div>
-                      : <SheetBlock block={b} ctx={ctx} />}
                   </div>
-                );
-              })}
-              {editable && drag && <div className={'lb-dropzone' + (drop === blocks.length ? ' on' : '')}
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDrop(blocks.length); }}>Hier ablegen</div>}
+                )}
+                <div className="lb-paper" style={{ ['--lb-accent' as string]: data.brand.accent }}
+                  onDragOver={(e) => { if (drag) { e.preventDefault(); if (e.target === e.currentTarget) setDrop(pg.end); } }}
+                  onDrop={onDrop}>
+                  <div className="lb-sheet">
+                    <div className="lb-pageend" aria-hidden="true"><span>Seitenende (ungefähr)</span></div>
+                    {pg.end === pg.start && <div className="lb-empty"
+                      onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); setDrop(pg.end); } }}>
+                      {pi === 0 ? 'Ziehen Sie Bausteine hierher.' : 'Leere Seite: Ziehen Sie Bausteine hierher. Leere Seiten fallen im PDF weg.'}
+                    </div>}
+                    {blocks.slice(pg.start, pg.end).map((b, k) => renderBlock(b, pg.start + k))}
+                    {editable && drag && pg.end > pg.start && <div className={'lb-dropzone' + (drop === pg.end ? ' on' : '')}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDrop(pg.end); }}>Hier ablegen</div>}
+                  </div>
+                  <div className="lb-footer">{[pages.length > 1 ? `Seite ${pi + 1} von ${pages.length}` : null, data.sample.Firma, data.sample.Tenant, 'Die PIN wurde nicht gespeichert.'].filter(Boolean).join(' · ')}</div>
+                </div>
+              </Fragment>
+            );
+          })}
+          {editable && (
+            <div className="lb-addpage">
+              <button type="button" className="ghost small" disabled={pages.length >= maxPages}
+                title={pages.length >= maxPages ? `Höchstens ${maxPages} Seiten pro Brief` : 'Fügt am Ende eine neue, leere Seite an'}
+                onClick={(e) => { e.stopPropagation(); addPage(); }}>
+                <BlockIcon type="pageBreak" size={14} />Seite hinzufügen
+              </button>
             </div>
-            <div className="lb-footer">{[data.sample.Firma, data.sample.Tenant, 'Die PIN wurde nicht gespeichert.'].filter(Boolean).join(' · ')}</div>
-          </div>
+          )}
         </div>
 
         <aside className="lb-panel" aria-label="Eigenschaften">
@@ -338,6 +404,7 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
                 <ul className="lb-tips small">
                   <li><strong>Ziehen</strong> verschiebt Bausteine, auch neben einen anderen halben Baustein.</li>
                   <li><strong>Sichtbarkeit</strong> steuert, ob ein Baustein nur im Brief mit Initial-PIN oder nur mit dauerhafter PIN erscheint.</li>
+                  <li><strong>Seite hinzufügen</strong> legt unten eine neue Seite an. Den Umbruch zwischen zwei Seiten können Sie wie einen Baustein verschieben.</li>
                   <li>Oben umschalten, um beide Varianten zu prüfen. Die <strong>PDF-Vorschau</strong> zeigt das genaue Druckbild.</li>
                 </ul>
               </div>
@@ -476,7 +543,7 @@ function BlockProps({ block, type, variables, editable, onProp, onChange, onRemo
       })}
 
       {editable && !type.required && (
-        <button type="button" className="ghost small lb-remove" onClick={onRemove}><Icon name="trash" size={14} />Baustein entfernen</button>
+        <button type="button" className="ghost small lb-remove" onClick={onRemove}><Icon name="trash" size={14} />{type.type === 'pageBreak' ? 'Seite entfernen' : 'Baustein entfernen'}</button>
       )}
       {type.required && <p className="muted small">Die PIN muss im Brief stehen und lässt sich nicht entfernen, nur verschieben.</p>}
     </div>

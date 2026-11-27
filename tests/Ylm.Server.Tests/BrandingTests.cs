@@ -130,6 +130,35 @@ public sealed class BrandingTests : IAsyncLifetime
         Assert.True(doc.PageCount >= 3);
     }
 
+    [Fact]
+    public async Task Page_breaks_start_new_pages_and_empty_pages_are_skipped()
+    {
+        async Task<int> Pages(bool forced, params object[] blocks)
+        {
+            var res = await _owner.PostAsJsonAsync("/api/branding/letter/preview.pdf", new { layout = Layout(blocks), pinChangeForced = forced });
+            Assert.Equal(HttpStatusCode.OK, res.StatusCode);
+            using var doc = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(await res.Content.ReadAsByteArrayAsync()), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import);
+            return doc.PageCount;
+        }
+        Assert.Equal(2, await Pages(true, new { type = "pin" }, new { type = "pageBreak" }, new { type = "text" }));
+        Assert.Equal(3, await Pages(true, new { type = "heading" }, new { type = "pageBreak" }, new { type = "pin" }, new { type = "pageBreak" }, new { type = "text" }));
+        // Umbruch am Anfang, doppelter Umbruch und leere letzte Seite erzeugen keine leeren Seiten.
+        Assert.Equal(2, await Pages(true, new { type = "pageBreak" }, new { type = "pin" }, new { type = "pageBreak" }, new { type = "pageBreak" }, new { type = "text" }, new { type = "pageBreak" }));
+        // Seite 2 enthält nur einen Baustein für die dauerhafte PIN: im Brief mit Initial-PIN entfällt sie.
+        Assert.Equal(1, await Pages(true, new { type = "pin" }, new { type = "pageBreak" }, new { type = "text", show = "own" }));
+        Assert.Equal(2, await Pages(false, new { type = "pin" }, new { type = "pageBreak" }, new { type = "text", show = "own" }));
+
+        // Gespeichert wird der Umbruch wie jeder Baustein; mehr als 6 Seiten werden abgelehnt.
+        await Json(await _owner.PutAsJsonAsync("/api/branding/letter", new { layout = Layout(new { type = "pin" }, new { type = "pageBreak" }, new { type = "text" }) }));
+        var p = await Json(await _owner.GetAsync("/api/branding/letter"));
+        Assert.Contains(p.GetProperty("layout").GetProperty("blocks").EnumerateArray(), b => b.GetProperty("type").GetString() == "pageBreak");
+        var tooMany = new List<object> { new { type = "pin" } };
+        for (var i = 0; i < 6; i++) tooMany.Add(new { type = "pageBreak" });
+        var bad = await _owner.PutAsJsonAsync("/api/branding/letter", new { layout = Layout([.. tooMany]) });
+        Assert.Equal(HttpStatusCode.BadRequest, bad.StatusCode);
+        await Json(await _owner.PutAsJsonAsync("/api/branding/letter", new { layout = (object?)null }));
+    }
+
     /// <summary>Legt Muster-PIN-Briefe ab, wenn YLM_SAMPLE_DIR gesetzt ist (CI lädt sie als Artefakt hoch, zum Ansehen im PR).</summary>
     [Fact]
     public async Task Sample_letters_render()
