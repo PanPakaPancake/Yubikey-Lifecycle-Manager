@@ -411,6 +411,42 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Import_sample_csv_matches_the_import_format()
+    {
+        var tenantId = await OnboardTenantAsync();
+        (await _owner.PutAsJsonAsync("/api/fields", new object[]
+        {
+            new { key = "standort", label = "Standort", type = "Select", required = true, options = new[] { "Berlin", "Köln" } },
+            new { key = "anschaffung", label = "Anschaffung", type = "Date", required = false, options = Array.Empty<string>() },
+            new { key = "anzahl", label = "Anzahl", type = "Number", required = false, options = Array.Empty<string>() },
+        })).EnsureSuccessStatusCode();
+
+        foreach (var (sampleUrl, importUrl) in new[]
+        {
+            ($"/api/tenants/{tenantId}/keys/import/sample.csv", $"/api/tenants/{tenantId}/keys/import"),
+            ("/api/partner/keys/import/sample.csv", "/api/partner/keys/import"),
+        })
+        {
+            var res = await _owner.GetAsync(sampleUrl);
+            res.EnsureSuccessStatusCode();
+            Assert.Equal("text/csv", res.Content.Headers.ContentType!.MediaType);
+            var bytes = await res.Content.ReadAsByteArrayAsync();
+            Assert.Equal(new byte[] { 0xEF, 0xBB, 0xBF }, bytes[..3]);
+            var text = System.Text.Encoding.UTF8.GetString(bytes[3..]);
+            Assert.StartsWith("Seriennummer;Modell;Firmware;Tags;Notiz;Standort;Anschaffung;Anzahl\r\n", text);
+
+            // The sample is valid input for the import it describes (only first run creates, then all are known).
+            var import = await Json(await _owner.PostAsync(importUrl, new ByteArrayContent(bytes)));
+            Assert.Empty(import.GetProperty("errors").EnumerateArray());
+            Assert.Equal(3, import.GetProperty("created").GetInt32() + import.GetProperty("skipped").GetInt32());
+        }
+
+        var keys = await Json(await _owner.GetAsync($"/api/keys?tenantId={tenantId}"));
+        var first = keys.GetProperty("items").EnumerateArray().First(k => k.GetProperty("serialNumber").GetInt32() == 12345671);
+        Assert.Contains("neu", first.GetProperty("tags").EnumerateArray().Select(t => t.GetString()));
+    }
+
+    [Fact]
     public async Task Target_audience_supports_several_groups_and_exclusions()
     {
         var tenantId = await OnboardTenantAsync();

@@ -10,6 +10,7 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 ## 0.12.1 · 2026-11-27
 - Neu: „Passkeys erklärt“ hat in der Endbenutzer-Ansicht einen Abschnitt „Warum Sie Ihren Key nicht verleihen“. Ein Vergleich mit dem Haustürschlüssel und ein Beispielprotokoll zeigen, dass alles unter dem eigenen Namen läuft; dazu, wie Vertretung richtig geht. Direkt verlinkbar mit /passkey#verleihen.
 - Verbessert: Die Hinweisliste im PIN-Brief sagt jetzt standardmäßig „Key und PIN nie verleihen oder weitergeben“. Angepasste Hinweislisten bleiben unverändert.
+- Neu: Beim CSV-Import für Wareneingang und Partnerlager gibt es „Beispiel-CSV herunterladen“. Die Datei zeigt genau das erwartete Format (Semikolon, UTF-8, Excel-tauglich) mit allen Spalten, inklusive der Zusatzfelder des gewählten Lagers, und drei Beispielzeilen mit gültigen Werten.
 
 ## 0.12.0 · 2026-11-27
 - Neu: Der PIN-Brief kann jetzt mehrere Seiten haben. Im Brief-Editor legt „Seite hinzufügen“ unter dem Blatt eine neue Seite an, alternativ zieht man den Baustein „Neue Seite“ an die gewünschte Stelle. Der Umbruch zwischen zwei Seiten lässt sich wie ein Baustein verschieben oder mit „Seite entfernen“ wieder auflösen. Höchstens 6 Seiten.
