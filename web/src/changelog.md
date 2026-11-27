@@ -8,6 +8,8 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 -->
 
 ## 0.11.3 · 2026-11-27
+- Behoben: Koppeln scheiterte mit „Requested registry access is not allowed“ und bei https:// teils mit TLS-Fehlern. Der Dienst hat beim Prüfen der Administratorrechte die Identität der Tray-App übernommen und durfte danach weder Registry noch Zertifikate noch Logdateien lesen. Er prüft die Rechte jetzt, ohne die Identität zu wechseln.
+- Verbessert: „Server nicht erreichbar“ erscheint beim Koppeln nur noch bei echten Netzwerkfehlern.
 - Verbessert: Der Menüpunkt „Passkey-Rollout“ heißt jetzt „Rollout Übersicht“, ebenso der Seitentitel und die Excel-/CSV-Exporte. Die Adresse /rollout bleibt gleich.
 
 ## 0.11.2 · 2026-11-27
