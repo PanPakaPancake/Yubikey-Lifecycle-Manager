@@ -7,6 +7,10 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.12.0 · 2026-11-27
+- Neu: Der PIN-Brief kann jetzt mehrere Seiten haben. Im Brief-Editor legt „Seite hinzufügen“ unter dem Blatt eine neue Seite an, alternativ zieht man den Baustein „Neue Seite“ an die gewünschte Stelle. Der Umbruch zwischen zwei Seiten lässt sich wie ein Baustein verschieben oder mit „Seite entfernen“ wieder auflösen. Höchstens 6 Seiten.
+- Verbessert: Im PDF steht auf jeder Seite „Seite x von y“. Seiten ohne Inhalt (z. B. weil alle Bausteine nur in der anderen Variante erscheinen) fallen weg.
+
 ## 0.11.2 · 2026-11-27
 - Behoben: Das Tray-Symbol des Agents 0.11.1 stürzte direkt beim Start ab und erschien deshalb nicht. Der Agent-Dienst selbst lief weiter.
 

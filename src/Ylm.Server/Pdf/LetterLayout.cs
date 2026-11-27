@@ -58,7 +58,9 @@ public static class LetterBlocks
     public sealed record Prop(string Key, string Label, string Default, string Kind = "text", IReadOnlyList<Option>? Options = null, string? Hint = null);
     public sealed record BlockType(string Type, string Label, string Description, IReadOnlyList<Prop> Props, bool HalfWidth = true, bool Unique = false, bool Required = false);
 
-    public const int MaxBlocks = 40;
+    public const int MaxBlocks = 80;
+    /// <summary>Höchstzahl der Seiten, die mit „Neue Seite“ angelegt werden können.</summary>
+    public const int MaxPages = 6;
     public const int MaxLength = 1500;
 
     public const string DefaultPinChange =
@@ -134,6 +136,7 @@ public static class LetterBlocks
             new("title", "Text", "Was ist ein Passkey? Anleitung und Erklärung:"),
         ]),
         new("divider", "Trennlinie", "Feine Linie mit Akzent.", [], HalfWidth: false),
+        new("pageBreak", "Neue Seite", "Seitenumbruch: alles darunter steht auf der nächsten Seite.", [], HalfWidth: false),
         new("spacer", "Abstand", "Freier Raum zwischen Bausteinen.",
         [
             new("size", "Höhe", "m", "select", Spaces),
@@ -234,6 +237,8 @@ public static class LetterBlocks
         foreach (var t in Types.Where(t => t.Required))
             if (result.Blocks.All(b => b.Type != t.Type))
                 throw ApiException.BadRequest("missing_block", $"Der Baustein „{t.Label}“ muss im Brief stehen.");
+        if (result.Blocks.Count(b => b.Type == "pageBreak") > MaxPages - 1)
+            throw ApiException.BadRequest("too_many_pages", $"Höchstens {MaxPages} Seiten pro Brief.");
         if (result.Blocks.First(b => b.Type == "pin").Show != "always")
             throw ApiException.BadRequest("pin_hidden", "Der Baustein „PIN“ muss immer angezeigt werden.");
         return result;
