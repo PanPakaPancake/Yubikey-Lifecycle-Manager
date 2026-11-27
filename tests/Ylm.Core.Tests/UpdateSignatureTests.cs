@@ -43,4 +43,17 @@ public class UpdateSignatureTests
     [Fact]
     public void Invalid_signature_is_rejected() =>
         Assert.NotNull(UpdateSignaturePolicy.Check(Signed, new(false, Signed.Subject), false, null));
+
+    [Theory]
+    [InlineData("{6B0B4E2C-6F7A-4E0F-9C1C-3D1F4C7A2E51}")]
+    [InlineData("6b0b4e2c-6f7a-4e0f-9c1c-3d1f4c7a2e51")]
+    public void Agent_package_is_accepted(string code) =>
+        Assert.Null(UpdateSignaturePolicy.CheckProduct(code));
+
+    [Theory]
+    [InlineData("{11111111-2222-3333-4444-555555555555}")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void Foreign_or_unreadable_package_is_rejected(string? code) =>
+        Assert.NotNull(UpdateSignaturePolicy.CheckProduct(code));
 }

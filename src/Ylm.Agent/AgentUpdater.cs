@@ -246,6 +246,13 @@ public sealed partial class AgentUpdater(
                 File.Delete(msi);
                 throw new InvalidOperationException(problem);
             }
+            // Signiert: zusätzlich prüfen, dass es wirklich der Agent-Installer ist (gemeinsamer Unterzeichner bei SignPath).
+            problem = update.Valid ? UpdateSignaturePolicy.CheckProduct(MsiPackage.ReadProperty(msi, "UpgradeCode")) : null;
+            if (problem is not null)
+            {
+                File.Delete(msi);
+                throw new InvalidOperationException(problem);
+            }
             logger.LogInformation("Update {Version}: {Signature}", info.Version,
                 update.Valid ? "signiert von " + update.Subject : "nicht signiert (dieser Agent ist es auch nicht)");
         }

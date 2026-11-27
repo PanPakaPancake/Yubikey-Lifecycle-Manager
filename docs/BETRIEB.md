@@ -320,7 +320,7 @@ Beim Offboarding entfernt die Plattform ihre Daten nach der Aufbewahrungsfrist. 
 
 Protokolle: `C:\ProgramData\YubikeyLifecycleManager\Agent\logs`. Update: neueres MSI installieren.
 
-Signatur: Release-MSIs werden signiert, sobald Azure Artifact Signing eingerichtet ist ([SIGNIERUNG.md](SIGNIERUNG.md)). Ein signierter Agent installiert nur Updates vom selben Unterzeichner.
+Signatur: Release-MSIs werden signiert, sobald die Signierung über SignPath eingerichtet ist ([SIGNIERUNG.md](SIGNIERUNG.md)). Ein signierter Agent installiert nur Updates vom selben Unterzeichner.
 
 Für Tests ohne Key: `YlmAgent.exe --simulate` startet den Agent mit einem simulierten YubiKey.
 

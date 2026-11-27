@@ -12,7 +12,7 @@ public sealed record SignatureInfo(bool Valid, string? Subject)
 
 /// <summary>
 /// Regel für Agent-Updates: Ist der laufende Agent signiert, muss das Update gültig und vom selben Unterzeichner
-/// signiert sein (Zertifikate von Azure Artifact Signing wechseln täglich, der Name bleibt). Ein unsignierter Agent
+/// signiert sein (der Name im Zertifikat zählt, nicht das Zertifikat selbst, weil es regelmäßig erneuert wird). Ein unsignierter Agent
 /// nimmt unsignierte Updates weiter an, damit der Umstieg klappt, außer Agent:RequireSignedUpdates ist gesetzt.
 /// Agent:TrustedSigner erlaubt zusätzlich einen bestimmten Unterzeichner (z. B. beim Wechsel des Zertifikats).
 /// </summary>
@@ -32,9 +32,74 @@ public static class UpdateSignaturePolicy
         return $"Das Update ist von einem anderen Unterzeichner signiert ({update.Subject}). Abgebrochen.";
     }
 
+    /// <summary>UpgradeCode des Agent-MSI (installer/Package.wxs). Muss bei jeder Version gleich bleiben.</summary>
+    public const string AgentUpgradeCode = "6B0B4E2C-6F7A-4E0F-9C1C-3D1F4C7A2E51";
+
+    /// <summary>
+    /// Zweite Prüfung für signierte Updates: Das MSI muss der Agent-Installer sein. Nötig, weil SignPath Foundation
+    /// viele Open-Source-Projekte mit demselben Zertifikatsnamen signiert. Der gleiche Unterzeichner allein beweist
+    /// also nicht, dass es unser Paket ist.
+    /// </summary>
+    /// <returns>null, wenn der UpgradeCode passt, sonst der Grund für die Ablehnung.</returns>
+    public static string? CheckProduct(string? upgradeCode) =>
+        Guid.TryParse(upgradeCode, out var code) && code == Guid.Parse(AgentUpgradeCode)
+            ? null
+            : $"Das Update ist kein Paket des Agents (UpgradeCode {upgradeCode ?? "fehlt"}). Abgebrochen.";
+
     /// <summary>Distinguished Name ohne Unterschiede bei Leerzeichen und Groß-/Kleinschreibung.</summary>
     public static string Normalize(string? dn) =>
         string.Join(",", (dn ?? "").Split(',', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)).ToUpperInvariant();
+}
+
+/// <summary>Liest eine Eigenschaft aus der Property-Tabelle eines MSI (nur lesend, ohne Installation).</summary>
+[SupportedOSPlatform("windows")]
+public static class MsiPackage
+{
+    public static string? ReadProperty(string path, string property)
+    {
+        if (MsiOpenDatabaseW(path, IntPtr.Zero, out var db) != 0) return null;
+        try
+        {
+            if (MsiDatabaseOpenViewW(db, $"SELECT `Value` FROM `Property` WHERE `Property` = '{property.Replace("'", "")}'", out var view) != 0) return null;
+            try
+            {
+                if (MsiViewExecute(view, IntPtr.Zero) != 0) return null;
+                if (MsiViewFetch(view, out var record) != 0) return null;
+                try
+                {
+                    var size = 0u;
+                    var empty = new char[1];
+                    var rc = MsiRecordGetStringW(record, 1, empty, ref size);
+                    if (rc != 0 && rc != 234) return null; // 234 = ERROR_MORE_DATA
+                    var buffer = new char[size + 1];
+                    size++;
+                    if (MsiRecordGetStringW(record, 1, buffer, ref size) != 0) return null;
+                    return new string(buffer, 0, (int)size);
+                }
+                finally { MsiCloseHandle(record); }
+            }
+            finally { MsiCloseHandle(view); }
+        }
+        finally { MsiCloseHandle(db); }
+    }
+
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern uint MsiOpenDatabaseW(string path, IntPtr persist, out IntPtr handle);
+
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern uint MsiDatabaseOpenViewW(IntPtr database, string query, out IntPtr view);
+
+    [DllImport("msi.dll", ExactSpelling = true)]
+    private static extern uint MsiViewExecute(IntPtr view, IntPtr record);
+
+    [DllImport("msi.dll", ExactSpelling = true)]
+    private static extern uint MsiViewFetch(IntPtr view, out IntPtr record);
+
+    [DllImport("msi.dll", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    private static extern uint MsiRecordGetStringW(IntPtr record, uint field, [Out] char[] value, ref uint size);
+
+    [DllImport("msi.dll", ExactSpelling = true)]
+    private static extern uint MsiCloseHandle(IntPtr handle);
 }
 
 /// <summary>Prüft Authenticode-Signaturen mit WinVerifyTrust (ohne Sperrlistenabruf, damit es auch offline klappt).</summary>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath-Artefaktkonfiguration "agent-msi": signiert das Agent-MSI (die EXE-Dateien darin sind schon signiert).
+  Eingabe: das GitHub-Artefakt "agent-msi-unsigned" aus .github/workflows/release.yml (Inhalt von installer/out).
+  In SignPath unter Projekt -> Artifact Configurations mit dem Slug "agent-msi" anlegen und diesen Text einfügen.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <msi-file path="YubikeyLifecycleManager-Agent.msi">
+      <authenticode-sign />
+    </msi-file>
+  </zip-file>
+</artifact-configuration>
