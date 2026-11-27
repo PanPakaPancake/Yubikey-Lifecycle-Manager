@@ -1,5 +1,7 @@
 # Betrieb und Installation
 
+> Zum ersten Ausprobieren auf einem Windows-PC reicht die [bebilderte Installationsanleitung](INSTALLATION.md). Dieses Dokument beschreibt alle Varianten und den Betrieb im Detail.
+
 ## 1. Server installieren
 
 Die Plattform läuft als kleiner Docker-Compose-Stapel aus fertigen Images. Gebaut wird nichts, es braucht nur Docker.

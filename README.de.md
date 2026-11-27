@@ -36,46 +36,32 @@ Danach `http://localhost:8099` öffnen und eine Rolle wählen. Details: [Demo](d
 
 ## Installation
 
-Kurz gesagt: Server per Skript in Docker starten, im Browser einrichten, Agent auf dem Admin-PC installieren und koppeln. Ausführlich mit allen Varianten: [Betrieb und Installation](docs/BETRIEB.md).
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/bilder/installation/ablauf-dark.gif">
+  <img alt="Ablauf: Server starten, einrichten, Agent installieren, koppeln" src="docs/bilder/installation/ablauf-light.gif">
+</picture>
 
-### 1. Server
-
-**Zum Ausprobieren auf einem Windows-PC** mit [Docker Desktop](https://www.docker.com/products/docker-desktop/) (PowerShell, keine Adminrechte nötig):
+Zum Ausprobieren auf einem Windows-PC mit [Docker Desktop](https://www.docker.com/products/docker-desktop/) genügt ein Befehl in PowerShell:
 
 ```powershell
 irm https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.ps1 | iex
 ```
 
-Die Plattform läuft danach unter **`https://localhost`**. Das Skript erzeugt dafür eine interne Zertifizierungsstelle und trägt deren Stammzertifikat nach einer UAC-Abfrage in Windows ein, damit Browser und Agent der Adresse vertrauen.
+Danach läuft die Plattform unter `https://localhost`. Einrichten, Agent installieren und koppeln zeigt die **[bebilderte Installationsanleitung](docs/INSTALLATION.md)** Schritt für Schritt.
 
-**Für den Betrieb auf einem Linux-Server** im internen Netz oder hinter ZTNA, mit HTTPS über interne CA, eigenes Zertifikat oder vorhandenen Reverse Proxy:
+Für den Betrieb auf einem Linux-Server im internen Netz oder hinter ZTNA:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/PanPakaPancake/Yubikey-Lifecycle-Manager/main/install.sh | sudo bash
 ```
 
-Beide Skripte legen eine `.env` mit Zufallsgeheimnissen an, laden die fertigen Images der neuesten Version von GitHub (`ghcr.io`), richten die tägliche, verschlüsselte Datensicherung ein und zeigen am Ende die **Passphrase der Sicherung** (in den Passwortmanager übernehmen) und das **Setup-Token**. Gebaut wird nichts. Die Plattform ist nicht dafür gedacht, offen im Internet zu stehen.
-
-### 2. Einrichtung
-
-`https://<adresse>/setup` öffnen, Setup-Token eingeben und als Globaler Administrator des eigenen Entra-Tenants bei Microsoft anmelden. Die Plattform legt ihre App-Registrierung, das App-Zertifikat und den Admin-Consent selbst an ([Details](docs/BETRIEB.md#2-einrichtung-einmalig)).
-
-### 3. Agent auf dem Admin-PC
-
-1. In der Weboberfläche unter **Mein Agent** auf **Agent herunterladen** klicken (passt immer zur Server-Version) oder `YubikeyLifecycleManager-Agent.msi` von der [Release-Seite](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/releases/latest) laden und mit Adminrechten installieren.
-2. Unter **Mein Agent** einen Kopplungscode erzeugen.
-3. Rechtsklick auf das Tray-Symbol → **Koppeln …** → die Adresse der Plattform, genau wie im Browser (z. B. `https://localhost`), und den Code eingeben.
-
-Der Tray startet danach mit jeder Windows-Anmeldung, und der Agent installiert neue Versionen selbst ([Details](docs/BETRIEB.md#4-agent-auf-dem-admin-pc-windows)).
-
-### Updates
-
-Unter **Globale Einstellungen → Version und Updates** zeigt die Plattform neue Versionen an; **Update per Klick** aktualisiert alle Container. Gelegentlich das Installationsskript erneut ausführen, damit auch `docker-compose.yml` und die Hilfsdateien aktuell bleiben; die `.env` und alle Daten bleiben dabei erhalten.
+Alle Varianten, Datensicherung, Updates und Umzug: [Betrieb und Installation](docs/BETRIEB.md). Die Plattform ist nicht dafür gedacht, offen im Internet zu stehen.
 
 ## Dokumentation
 
 - [Demo mit Beispieldaten](docs/DEMO.md)
 - [Projektplanung](docs/PLANUNG.md)
+- [Installationsanleitung mit Bildern](docs/INSTALLATION.md)
 - [Betrieb und Installation](docs/BETRIEB.md)
 - [Testanleitung V1 (Praxistest mit Tenant und YubiKey)](docs/TESTANLEITUNG-V1.md)
 - [Signierung des Agents (SignPath)](docs/SIGNIERUNG.md)
