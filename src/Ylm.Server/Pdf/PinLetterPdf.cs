@@ -68,7 +68,8 @@ public static class PinLetterPdf
 
     /// <summary>
     /// Zeichnet die Bausteine des Briefaufbaus untereinander; zwei halbe Bausteine stehen nebeneinander.
-    /// Passt ein Baustein nicht mehr auf die Seite, beginnt eine neue Seite.
+    /// Passt ein Baustein nicht mehr auf die Seite, beginnt eine neue Seite. Der Baustein „Neue Seite“ erzwingt einen Seitenwechsel;
+    /// Seiten ohne sichtbaren Inhalt (etwa weil alle Bausteine in dieser Variante ausgeblendet sind) entfallen.
     /// </summary>
     private sealed class Renderer(PdfDocument doc, PinLetterData d)
     {
@@ -101,15 +102,19 @@ public static class PinLetterPdf
             var half = (w - ColGap) / 2;
             using var measure = XGraphics.CreateMeasureContext(new XSize(_page.Width.Point, _page.Height.Point), XGraphicsUnit.Point, XPageDirection.Downwards);
             var y = Top;
+            var pageBreak = false;
             foreach (var row in rows)
             {
+                // Neue Seite erst, wenn danach wirklich etwas kommt: so entstehen keine leeren Seiten.
+                if (row[0].Type == "pageBreak") { pageBreak = true; continue; }
                 double Width(LetterBlock b) => row.Length == 2 || b.Width == "half" ? half : w;
                 var real = _g;
                 _g = measure; _measuring = true;
                 var h = row.Max(b => Draw(b, M, 0, Width(b)));
                 _g = real; _measuring = false;
                 if (h <= 0) continue;
-                if (y + h > Bottom && y > Top + 1) { NewPage(); y = Top; }
+                if ((pageBreak || y + h > Bottom) && y > Top + 1) { NewPage(); y = Top; }
+                pageBreak = false;
                 for (var i = 0; i < row.Length; i++) Draw(row[i], M + i * (half + ColGap), y, Width(row[i]));
                 y += h + (row.All(b => b.Type is "spacer" or "divider") ? 4 : Gap);
             }

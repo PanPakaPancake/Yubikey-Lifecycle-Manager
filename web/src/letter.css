@@ -63,6 +63,23 @@
 .lb-dropzone { flex: 0 0 100%; margin-top: .8em; padding: 1.4em; text-align: center; font-size: 1.1em; color: #5b6575; border: 2px dashed #c4cad4; border-radius: .8em; }
 .lb-dropzone.on { border-color: var(--lb-accent); color: var(--lb-accent); background: color-mix(in srgb, var(--lb-accent) 6%, #fff); }
 
+/* Mehrere Seiten: Umbruch zwischen zwei Blättern, „Seite hinzufügen“ darunter */
+.lb-break { --lb-accent: #1f5fbf; max-width: 760px; margin: 14px auto; display: flex; align-items: center; gap: 10px; padding: 6px 10px;
+  border: 1.5px dashed color-mix(in srgb, var(--muted, #5b6575) 45%, transparent); border-radius: 10px; color: var(--muted, #5b6575);
+  font: 600 12px/1.2 "Inter Variable", system-ui, sans-serif; cursor: grab; background: color-mix(in srgb, var(--surface, #fff) 70%, transparent); }
+.lb-break:hover, .lb-break:focus-visible { border-color: var(--lb-accent); color: var(--lb-accent); outline: none; }
+.lb-break.lb-selected { border-style: solid; border-color: var(--lb-accent); color: var(--lb-accent); }
+.lb-break.lb-dragging { opacity: .4; }
+.lb-break-label { display: inline-flex; align-items: center; gap: 6px; }
+.lb-break-label em { font-style: normal; font-weight: 500; opacity: .85; }
+.lb-break-tools { margin-left: auto; display: inline-flex; gap: 2px; }
+.lb-break-tools button { border: 0; background: none; color: inherit; min-width: 24px; height: 24px; padding: 0 6px; border-radius: 6px; font-size: 12px;
+  display: inline-flex; align-items: center; gap: 4px; }
+.lb-break-tools button:hover:not(:disabled) { background: color-mix(in srgb, var(--lb-accent) 12%, transparent); color: var(--lb-accent); }
+.lb-break-tools button:disabled { opacity: .3; }
+.lb-readonly .lb-break { cursor: default; }
+.lb-addpage { max-width: 760px; margin: 14px auto 0; display: flex; justify-content: center; }
+
 /* Inhalte, angelehnt an das PDF */
 .lc-muted { color: #5b6575; }
 .lc-small { font-size: .88em; }
