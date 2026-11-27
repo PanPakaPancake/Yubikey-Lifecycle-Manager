@@ -98,7 +98,7 @@ export interface Registration {
   registeredAt: string; registeredByName?: string; source: string; removedAt?: string; removedReason?: string; lastSeenInSyncAt?: string;
 }
 
-export interface Advisory { id: string; title: string; severity: string; url: string; affectsFido: boolean }
+export interface Advisory { id: string; title: string; severity: string; url: string; affectsFido: boolean; recommendation: string }
 
 export interface YubiKey {
   id: string; tenantId?: string | null; tenantName?: string | null; inPartnerStock: boolean; serialNumber?: number; firmwareVersion?: string; model?: string; formFactor?: string;

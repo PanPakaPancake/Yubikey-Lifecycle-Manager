@@ -14,7 +14,8 @@ interface DashboardData {
   targetUsers?: number; usersWithKey: number; coveragePercent?: number; targetAllUsers?: boolean;
   issuedPerMonth: { month: string; count: number }[];
   firmware: { firmware: string; count: number; advisories: string[]; vulnerable: boolean }[];
-  vulnerableKeys: number; forcePinChangeUnsupported: number; openTodos: number; pendingApprovals: number;
+  vulnerableKeys: number; forcePinChangeUnsupported: number;
+  advisories?: { id: string; title: string; severity: string; affectsFido: boolean; keys: number }[]; openTodos: number; pendingApprovals: number;
   tenants: { id: string; displayName: string; lastSyncAt?: string; lastSyncSucceeded?: boolean; targetUserCount?: number; active: number; inStock: number; usersWithKey: number; checksFailed: number }[];
 }
 
@@ -65,8 +66,8 @@ export default function DashboardPage() {
               ]} />} />
             <Kpi icon="key" className="kpi-active" label="Keys aktiv" value={data.byStatus.Active ?? 0} sub={`${data.total} Keys gesamt`} to={keysLink('Active')} />
             <Kpi icon="box" className="kpi-stock" label="Im Lager" value={data.inStock} sub={`${data.byStatus.Locked ?? 0} gesperrt, ${data.byStatus.Retired ?? 0} ausgemustert`} to={keysLink('InStock')} />
-            <Kpi icon="shield" className="kpi-firmware" label="Firmware mit Sicherheitshinweis" value={data.vulnerableKeys} tone={data.vulnerableKeys ? 'warn' : undefined}
-              sub={`${data.forcePinChangeUnsupported} ohne erzwingbaren PIN-Wechsel`} to={data.vulnerableKeys ? '#firmware' : undefined} />
+            <Kpi icon="shield" className="kpi-firmware" label="Keys mit Sicherheitshinweis" value={data.vulnerableKeys} tone={data.vulnerableKeys ? 'warn' : undefined}
+              sub={advisorySub(data)} to="/sicherheitshinweise" />
           </div>
 
           <div className="grid cols-2 dash-charts" style={{ marginTop: 16 }}>
@@ -104,7 +105,7 @@ export default function DashboardPage() {
                       <tr key={f.firmware}>
                         <td className="mono">{f.firmware}</td>
                         <td>{f.count}</td>
-                        <td>{f.advisories.map((a) => <Badge key={a} tone={f.vulnerable ? 'warn' : 'neutral'}>{a}</Badge>)}</td>
+                        <td>{f.advisories.map((a) => <Link key={a} to={'/sicherheitshinweise#' + a}><Badge tone={data.advisories?.find((x) => x.id === a)?.affectsFido ? 'warn' : 'neutral'}>{a}</Badge></Link>)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -170,6 +171,13 @@ function DashHero({ data, cert, update }: { data: DashboardData; cert?: Certific
   );
 }
 
+/** Unterzeile der Kachel: der Hinweis mit den meisten Keys, sonst PIN-Wechsel-Fähigkeit. */
+function advisorySub(data: DashboardData) {
+  const top = [...(data.advisories ?? [])].filter((a) => a.affectsFido).sort((a, b) => b.keys - a.keys)[0];
+  const pin = `${data.forcePinChangeUnsupported} ohne erzwingbaren PIN-Wechsel`;
+  return top ? `am häufigsten ${top.id} (${top.keys}) · ${pin}` : 'keine bekannten Hinweise · ' + pin;
+}
+
 const statusColor: Record<KeyStatus, string> = { Active: 'var(--ok)', InStock: 'var(--accent)', Locked: 'var(--error)', Retired: 'var(--muted)' };
 
 function Kpi({ label, value, sub, to, tone, children, aside, icon, className = '', footer }: { label: string; value: ReactNode; sub: string; to?: string; tone?: 'warn'; children?: ReactNode; aside?: ReactNode; icon?: IconName; className?: string; footer?: ReactNode }) {
@@ -203,7 +211,7 @@ function ActionItems({ data, keysLink, cert, update }: { data: DashboardData; ke
     if (t.lastSyncSucceeded === false) items.push({ tone: 'error', text: <><strong>{t.displayName}</strong>: letzte Synchronisation fehlgeschlagen</>, to: '/tenants/' + t.id, cta: 'Ansehen' });
   }
   if ((data.byStatus.Locked ?? 0) > 0) items.push({ tone: 'warn', text: <>{data.byStatus.Locked} gesperrte(r) Key(s)</>, to: keysLink('Locked'), cta: 'Im Inventar' });
-  if (data.vulnerableKeys > 0) items.push({ tone: 'warn', text: <>{data.vulnerableKeys} Key(s) mit Firmware-Sicherheitshinweis</>, to: '#firmware', cta: 'Firmware-Stände' });
+  if (data.vulnerableKeys > 0) items.push({ tone: 'warn', text: <>{data.vulnerableKeys} Key(s) von einem Yubico-Sicherheitshinweis zu Passkeys betroffen</>, to: '/sicherheitshinweise', cta: 'Betroffene Keys' });
   if (data.pendingApprovals > 0) items.push({ tone: 'warn', text: <>{data.pendingApprovals} Breakglass-Antrag/Anträge warten auf Freigabe</>, to: '/approvals', cta: 'Freigaben' });
   if (data.openTodos > 0) items.push({ tone: 'info', text: <>{data.openTodos} offene(s) ToDo(s): Personen, die einen Key bekommen sollen</>, to: '/todos', cta: 'ToDo-Liste' });
   if (update?.updateAvailable && update.canApply) items.push({ tone: 'info', text: <>Version {update.latestVersion} ist verfügbar (installiert: {update.currentVersion})</>, to: '/versionen', cta: 'Was ist neu' });

@@ -261,7 +261,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         Assert.True(key.GetProperty("needsDetails").GetBoolean());
 
         // Stock import via CSV with tags.
-        var csv = new StringContent("Seriennummer;Modell;Firmware;Tags\n30000001;YubiKey 5C NFC;5.7.1;Berlin,neu\n30000002;YubiKey 5 NFC;5.4.3;\nabc;x;y;\n", System.Text.Encoding.UTF8, "text/csv");
+        var csv = new StringContent("Seriennummer;Modell;Firmware;Tags\n30000001;YubiKey 5C NFC;5.7.4;Berlin,neu\n30000002;YubiKey 5 NFC;5.4.3;\nabc;x;y;\n", System.Text.Encoding.UTF8, "text/csv");
         var import = await Json(await _owner.PostAsync($"/api/tenants/{tenantId}/keys/import", csv));
         Assert.Equal(2, import.GetProperty("created").GetInt32());
         Assert.Single(import.GetProperty("errors").EnumerateArray());
@@ -269,7 +269,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         var dashboard = await Json(await _owner.GetAsync($"/api/dashboard?tenantId={tenantId}"));
         Assert.Equal(2, dashboard.GetProperty("inStock").GetInt32());
         Assert.Equal(1, dashboard.GetProperty("usersWithKey").GetInt32());
-        Assert.Equal(1, dashboard.GetProperty("vulnerableKeys").GetInt32());
+        Assert.Equal(1, dashboard.GetProperty("vulnerableKeys").GetInt32()); // nur 5.4.3; 5.7.4 hat keinen Hinweis (5.7.1 hätte YSA-2025-02)
 
         var exportCsv = await (await _owner.GetAsync($"/api/exports/keys.csv?tenantId={tenantId}")).Content.ReadAsStringAsync();
         Assert.Contains("30000001", exportCsv);

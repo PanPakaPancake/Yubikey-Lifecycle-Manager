@@ -68,7 +68,7 @@ public static class PublicApiEndpoints
         k.Id.ToString(), k.TenantId.ToString(), k.Tenant?.DisplayName, k.SerialNumber?.ToString(), k.Model, k.FirmwareVersion, k.Status.ToString(), k.LockReason?.ToString(), k.Source.ToString(),
         k.Tags, k.CustomFields,
         k.Registrations.Where(r => r.RemovedAt == null).Select(r => new ApiRegistrationDto(r.UserPrincipalName, r.UserDisplayName, r.DisplayName, r.RegisteredAt, r.Source.ToString())).ToList(),
-        FirmwareAdvisories.For(k.FirmwareVersion).Select(a => a.Id).ToList(), k.UpdatedAt);
+        FirmwareAdvisories.For(k.FirmwareVersion, k.Model, k.IsFips).Select(a => a.Id).ToList(), k.UpdatedAt);
 
     public static void MapPublicApi(this IEndpointRouteBuilder app)
     {
@@ -127,6 +127,12 @@ public static class PublicApiEndpoints
             var tenantIds = await ScopeAsync(p, db, tenant);
             return TypedResults.Ok(await assignments.BuildAsync(tenantIds, new AssignmentFilter(q, usage)));
         }).WithSummary("Wer hat welchen Key").WithDescription("Ausgegebene Keys mit Person bzw. Verwahrer und allen Konten darauf. Filter: q (Person, UPN, Seriennummer, Verwahrer), usage (Personal, Shared, Breakglass)." + tenantHint).RequireScope(ApiScopes.AssignmentsRead);
+
+        g.MapGet("/advisories", async (ClaimsPrincipal p, string? tenant, YlmDbContext db, AdvisoryService advisories) =>
+        {
+            var tenantIds = await ScopeAsync(p, db, tenant);
+            return TypedResults.Ok(await advisories.BuildAsync(tenantIds, includePartnerStock: false));
+        }).WithTags("Berichte").WithSummary("Keys mit Yubico-Sicherheitshinweis").WithDescription("Alle bekannten Yubico-Sicherheitshinweise zur Key-Firmware mit den betroffenen Keys (nicht ausgemustert) und Personen. Die Bereiche hängen von Reihe und Modell ab (z. B. YubiKey Bio, FIPS)." + tenantHint).RequireScope(ApiScopes.ReportsRead);
 
         g.MapGet("/summary", async (ClaimsPrincipal p, string? tenant, DashboardService dash, YlmDbContext db) =>
         {

@@ -35,6 +35,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
   const q = params.get('q') ?? '';
   const tag = params.get('tag') ?? '';
   const needsDetails = params.get('needsDetails') === '1';
+  const advisory = params.get('advisory') ?? '';
   const page = Number(params.get('page') ?? '1');
   const sort = parseSort(params.get('sort'), { key: 'updated', desc: true });
   const onSort = (s: SortState) => set('sort', s.key === 'updated' && s.desc ? '' : formatSort(s));
@@ -57,6 +58,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
   if (q) qs.set('q', q);
   if (tag) qs.set('tag', tag);
   if (needsDetails) qs.set('needsDetails', 'true');
+  if (advisory) qs.set('advisory', advisory);
   if (params.get('sort')) qs.set('sort', params.get('sort')!);
   qs.set('page', String(page));
   const { data, error, loading, reload } = useApi<KeyPage>(view === 'keys' ? '/api/keys?' + qs.toString() : null, [qs.toString(), view]);
@@ -66,6 +68,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
   const exportQs = tenantId ? '?tenantId=' + tenantId : '';
   const usage = params.get('usage') ?? '';
   const issues = params.get('issues') === '1';
+  const { data: catalog } = useApi<{ id: string; title: string }[]>('/api/advisories/catalog');
   const { data: tags } = useApi<string[]>('/api/tags' + (tenantId ? '?tenantId=' + tenantId : ''), [tenantId]);
   const pages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
   useEffect(() => { setSelected(new Set()); }, [qs.toString()]);
@@ -115,6 +118,12 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
           <option value="">Alle Tags</option>
           {tags?.map((t) => <option key={t} value={t}>{t}</option>)}
         </select>
+        <select value={advisory} onChange={(e) => set('advisory', e.target.value)} aria-label="Sicherheitshinweis" className={advisory ? 'filter-on' : undefined}>
+          <option value="">Alle Sicherheitsstände</option>
+          <option value="fido">Von Sicherheitshinweis betroffen (Passkeys)</option>
+          <option value="any">Irgendein Sicherheitshinweis</option>
+          {catalog?.map((a) => <option key={a.id} value={a.id}>{a.id}: {a.title}</option>)}
+        </select>
         <LiveSearchInput value={q} onSearch={(v) => set('q', v)} placeholder="Seriennummer, Person, Modell …" busy={loading} />
         <label className="check"><input type="checkbox" checked={needsDetails} onChange={(e) => set('needsDetails', e.target.checked ? '1' : '')} /> Nur ohne Seriennummer</label>
       </div>
@@ -129,7 +138,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
           <button className="link" style={{ marginLeft: 8 }} onClick={() => setBulkResult(undefined)}>Ausblenden</button>
         </Info>
       )}
-      {data && data.items.length === 0 && <Empty>{q || status || tag || needsDetails ? <>Keine Keys passen zu diesen Filtern. <button className="link" onClick={() => setParams(new URLSearchParams())}>Filter zurücksetzen</button></> : canIntake ? <>Noch keine Keys. Erfassen Sie Keys per <button className="link" onClick={() => setModal('intake')}>Wareneingang</button> oder <button className="link" onClick={() => setModal('import')}>CSV-Import</button>.</> : 'Noch keine Keys.'}</Empty>}
+      {data && data.items.length === 0 && <Empty>{q || status || tag || needsDetails || advisory ? <>Keine Keys passen zu diesen Filtern. <button className="link" onClick={() => setParams(new URLSearchParams())}>Filter zurücksetzen</button></> : canIntake ? <>Noch keine Keys. Erfassen Sie Keys per <button className="link" onClick={() => setModal('intake')}>Wareneingang</button> oder <button className="link" onClick={() => setModal('import')}>CSV-Import</button>.</> : 'Noch keine Keys.'}</Empty>}
       {data && data.items.length > 0 && (
         <div className="card table-wrap" style={{ padding: 0 }}>
           <table>
@@ -151,7 +160,7 @@ export default function KeysPage({ partner }: { partner?: boolean }) {
                         </Link>
                       )}</td>
                     <td>{k.model ?? '–'}</td>
-                    <td className="mono">{k.firmwareVersion ?? '–'} {k.advisories.some((a) => a.affectsFido) && <Badge tone="warn">Hinweis</Badge>}</td>
+                    <td className="mono">{k.firmwareVersion ?? '–'} {k.advisories.some((a) => a.affectsFido) && <Link to={'/sicherheitshinweise#' + k.advisories.find((a) => a.affectsFido)!.id} title={k.advisories.map((a) => a.id + ': ' + a.title).join('\n')}><Badge tone="warn">Hinweis</Badge></Link>}</td>
                     <td><StatusBadge status={k.status} /></td>
                     <td>{k.usage !== 'Personal' && <div><Badge tone={k.usage === 'Breakglass' ? 'error' : 'info'}>{usageLabels[k.usage]}</Badge> <span className="small muted">{k.custodian ? 'bei ' + k.custodian : 'Verwahrer fehlt'}</span></div>}
                       {reg.length === 0 ? (k.usage === 'Personal' ? '–' : null) : reg.map((r) => <div key={r.id}>{r.userDisplayName ?? r.userPrincipalName}<div className="small muted">{r.userPrincipalName}</div></div>)}</td>
