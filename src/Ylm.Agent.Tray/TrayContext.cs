@@ -47,8 +47,6 @@ internal sealed class TrayContext : ApplicationContext
         _logs.Click += (_, _) => OpenLogs();
         _exit.Click += (_, _) => ExitThread();
         _openWeb.Click += (_, _) => { if (_status.ServerUrl is { } url) Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); };
-        _icon.BalloonTipClicked += (_, _) => { if (_balloonOpensPairing) { _balloonOpensPairing = false; ShowPairing(); } };
-        _icon.BalloonTipClosed += (_, _) => _balloonOpensPairing = false;
         _pair.Click += (_, _) => ShowPairing();
         _unpair.Click += async (_, _) =>
         {
@@ -60,6 +58,9 @@ internal sealed class TrayContext : ApplicationContext
 
         _icon = new NotifyIcon { ContextMenuStrip = _menu, Visible = !preview, Text = "YubiKey LC Manager" };
         _icon.DoubleClick += (_, _) => ShowStatus();
+        // Erst nach dem Anlegen von _icon abonnieren, sonst NullReferenceException beim Start (0.11.1).
+        _icon.BalloonTipClicked += (_, _) => { if (_balloonOpensPairing) { _balloonOpensPairing = false; ShowPairing(); } };
+        _icon.BalloonTipClosed += (_, _) => _balloonOpensPairing = false;
         _pipe.Message += m => _ui.Post(_ => OnMessage(m), null);
         _pipe.ConnectedChanged += c => _ui.Post(_ => { _pipeConnected = c; Render(); }, null);
         Render();
