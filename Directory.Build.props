@@ -9,6 +9,7 @@
     <Company>Yubikey Lifecycle Manager</Company>
     <!-- SignPath prüft beim Signieren Produktname und -version der EXE-Dateien (.signpath/artifact-configurations). -->
     <Product>Yubikey Lifecycle Manager</Product>
+    <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
     <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 </Project>

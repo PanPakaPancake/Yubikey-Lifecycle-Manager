@@ -10,6 +10,7 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 ## 0.12.2 · 2026-11-27
 - Neu: Der Agent wird künftig kostenlos über die SignPath Foundation signiert (Open-Source-Programm) statt über Azure. Bis die Signierung eingerichtet ist, bleibt das MSI wie bisher unsigniert.
 - Sicherheit: Ein signierter Agent prüft bei Updates zusätzlich, dass das MSI wirklich der Agent-Installer ist. Nötig, weil die SignPath Foundation viele Projekte unter demselben Namen signiert.
+- Neu: Der Yubikey Lifecycle Manager ist Open Source unter der Lizenz AGPL-3.0.
 - Verbessert: Das README hat eine „Code signing policy“ mit Rollen und Datenschutzaussage.
 
 ## 0.12.1 · 2026-11-27

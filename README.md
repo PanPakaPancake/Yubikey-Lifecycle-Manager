@@ -93,6 +93,12 @@ Rollen:
 
 Datenschutz: This program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Der Agent spricht nur mit dem Server, mit dem er gekoppelt wurde. Der Server spricht mit den Microsoft-Entra-Tenants, Mail-Servern, Webhooks und Ticketsystemen, die der Betreiber einrichtet, und fragt täglich bei der GitHub-API nach neuen Versionen (abschaltbar mit `Ylm__UpdateCheckEnabled=false`, siehe [Betrieb](docs/BETRIEB.md)).
 
+## Lizenz
+
+Copyright (C) 2026 PanPakaPancake und Mitwirkende
+
+Der Yubikey-Lifecycle-Manager steht unter der [GNU Affero General Public License v3.0](LICENSE) (AGPL-3.0-only). Er darf frei genutzt, verändert und weitergegeben werden. Wer eine veränderte Fassung weitergibt oder anderen über das Netz zur Nutzung bereitstellt (z. B. als Dienstleister für Kunden), muss deren Quellcode unter derselben Lizenz zugänglich machen.
+
 ## Lizenzen von Abhängigkeiten
 
 PDFsharp ist bewusst auf Version 6.2.4 (MIT) festgelegt; neuere Versionen stehen unter einer anderen Lizenz.
