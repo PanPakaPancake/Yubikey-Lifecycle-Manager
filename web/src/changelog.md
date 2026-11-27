@@ -7,7 +7,7 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
-## 0.13.1 · 2026-11-27
+## 0.14.0 · 2026-11-27
 - Sicherheit: Neue Mail- und Webhook-Ereignisse für sicherheitsrelevante Änderungen: Plattform-Benutzer angelegt oder geändert, Rolle geändert, Schutz geändert (Vier-Augen für Breakglass, geschützte Konten), Anmeldeeinstellungen geändert, API-Schlüssel angelegt oder in den Rechten geändert, Agent gekoppelt und TAP erzeugt. So fällt auf, wenn jemand die Vier-Augen-Freigabe abschaltet oder sich ein zweites Konto anlegt. Abos mit „alle Ereignisse“ bekommen diese Ereignisse ab jetzt mit.
 - Sicherheit: Webhooks gehen nicht mehr an link-lokale Adressen wie 169.254.169.254 (Cloud-Metadaten), auch nicht über einen Hostnamen, der dorthin zeigt.
 - Sicherheit: Ein Kopplungscode für den Agent gilt auch bei zwei gleichzeitigen Versuchen garantiert nur einmal.
