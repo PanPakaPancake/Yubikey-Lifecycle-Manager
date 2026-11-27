@@ -7,7 +7,12 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
-## 0.12.2 · 2026-11-27
+## 0.13.0 · 2026-11-27
+- Neu: Menüpunkt „Sicherheitshinweise“. Pro Yubico-Sicherheitshinweis (z. B. EUCLEAK YSA-2024-03) steht dort, wie viele Keys und Personen betroffen sind, wie Yubico ihn einstuft, ob er Passkeys betrifft und was zu tun ist. Darunter die Liste der Keys mit Person bzw. Verwahrer, Status und Tenant, ohne Tenant-Auswahl auch das Partnerlager. Export als Excel oder CSV, für alle Hinweise oder einen einzelnen.
+- Neu: Im Inventar filtert die Auswahl „Von Sicherheitshinweis betroffen“ nach Keys mit Hinweis zu Passkeys, nach irgendeinem Hinweis oder nach einem bestimmten Hinweis. „Im Inventar filtern“ auf der neuen Seite springt direkt dorthin.
+- Verbessert: Die Hinweise berücksichtigen jetzt Reihe und Modell, nicht nur die Firmware. Ein YubiKey Bio 5.7.1 ist zum Beispiel noch von EUCLEAK betroffen, ein YubiKey 5 mit 5.7.1 nicht. Neu in der Liste: YSA-2025-02, YSA-2024-02, YSA-2020-05, YSA-2020-04 und YSA-2019-02.
+- Verbessert: Die Kachel „Keys mit Sicherheitshinweis“ auf der Übersicht und der Eintrag unter „Handlungsbedarf“ führen auf die neue Seite. Am einzelnen Key steht zu jedem Hinweis die Empfehlung.
+- Neu: Lese-API GET /api/v1/advisories (Recht „Kennzahlen lesen“).
 - Neu: Der Agent wird künftig kostenlos über die SignPath Foundation signiert (Open-Source-Programm) statt über Azure. Bis die Signierung eingerichtet ist, bleibt das MSI wie bisher unsigniert.
 - Sicherheit: Ein signierter Agent prüft bei Updates zusätzlich, dass das MSI wirklich der Agent-Installer ist. Nötig, weil die SignPath Foundation viele Projekte unter demselben Namen signiert.
 - Neu: Der Yubikey Lifecycle Manager ist Open Source unter der Lizenz AGPL-3.0.

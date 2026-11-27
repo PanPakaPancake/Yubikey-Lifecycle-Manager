@@ -68,7 +68,7 @@ public sealed class AssignmentService(YlmDbContext db)
         if (!personal && string.IsNullOrWhiteSpace(k.Custodian)) issues.Add("Verwahrer fehlt");
         if (personal && accounts.Select(a => a.EntraUserId).Distinct().Count() > 1) issues.Add("Persönlicher Key mit mehreren Konten");
         if (k.Status != KeyStatus.Active) issues.Add($"Status {KeyLifecycle.DisplayName(k.Status)}, aber noch Konten registriert");
-        var advisories = FirmwareAdvisories.For(k.FirmwareVersion);
+        var advisories = FirmwareAdvisories.For(k.FirmwareVersion, k.Model, k.IsFips);
         return new AssignmentKey(
             k.Id, k.TenantId!.Value, k.Tenant?.DisplayName ?? "", k.SerialNumber, k.Model, k.FirmwareVersion, k.Status.ToString(), k.Usage.ToString(),
             personal ? first?.UserDisplayName ?? first?.UserPrincipalName : k.Custodian,

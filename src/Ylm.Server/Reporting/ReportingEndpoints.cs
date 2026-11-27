@@ -76,6 +76,30 @@ public static class ReportingEndpoints
                 : Results.File(Xlsx.Write("Key-Zuweisungen", header, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
         });
 
+        // Yubico-Sicherheitshinweise: betroffene Keys und Personen je Hinweis. Ohne tenantId zusätzlich das Partnerlager (mit Recht).
+        g.MapGet("/advisories", async (Guid? tenantId, CurrentUser cu, AdvisoryService advisories) =>
+        {
+            var me = await cu.RequireAsync(Permission.ReadInventory);
+            return Results.Ok(await advisories.BuildAsync(await ScopeAsync(cu, tenantId), tenantId is null && CurrentUser.Has(me, Permission.ManagePartnerStock)));
+        });
+
+        g.MapGet("/advisories/catalog", () => Results.Ok(FirmwareAdvisories.Known.Select(a => new { a.Id, a.Title, a.AffectsFido })));
+
+        g.MapGet("/exports/advisories.{format}", async (string format, Guid? tenantId, string? advisory, CurrentUser cu, AdvisoryService advisories, AuditService audit) =>
+        {
+            format = format.ToLowerInvariant();
+            if (format is not ("csv" or "xlsx")) return Results.NotFound();
+            if (advisory is not null && FirmwareAdvisories.Find(advisory) is null) throw ApiException.NotFound("Sicherheitshinweis");
+            var user = await cu.RequireAsync(Permission.ReadReports);
+            var o = await advisories.BuildAsync(await ScopeAsync(cu, tenantId), tenantId is null && CurrentUser.Has(user, Permission.ManagePartnerStock));
+            await audit.WriteAsync(AuditService.User(user), AuditActions.ExportCreated, tenantId, details: new { kind = "advisories." + format, advisory });
+            var (header, rows) = AdvisoryService.Table(o, advisory, tenantId is null);
+            var name = $"sicherheitshinweise{(advisory is null ? "" : "-" + advisory.ToLowerInvariant())}-{DateTime.Today:yyyy-MM-dd}";
+            return format == "csv"
+                ? Results.File(Csv.Write(header, rows.Select(r => (IReadOnlyList<string?>)r.Select(v => v?.ToString()).ToList())), "text/csv; charset=utf-8", name + ".csv")
+                : Results.File(Xlsx.Write("Sicherheitshinweise", header, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
+        });
+
         g.MapGet("/exports/dashboard.pdf", async (Guid? tenantId, CurrentUser cu, DashboardService dash, SetupService setup, BrandingService branding, AuditService audit, Data.YlmDbContext db) =>
         {
             var user = await cu.RequireAsync(Permission.ReadReports);

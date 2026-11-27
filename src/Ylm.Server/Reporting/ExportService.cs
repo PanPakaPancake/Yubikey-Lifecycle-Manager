@@ -26,7 +26,7 @@ public sealed class ExportService(YlmDbContext db)
                 active.Count > 0 ? active.Min(r => r.RegisteredAt).ToString("yyyy-MM-dd HH:mm") : null,
                 k.PinChangeForced is null ? null : k.PinChangeForced.Value ? "ja" : "nein",
                 string.Join(", ", k.Tags), k.Notes,
-                string.Join(", ", FirmwareAdvisories.For(k.FirmwareVersion).Select(a => a.Id)),
+                string.Join(", ", FirmwareAdvisories.For(k.FirmwareVersion, k.Model, k.IsFips).Select(a => a.Id)),
                 .. fieldKeys.Select(f => k.CustomFields.GetValueOrDefault(f)),
             ];
         });

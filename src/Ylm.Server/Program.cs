@@ -90,6 +90,7 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<Ylm.Server.Integra
 builder.Services.AddScoped<DashboardService>();
 builder.Services.AddScoped<ExportService>();
 builder.Services.AddScoped<AssignmentService>();
+builder.Services.AddScoped<AdvisoryService>();
 builder.Services.AddScoped<Ylm.Server.Rollout.RolloutService>();
 builder.Services.AddSingleton<Ylm.Server.Protection.ProtectedAccountService>();
 builder.Services.AddScoped<Ylm.Server.Setup.BrandingService>();

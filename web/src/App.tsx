@@ -13,6 +13,7 @@ import AccountSetupPage from './pages/AccountSetup';
 import AccountPage from './pages/Account';
 import DashboardPage from './pages/Dashboard';
 import KeysPage from './pages/Keys';
+import AdvisoriesPage from './pages/Advisories';
 import KeyDetailPage from './pages/KeyDetail';
 import WizardPage from './pages/Wizard';
 import BatchesPage, { NewBatchPage } from './pages/Batches';
@@ -125,6 +126,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
+          {item('/sicherheitshinweise', 'shield', 'Sicherheitshinweise')}
           {can('ReadReports') && item('/rollout', 'target', 'Rollout Übersicht')}
           {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" /><span className="nav-label">Registrieren</span></NavLink>}
           {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
@@ -184,6 +186,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         <Routes>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/keys" element={<KeysPage />} />
+          <Route path="/sicherheitshinweise" element={<AdvisoriesPage />} />
           <Route path="/rollout" element={<RolloutPage />} />
           <Route path="/assignments" element={<ToPeopleView />} />
           <Route path="/keys/identify" element={<IdentifyPage />} />
