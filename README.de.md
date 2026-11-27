@@ -116,3 +116,5 @@ Der Yubikey-Lifecycle-Manager steht unter der [GNU Affero General Public License
 ## Lizenzen von Abhängigkeiten
 
 PDFsharp ist bewusst auf Version 6.2.4 (MIT) festgelegt; neuere Versionen stehen unter einer anderen Lizenz.
+
+YubiKey ist eine Marke der Yubico AB. Dieses Projekt steht in keiner Verbindung zu Yubico oder Microsoft und wird von ihnen nicht unterstützt.

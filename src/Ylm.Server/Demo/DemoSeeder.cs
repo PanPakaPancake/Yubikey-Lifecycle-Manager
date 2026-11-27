@@ -150,6 +150,9 @@ public sealed class DemoSeeder(YlmDbContext db, DemoGraphFactory graphs, SyncSer
             await sync.SyncAsync(tenant.Id, AuditService.System, ct);
             await checks.RunAsync(tenant, AuditService.System, ct);
         }
+        // Übernommene Keys gelten als schon länger bekannt (sonst stünden sie im Inventar ganz oben als „gerade geändert“).
+        foreach (var key in await db.Keys.Where(k => k.Source == KeySource.EntraSync).ToListAsync(ct)) key.UpdatedAt = key.StatusChangedAt;
+        await db.SaveChangesAsync(ct);
 
         await File.WriteAllTextAsync(marker, "Diese Datenbank enthält die Beispieldaten des Demo-Modus.\n", ct);
         logger.LogInformation("Demo-Modus: Beispieldaten angelegt ({Tenants} Tenants)", tenants.Count);
