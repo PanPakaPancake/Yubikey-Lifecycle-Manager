@@ -381,3 +381,35 @@
 .avatar { overflow: hidden; }
 .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .btn.identify-link { display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 2px 9px; min-height: 0; font-size: .74rem; border-radius: 999px; vertical-align: middle; }
+
+/* ---------- Sicherheitshinweise (/sicherheitshinweise) ---------- */
+.adv-kpis { margin-bottom: 16px; }
+:root .adv-kpis .kpi { position: relative; }
+:root .adv-kpi-keys { --c: #ea580c; --c2: #fbbf24; }
+:root .adv-kpi-people { --c: #6d28d9; --c2: #c026d3; animation-delay: .05s, 0s; }
+:root .adv-kpi-nofw { --c: #2563eb; --c2: #38bdf8; animation-delay: .1s, 0s; }
+[data-dark] .adv-kpi-keys { --c: #fbbf24; } [data-dark] .adv-kpi-people { --c: #a78bfa; } [data-dark] .adv-kpi-nofw { --c: #22d3ee; }
+:root .adv-kpis .kpi a { color: #fff; text-decoration: underline; }
+.adv-list { display: grid; gap: 16px; margin-bottom: 16px; }
+.adv-card { padding: 20px 22px; scroll-margin-top: 80px; }
+.adv-card.adv-fido { border-left: 4px solid var(--warn); }
+.adv-head { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; }
+.adv-title h2 { margin: 6px 0 0; font-size: 1.15rem; }
+.adv-badges { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.adv-id { font-weight: 600; }
+.adv-count { display: flex; flex-direction: column; align-items: flex-end; text-align: right; min-width: 84px; }
+.adv-count strong { font-size: 2rem; line-height: 1; }
+.adv-card.adv-fido .adv-count strong { color: var(--warn); }
+.adv-reco { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--accent) 8%, transparent); margin: 10px 0; }
+.adv-reco > svg { flex: none; margin-top: 2px; color: var(--accent); }
+.adv-meta { margin-bottom: 12px; }
+.adv-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.adv-table { margin-top: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.adv-clean-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.adv-clean-list li > svg { vertical-align: -2px; margin-right: 6px; }
+.adv-clean-list .small { margin-left: 22px; }
+select.filter-on { border-color: var(--accent); }
+@media (max-width: 720px) {
+  .adv-head { flex-direction: column; }
+  .adv-count { flex-direction: row; gap: 8px; align-items: baseline; min-width: 0; }
+}

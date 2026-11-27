@@ -72,6 +72,54 @@ public class FirmwareTests
         Assert.DoesNotContain(FirmwareAdvisories.For("5.7.0"), a => a.Id == "YSA-2024-03");
         Assert.Empty(FirmwareAdvisories.For(null));
     }
+
+    private static string[] Ids(string fw, string? model, bool fips = false) => FirmwareAdvisories.For(fw, model, fips).Select(a => a.Id).Order().ToArray();
+
+    [Fact]
+    public void Advisories_depend_on_series_and_model()
+    {
+        // YubiKey Bio: EUCLEAK erst ab 5.7.2 behoben, RP-Auflisten schon ab 5.6.4.
+        Assert.Equal(["YSA-2024-03", "YSA-2025-02"], Ids("5.7.1", "YubiKey Bio"));
+        Assert.Equal(["YSA-2025-02"], Ids("5.7.1", "YubiKey 5 NFC"));
+        Assert.Equal(["YSA-2024-02", "YSA-2024-03", "YSA-2025-02"], Ids("5.4.3", "YubiKey 5 NFC FIPS", fips: true));
+        Assert.Empty(Ids("5.7.4", "YubiKey 5C NFC"));
+        // NDEF-Hinweis nur beim YubiKey 5 NFC, nicht beim 5C.
+        Assert.Contains("YSA-2020-04", Ids("5.2.4", "YubiKey 5 NFC"));
+        Assert.DoesNotContain("YSA-2020-04", Ids("5.2.4", "YubiKey 5C"));
+        Assert.Contains("YSA-2020-05", Ids("5.2.4", "YubiKey 5C"));
+        // FIPS 4: wenig Zufall nur 4.4.2 und 4.4.4; ROCA nur beim normalen YubiKey 4.
+        Assert.Equal(["YSA-2019-02"], Ids("4.4.4", "YubiKey 4 FIPS", fips: true));
+        Assert.Empty(Ids("4.4.5", "YubiKey 4 FIPS", fips: true));
+        Assert.Equal(["YSA-2017-01"], Ids("4.3.4", "YubiKey 4"));
+        Assert.Empty(Ids("4.3.5", "YubiKey 4"));
+        // Security Key: wie YubiKey 5, ohne OpenPGP/OTP-Hinweise.
+        Assert.Equal(["YSA-2024-02", "YSA-2024-03"], Ids("5.2.7", "Security Key NFC"));
+    }
+
+    [Fact]
+    public void Series_detection_without_model_uses_firmware()
+    {
+        Assert.Equal(KeySeries.YubiKey5, KeySeriesInfo.Detect(null, false, "5.4.3"));
+        Assert.Equal(KeySeries.YubiKey5Fips, KeySeriesInfo.Detect(null, true, "5.4.3"));
+        Assert.Equal(KeySeries.YubiKey4, KeySeriesInfo.Detect(null, false, "4.3.1"));
+        Assert.Equal(KeySeries.YubiKeyBio, KeySeriesInfo.Detect("YubiKey C Bio", false, "5.6.3"));
+        Assert.Equal(KeySeries.SecurityKey, KeySeriesInfo.Detect("Security Key C NFC", false, "5.7.1"));
+        Assert.Equal(KeySeries.Unknown, KeySeriesInfo.Detect(null, false, null));
+    }
+
+    [Fact]
+    public void Advisory_list_is_consistent()
+    {
+        Assert.Equal(FirmwareAdvisories.Known.Count, FirmwareAdvisories.Known.Select(a => a.Id).Distinct().Count());
+        foreach (var a in FirmwareAdvisories.Known)
+        {
+            Assert.NotEmpty(a.Ranges);
+            Assert.All(a.Ranges, r => Assert.True(r.FromInclusive is null || r.FromInclusive.Value < r.ToExclusive, a.Id));
+            Assert.StartsWith("https://www.yubico.com/support/security-advisories/", a.Url);
+        }
+        Assert.Equal("YubiKey 5, YubiKey 5 FIPS, Security Key 5.4.1 bis 5.7.3", FirmwareAdvisories.Find("YSA-2025-02")!.Ranges[0].Describe());
+        Assert.Equal("YubiKey Bio vor 5.7.2", FirmwareAdvisories.Find("ysa-2024-03")!.Ranges[1].Describe());
+    }
 }
 
 public class ProfileEvaluatorTests

@@ -74,8 +74,11 @@ export default function KeyDetailPage() {
         </Info>
       )}
       {key.advisories.length > 0 && (
-        <Info tone="warn">
-          {key.advisories.map((a) => <div key={a.id}><strong>{a.id}</strong>: {a.title} <a href={a.url} target="_blank" rel="noreferrer">Details</a></div>)}
+        <Info tone={key.advisories.some((a) => a.affectsFido) ? 'warn' : 'info'}>
+          <strong>Yubico-Sicherheitshinweise für diesen Key</strong>
+          {key.advisories.map((a) => <div key={a.id} style={{ marginTop: 6 }}><strong>{a.id}</strong>: {a.title} <a href={a.url} target="_blank" rel="noreferrer">Details</a>
+            <div className="small">{a.recommendation}</div></div>)}
+          <div className="small" style={{ marginTop: 6 }}><Link to="/sicherheitshinweise">Alle betroffenen Keys ansehen</Link></div>
         </Info>
       )}
       {removal?.required && (

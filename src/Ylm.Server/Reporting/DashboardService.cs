@@ -5,6 +5,8 @@ using Ylm.Server.Data;
 namespace Ylm.Server.Reporting;
 
 public sealed record FirmwareBucket(string Firmware, int Count, IReadOnlyList<string> Advisories, bool Vulnerable);
+/// <summary>Keys (aktiv oder im Lager) je Sicherheitshinweis.</summary>
+public sealed record AdvisoryCount(string Id, string Title, string Severity, bool AffectsFido, int Keys);
 public sealed record MonthBucket(string Month, int Count);
 
 public sealed record Dashboard(
@@ -24,7 +26,8 @@ public sealed record Dashboard(
     IReadOnlyList<object> Tenants,
     int OpenTodos = 0,
     int PendingApprovals = 0,
-    bool TargetAllUsers = false);
+    bool TargetAllUsers = false,
+    IReadOnlyList<AdvisoryCount>? Advisories = null);
 
 /// <summary>Dashboard per tenant and for the whole organization (planning 7).</summary>
 public sealed class DashboardService(YlmDbContext db)
@@ -32,7 +35,7 @@ public sealed class DashboardService(YlmDbContext db)
     public async Task<Dashboard> BuildAsync(IReadOnlyList<Guid> tenantIds, DateTimeOffset? from = null, CancellationToken ct = default)
     {
         var keys = await db.Keys.AsNoTracking().Where(k => k.TenantId != null && tenantIds.Contains(k.TenantId.Value))
-            .Select(k => new { k.TenantId, k.Status, k.FirmwareVersion, k.SerialNumber }).ToListAsync(ct);
+            .Select(k => new { k.TenantId, k.Status, k.FirmwareVersion, k.SerialNumber, k.Model, k.IsFips }).ToListAsync(ct);
         var regs = await db.Registrations.AsNoTracking().Where(r => tenantIds.Contains(r.TenantId))
             .Select(r => new { r.TenantId, r.EntraUserId, r.RegisteredAt, r.RemovedAt, r.Source }).ToListAsync(ct);
         var tenants = await db.Tenants.AsNoTracking().Where(t => tenantIds.Contains(t.Id)).OrderBy(t => t.DisplayName).ToListAsync(ct);
@@ -53,14 +56,20 @@ public sealed class DashboardService(YlmDbContext db)
                 regs.Count(r => r.Source == KeySource.Platform && r.RegisteredAt >= mth && r.RegisteredAt < next)));
         }
 
-        var firmware = keys.Where(k => k.Status is KeyStatus.Active or KeyStatus.InStock && k.FirmwareVersion != null)
-            .GroupBy(k => k.FirmwareVersion!)
+        // Hinweise pro Key, weil sie je nach Modell (Bio, FIPS, NFC …) für dieselbe Firmware verschieden ausfallen.
+        var current = keys.Where(k => k.Status is KeyStatus.Active or KeyStatus.InStock && k.FirmwareVersion != null)
+            .Select(k => (k.FirmwareVersion, Advisories: FirmwareAdvisories.For(k.FirmwareVersion, k.Model, k.IsFips))).ToList();
+        var firmware = current.GroupBy(k => k.FirmwareVersion!)
             .Select(gr =>
             {
-                var adv = FirmwareAdvisories.For(gr.Key);
+                var adv = gr.SelectMany(k => k.Advisories).DistinctBy(a => a.Id).ToList();
                 return new FirmwareBucket(gr.Key, gr.Count(), adv.Select(a => a.Id).ToList(), adv.Any(a => a.AffectsFido));
             })
             .OrderByDescending(f => FirmwareVersion.TryParse(f.Firmware, out var v) ? v : default).ToList();
+        var vulnerable = current.Count(k => k.Advisories.Any(a => a.AffectsFido));
+        var advisoryCounts = FirmwareAdvisories.Known
+            .Select(a => new AdvisoryCount(a.Id, a.Title, a.Severity, a.AffectsFido, current.Count(k => k.Advisories.Contains(a))))
+            .Where(a => a.Keys > 0).ToList();
 
         var forceUnsupported = activeKeys.Count(k => FirmwareVersion.TryParse(k.FirmwareVersion, out var v) && v < FirmwareVersion.ForcePinChangeMinimum);
 
@@ -76,7 +85,7 @@ public sealed class DashboardService(YlmDbContext db)
             targetUsers is > 0 ? Math.Round(100.0 * Math.Min(usersWithKey, targetUsers.Value) / targetUsers.Value, 1) : null,
             months,
             firmware,
-            firmware.Where(f => f.Vulnerable).Sum(f => f.Count),
+            vulnerable,
             forceUnsupported,
             tenants.Select(t => (object)new
             {
@@ -89,6 +98,7 @@ public sealed class DashboardService(YlmDbContext db)
             openTodos,
             pendingApprovals,
             // No include groups anywhere: the target audience is every enabled member account.
-            tenants.Count > 0 && tenants.All(t => t.TargetIncludeGroups.Count == 0));
+            tenants.Count > 0 && tenants.All(t => t.TargetIncludeGroups.Count == 0),
+            advisoryCounts);
     }
 }

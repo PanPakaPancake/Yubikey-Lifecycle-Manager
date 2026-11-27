@@ -33,7 +33,7 @@ public static class ApiScopes
     [
         new(InventoryRead, "Inventar", "Inventar lesen", "Tenants, Keys mit Seriennummer, Firmware, Status, Tags, Zusatzfeldern und Registrierungen.", false),
         new(AssignmentsRead, "Inventar", "Zuweisungen lesen", "Wer hat welchen Key (Person, Verwahrer, Konten auf dem Key).", false),
-        new(ReportsRead, "Berichte", "Kennzahlen lesen", "Kennzahlen wie Bestand nach Status und Abdeckung der Zielgruppe.", false),
+        new(ReportsRead, "Berichte", "Kennzahlen lesen", "Kennzahlen wie Bestand nach Status und Abdeckung der Zielgruppe, dazu die Keys mit Yubico-Sicherheitshinweis.", false),
         new(TodosRead, "ToDo-Liste", "ToDo-Liste lesen", "Offene und erledigte ToDos (Personen, die einen Key bekommen sollen).", false),
         new(AuditRead, "Audit-Log", "Audit-Log lesen", "Einträge des Audit-Logs, z. B. für ein SIEM. Einträge ohne Tenant nur bei Schlüsseln für alle Tenants.", false),
         new(InventoryWrite, "Inventar", "Inventar pflegen", "Tags, Zusatzfelder und Notiz eines Keys ändern. Ändert nichts in Entra.", true),

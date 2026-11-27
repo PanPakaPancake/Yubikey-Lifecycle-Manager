@@ -52,7 +52,7 @@ public static class KeyEndpoints
         k.CreatedAt,
         k.UpdatedAt,
         k.StatusChangedAt,
-        Advisories = FirmwareAdvisories.For(k.FirmwareVersion).Select(a => new { a.Id, a.Title, a.Severity, a.Url, a.AffectsFido }),
+        Advisories = FirmwareAdvisories.For(k.FirmwareVersion, k.Model, k.IsFips).Select(a => new { a.Id, a.Title, a.Severity, a.Url, a.AffectsFido, a.Recommendation }),
         NextStates = KeyLifecycle.NextStates(k.Status).Select(s => s.ToString()),
         Registrations = k.Registrations.Where(r => includeAll || r.RemovedAt == null).OrderByDescending(r => r.RegisteredAt).Select(r => new
         {
@@ -66,7 +66,7 @@ public static class KeyEndpoints
         var g = app.MapGroup("/api").RequireAuthorization();
 
         // partner=true: nur das Partnerlager; ohne tenantId: alle zuständigen Tenants plus Partnerlager (mit Recht „Partnerlager verwalten“).
-        g.MapGet("/keys", async (Guid? tenantId, bool? partner, string? status, string? q, string? tag, string? source, bool? needsDetails, string? sort, int? page, int? pageSize, CurrentUser cu, YlmDbContext db) =>
+        g.MapGet("/keys", async (Guid? tenantId, bool? partner, string? status, string? q, string? tag, string? source, bool? needsDetails, string? advisory, string? sort, int? page, int? pageSize, CurrentUser cu, YlmDbContext db) =>
         {
             var me = await cu.RequireAsync(Permission.ReadInventory);
             var ids = await cu.AccessibleTenantIdsAsync();
@@ -96,6 +96,20 @@ public static class KeyEndpoints
                     || (k.Model != null && k.Model.ToLower().Contains(term))
                     || (k.Notes != null && k.Notes.ToLower().Contains(term))
                     || k.Registrations.Any(r => r.RemovedAt == null && (r.UserPrincipalName.ToLower().Contains(term) || (r.UserDisplayName != null && r.UserDisplayName.ToLower().Contains(term)))));
+            }
+            // advisory: any (irgendein Hinweis), fido (betrifft Passkeys) oder eine Hinweis-ID wie YSA-2024-03.
+            // Die Firmware-Bereiche hängen vom Modell ab, deshalb wird im Speicher geprüft und nur nach IDs gefiltert.
+            if (!string.IsNullOrWhiteSpace(advisory))
+            {
+                var one = FirmwareAdvisories.Find(advisory);
+                if (one is null && advisory is not ("any" or "fido")) throw ApiException.BadRequest("unknown_advisory", "Unbekannter Sicherheitshinweis.");
+                var candidates = await query.Where(k => k.FirmwareVersion != null).Select(k => new { k.Id, k.FirmwareVersion, k.Model, k.IsFips }).ToListAsync();
+                var hit = candidates.Where(k =>
+                {
+                    var adv = FirmwareAdvisories.For(k.FirmwareVersion, k.Model, k.IsFips);
+                    return one is not null ? adv.Contains(one) : advisory == "fido" ? adv.Any(a => a.AffectsFido) : adv.Count > 0;
+                }).Select(k => k.Id).ToList();
+                query = query.Where(k => hit.Contains(k.Id));
             }
             var size = Math.Clamp(pageSize ?? 50, 1, 500);
             var p = Math.Max(page ?? 1, 1);

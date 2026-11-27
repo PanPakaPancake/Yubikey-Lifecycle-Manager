@@ -7,6 +7,13 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.13.0 · 2026-11-27
+- Neu: Menüpunkt „Sicherheitshinweise“. Pro Yubico-Sicherheitshinweis (z. B. EUCLEAK YSA-2024-03) steht dort, wie viele Keys und Personen betroffen sind, wie Yubico ihn einstuft, ob er Passkeys betrifft und was zu tun ist. Darunter die Liste der Keys mit Person bzw. Verwahrer, Status und Tenant, ohne Tenant-Auswahl auch das Partnerlager. Export als Excel oder CSV, für alle Hinweise oder einen einzelnen.
+- Neu: Im Inventar filtert die Auswahl „Von Sicherheitshinweis betroffen“ nach Keys mit Hinweis zu Passkeys, nach irgendeinem Hinweis oder nach einem bestimmten Hinweis. „Im Inventar filtern“ auf der neuen Seite springt direkt dorthin.
+- Verbessert: Die Hinweise berücksichtigen jetzt Reihe und Modell, nicht nur die Firmware. Ein YubiKey Bio 5.7.1 ist zum Beispiel noch von EUCLEAK betroffen, ein YubiKey 5 mit 5.7.1 nicht. Neu in der Liste: YSA-2025-02, YSA-2024-02, YSA-2020-05, YSA-2020-04 und YSA-2019-02.
+- Verbessert: Die Kachel „Keys mit Sicherheitshinweis“ auf der Übersicht und der Eintrag unter „Handlungsbedarf“ führen auf die neue Seite. Am einzelnen Key steht zu jedem Hinweis die Empfehlung.
+- Neu: Lese-API GET /api/v1/advisories (Recht „Kennzahlen lesen“).
+
 ## 0.12.1 · 2026-11-27
 - Neu: „Passkeys erklärt“ hat in der Endbenutzer-Ansicht einen Abschnitt „Warum Sie Ihren Key nicht verleihen“. Ein Vergleich mit dem Haustürschlüssel und ein Beispielprotokoll zeigen, dass alles unter dem eigenen Namen läuft; dazu, wie Vertretung richtig geht. Direkt verlinkbar mit /passkey#verleihen.
 - Verbessert: Die Hinweisliste im PIN-Brief sagt jetzt standardmäßig „Key und PIN nie verleihen oder weitergeben“. Angepasste Hinweislisten bleiben unverändert.
