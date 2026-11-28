@@ -125,17 +125,20 @@ try {
     $pipe.Connect(10000)
     $reader = [System.IO.StreamReader]::new($pipe)
     $writer = [System.IO.StreamWriter]::new($pipe); $writer.AutoFlush = $true
-    $writer.WriteLine((@{ type = 'PairRequest'; serverUrl = $serverUrl; pairingCode = $code } | ConvertTo-Json -Compress))
+    # Der Dienst legt die Pipe ohne Puffer an: Schreiben blockiert, bis die Gegenseite liest. Er schickt zuerst den Status,
+    # deshalb wie die Tray-App gleichzeitig lesen und schreiben, sonst warten beide Seiten aufeinander.
+    $read = $reader.ReadLineAsync()
+    $write = $writer.WriteLineAsync((@{ type = 'PairRequest'; serverUrl = $serverUrl; pairingCode = $code } | ConvertTo-Json -Compress))
     $result = $null
     $deadline = (Get-Date).AddSeconds(90)
-    $task = $null
     while (-not $result -and (Get-Date) -lt $deadline) {
-        if (-not $task) { $task = $reader.ReadLineAsync() }
-        if (-not $task.Wait(1000)) { continue }
-        $line = $task.Result; $task = $null
+        if ($write.IsFaulted) { Fail "Senden an den Dienst fehlgeschlagen: $($write.Exception.InnerException.Message)" }
+        if (-not $read.Wait(500)) { continue }
+        $line = $read.Result
         if ($null -eq $line) { break }
         $msg = $line | ConvertFrom-Json
-        if ($msg.type -eq 'PairResult') { $result = $msg }
+        Write-Host "Dienst: $($msg.type)"
+        if ($msg.type -eq 'PairResult') { $result = $msg } else { $read = $reader.ReadLineAsync() }
     }
     $pipe.Dispose()
     if (-not $result) { Fail 'Keine Antwort des Dienstes auf die Kopplung' }
