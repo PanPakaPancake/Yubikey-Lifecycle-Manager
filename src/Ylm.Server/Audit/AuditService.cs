@@ -27,6 +27,8 @@ public static class AuditActions
     public const string BrandingChanged = "settings.branding_changed";
     public const string TenantOnboarded = "tenant.onboarded";
     public const string TenantUpdated = "tenant.updated";
+    /// <summary>Schutz geändert: Vier-Augen für Breakglass, geschützte Admins oder Schutzgruppen (eigenes Ereignis für Alarme).</summary>
+    public const string TenantProtectionChanged = "tenant.protection_changed";
     public const string TenantChecked = "tenant.checked";
     public const string TenantPolicyFixed = "tenant.policy_fixed";
     public const string TenantOffboarded = "tenant.offboarded";

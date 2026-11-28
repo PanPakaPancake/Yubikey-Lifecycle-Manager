@@ -21,7 +21,6 @@ internal sealed class SettingsForm : BentoForm
     private readonly Pill _connectionPill = new("Verbinde", Theme.P.Warn);
     private readonly Label _connection = Txt.Value("", CW);
     private readonly Label _instance = Txt.Muted("", CW);
-    private readonly bool _isAdmin = TraySettings.IsAdministrator();
     private bool _rendering;
     private bool _checking;
 
@@ -139,13 +138,12 @@ internal sealed class SettingsForm : BentoForm
             var p = Theme.P;
             var u = s.Update;
             _autoUpdate.SetSilently(u?.AutoUpdate ?? false);
-            _autoUpdate.Enabled = pipeConnected && u is not null && _isAdmin && u.Policy == AgentUpdatePolicy.AgentDecides;
+            _autoUpdate.Enabled = pipeConnected && u is not null && u.Policy == AgentUpdatePolicy.AgentDecides;
             _updateHint.Text = !pipeConnected ? "Der Agent-Dienst ist nicht erreichbar."
                 : u is null ? "Dieser Agent-Dienst unterstützt die Einstellung noch nicht."
                 : u.Policy == AgentUpdatePolicy.Always ? "Vom Server vorgegeben: Updates werden immer automatisch installiert."
                 : u.Policy == AgentUpdatePolicy.Never ? "Vom Server vorgegeben: keine automatischen Updates. „Jetzt nach Updates suchen“ installiert trotzdem."
-                : !_isAdmin ? "Nur Administratoren dieses PCs können das ändern."
-                : "Der Agent fragt alle 4 Stunden beim Server nach einer neuen Version.";
+                : "Der Agent fragt alle 4 Stunden beim Server nach einer neuen Version. Ändern verlangt die Bestätigung als Administrator (UAC).";
             var available = u?.AvailableVersion is { } v ? $"  ·  Server {v}" : "";
             var checkedAt = u?.LastCheckAt is { } at ? $"\nGeprüft {at.LocalDateTime:dd.MM.yyyy, HH:mm}" : "";
             _versions.Text = $"Installiert {(string.IsNullOrEmpty(s.AgentVersion) ? "?" : s.AgentVersion)}{available}{checkedAt}";

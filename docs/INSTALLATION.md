@@ -116,7 +116,7 @@ Ab und zu lohnt es sich, den Befehl aus Schritt 1 noch einmal auszuführen. Er b
 |---|---|
 | Der Browser warnt vor dem Zertifikat. | Die UAC-Abfrage wurde abgelehnt. Als Administrator ausführen: `certutil -addstore Root "$env:USERPROFILE\YubikeyLifecycleManager\ylm-root-ca.crt"` |
 | Das Setup-Token ist weg. | Im Ordner `%USERPROFILE%\YubikeyLifecycleManager`: `docker compose logs server \| findstr Setup-Token` |
-| Der Tray meldet beim Koppeln einen Fehler. | Die Adresse genau wie im Browser eingeben, also `https://localhost` ohne Port. Port 8080 ist nur intern. Koppeln darf nur ein Konto, das auf dem PC lokaler Administrator ist. |
+| Der Tray meldet beim Koppeln einen Fehler. | Die Adresse genau wie im Browser eingeben, also `https://localhost` ohne Port. Port 8080 ist nur intern. Koppeln verlangt die Bestätigung als Administrator dieses PCs (UAC-Abfrage). |
 | Der Tray zeigt „Kopplung ungültig – neu koppeln“. | Der Agent wurde in der Oberfläche entfernt oder die Plattform neu installiert. Einen neuen Code erzeugen und neu koppeln. |
 | Die Plattform startet nicht. | Läuft Docker Desktop? Im Installationsordner `docker compose ps` und `docker compose logs server` ansehen. |
 

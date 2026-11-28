@@ -86,8 +86,12 @@ public static class AgentEndpoints
             var code = await db.PairingCodes.FirstOrDefaultAsync(c => c.CodeHash == hash);
             if (code is null || code.UsedAt is not null || code.ExpiresAt < DateTimeOffset.UtcNow)
                 return Results.Json(new ApiError("invalid_code", "Der Kopplungscode ist ungültig oder abgelaufen."), statusCode: 400);
+            // Atomar einlösen: Zwei gleichzeitige Anfragen mit demselben Code dürfen nicht beide einen Agent bekommen.
+            var claimed = await db.PairingCodes.Where(c => c.Id == code.Id && c.UsedAt == null)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsedAt, DateTimeOffset.UtcNow));
+            if (claimed == 0)
+                return Results.Json(new ApiError("invalid_code", "Der Kopplungscode ist ungültig oder abgelaufen."), statusCode: 400);
             var user = await db.PlatformUsers.FirstAsync(u => u.Id == code.PlatformUserId);
-            code.UsedAt = DateTimeOffset.UtcNow;
             var secret = TokenHashing.NewSecret();
             var machine = string.IsNullOrWhiteSpace(body.MachineName) ? "Unbekannt" : body.MachineName.Trim()[..Math.Min(body.MachineName.Trim().Length, 100)];
             var agent = new Agent { PlatformUserId = user.Id, MachineName = machine, AgentVersion = body.AgentVersion, TokenHash = TokenHashing.Hash(secret) };

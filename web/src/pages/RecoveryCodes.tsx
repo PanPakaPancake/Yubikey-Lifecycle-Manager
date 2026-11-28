@@ -28,9 +28,12 @@ function printCodes(codes: string[], upn: string, org?: string) {
        Verbrauchte Codes abhaken. Bitte sicher verwahren, z. B. im Tresor, und nicht digital ablegen.</p>
     <ol>${rows}</ol>
     <p class="meta">Erzeugt am ${escape(new Date().toLocaleString('de-DE'))}. Neue Codes machen dieses Blatt ungültig.</p>
-    <script>window.onload=function(){window.print()}</script>
   </body></html>`);
   w.document.close();
+  // Ohne Inline-Skript im Druckfenster: Die Content-Security-Policy erlaubt nur Skripte der Plattform.
+  w.onafterprint = () => w.close();
+  w.focus();
+  w.print();
   return true;
 }
 

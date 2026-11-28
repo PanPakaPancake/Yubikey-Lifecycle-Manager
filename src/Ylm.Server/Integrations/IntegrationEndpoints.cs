@@ -35,6 +35,8 @@ public static class IntegrationEndpoints
         if (!Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var u) || (u.Scheme != Uri.UriSchemeHttps && u.Scheme != Uri.UriSchemeHttp))
             throw ApiException.BadRequest("invalid_url", "Bitte eine vollständige URL mit https:// angeben.");
         if (!string.IsNullOrEmpty(u.UserInfo)) throw ApiException.BadRequest("invalid_url", "Zugangsdaten gehören nicht in die URL. Die Signatur sichert den Webhook ab.");
+        if (System.Net.IPAddress.TryParse(u.Host.Trim('[', ']'), out var ip) && WebhookTargets.IsBlocked(ip))
+            throw ApiException.BadRequest("invalid_url", "Link-lokale Adressen (z. B. 169.254.169.254) sind als Webhook-Ziel nicht erlaubt.");
         return u.ToString();
     }
 
