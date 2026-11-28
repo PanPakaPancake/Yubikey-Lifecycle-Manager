@@ -26,7 +26,7 @@ export default function AgentsPage() {
         <Card title={tr("Agent installieren und koppeln")}>
           <ol>
             <li>{tr("Installieren Sie")} <strong>{tr("YubikeyLifecycleManager-Agent.msi")}</strong> {tr("(einmalig, mit Adminrechten). Der Agent läuft danach als Windows-Dienst; das Tray-Symbol startet bei der Anmeldung. Neue Versionen installiert der Agent danach selbst (abschaltbar im Tray unter")} <strong>{tr("Einstellungen")}</strong>).</li>
-            <li>{tr("Klicken Sie im Tray-Symbol auf")} <strong>{tr("„Agent koppeln“")}</strong> {tr("und geben Sie die Adresse dieser Plattform und den Kopplungscode ein.")}</li>
+            <li>{tr("Klicken Sie mit der rechten Maustaste auf das Tray-Symbol, wählen Sie")} <strong>{tr("„Koppeln …“")}</strong> {tr("und geben Sie die Plattform-Adresse (siehe unten, genau so wie im Browser) und den Kopplungscode ein.")}</li>
           </ol>
           {pkg?.available && pkg.downloadUrl
             ? <p><a className="btn" href={pkg.downloadUrl} download>{tr("Agent herunterladen{n}", { n: pkg.version ? tr(" (Version {version})", { version: pkg.version }) : '' })}</a>{pkg.size ? <span className="small muted"> {tr("{n} MB", { n: (pkg.size / 1024 / 1024).toFixed(1) })}</span> : null}</p>

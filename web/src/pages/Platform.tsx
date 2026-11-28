@@ -435,7 +435,7 @@ function AgentUpdates({ agent, onChanged }: { agent: UpdateInfo['agent']; onChan
         <select value={agent.policy} disabled={busy} onChange={(e) => setPolicy(e.target.value as AgentUpdatePolicy)}>
           {(Object.keys(policyLabels) as AgentUpdatePolicy[]).map((p) => <option key={p} value={p}>{policyLabels[p]}</option>)}
         </select>
-        <div className="small muted">{tr("Agents fragen alle 4 Stunden nach einer neuen Version. „Jetzt aktualisieren“ im Tray oder unter „Agent“ geht immer.")}</div>
+        <div className="small muted">{tr("Agents fragen alle 4 Stunden nach einer neuen Version. „Jetzt aktualisieren“ im Tray oder unter „Mein Agent“ geht immer.")}</div>
         <ErrorBox error={error} />
         {agent.list.length > 0 && (
           <details><summary className="small muted">{tr("Alle Agents ({length})", { length: agent.list.length })}</summary>

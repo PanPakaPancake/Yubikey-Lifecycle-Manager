@@ -94,7 +94,12 @@ export interface Tenant {
   requireBreakglassRemovalApproval: boolean;
   protectAdmins?: boolean;
   protectedGroups?: GroupRef[];
+  reminders?: ReminderSettings;
 }
+
+/** Lebenszyklus-Erinnerungen eines Tenants (alle standardmäßig aus). */
+export interface ReminderSettings { unusedKeys: boolean; unusedKeyDays: number; noSpareKey: boolean; leavers: boolean; retiredWithPasskey: boolean; createTodos: boolean }
+export const anyReminder = (r?: ReminderSettings) => !!r && (r.unusedKeys || r.noSpareKey || r.leavers || r.retiredWithPasskey);
 
 export interface Registration {
   id: string; entraUserId: string; userPrincipalName: string; userDisplayName?: string; entraMethodId: string; displayName?: string;

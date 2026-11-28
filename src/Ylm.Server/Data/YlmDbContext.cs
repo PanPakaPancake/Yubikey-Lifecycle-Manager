@@ -38,6 +38,7 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
     public DbSet<SmtpSettings> Smtp => Set<SmtpSettings>();
     public DbSet<ReportSchedule> ReportSchedules => Set<ReportSchedule>();
     public DbSet<Branding> Brandings => Set<Branding>();
+    public DbSet<ReminderState> ReminderStates => Set<ReminderState>();
 
     protected override void OnModelCreating(ModelBuilder b)
     {
@@ -94,6 +95,8 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.Property(x => x.PolicySnapshotJson).HasColumnType("jsonb");
             e.Property(x => x.TargetIncludeGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
             e.Property(x => x.TargetExcludeGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
+            e.Ignore(x => x.AnyReminderEnabled);
+            e.Property(x => x.UnusedKeyDays).HasDefaultValue(180);
             e.Property(x => x.ProtectedGroups).HasColumnType("jsonb").HasConversion(JsonConverter<List<GroupRef>>(), JsonComparer<List<GroupRef>>());
             e.Property(x => x.ProtectAdmins).HasDefaultValue(true);
             e.Property(x => x.RequireBreakglassRemovalApproval).HasDefaultValue(true);
@@ -209,6 +212,14 @@ public sealed class YlmDbContext(DbContextOptions<YlmDbContext> options) : DbCon
             e.ToTable("registration_todos");
             e.HasIndex(x => new { x.TenantId, x.Status });
             e.HasIndex(x => new { x.TenantId, x.EntraUserId });
+            e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        b.Entity<ReminderState>(e =>
+        {
+            e.ToTable("reminder_states");
+            e.HasIndex(x => new { x.TenantId, x.Kind, x.Subject }).IsUnique();
+            e.Property(x => x.Subject).HasMaxLength(200);
             e.HasOne<Tenant>().WithMany().HasForeignKey(x => x.TenantId).OnDelete(DeleteBehavior.Cascade);
         });
 

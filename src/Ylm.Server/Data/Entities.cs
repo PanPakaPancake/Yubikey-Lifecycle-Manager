@@ -157,6 +157,21 @@ public sealed class Tenant
     public bool ProtectAdmins { get; set; } = true;
     /// <summary>Mitglieder dieser Gruppen sind ebenfalls geschützt (z. B. Breakglass, Geschäftsführung).</summary>
     public List<GroupRef> ProtectedGroups { get; set; } = [];
+
+    // ---- Lebenszyklus-Erinnerungen (optional, standardmäßig alle aus) ----
+    /// <summary>Keys melden, die laut Entra länger als <see cref="UnusedKeyDays"/> Tage nicht benutzt wurden.</summary>
+    public bool RemindUnusedKeys { get; set; }
+    public int UnusedKeyDays { get; set; } = 180;
+    /// <summary>Personen melden, die nur einen einzigen persönlichen Key haben (kein Ersatz-Key).</summary>
+    public bool RemindNoSpareKey { get; set; }
+    /// <summary>Aktive Keys melden, deren Konto in Entra deaktiviert oder gelöscht ist (ausgeschiedene Personen).</summary>
+    public bool RemindLeavers { get; set; }
+    /// <summary>Gesperrte oder ausgemusterte Keys melden, deren Passkey in Entra noch angemeldet ist.</summary>
+    public bool RemindRetiredWithPasskey { get; set; }
+    /// <summary>Für Personen ohne Ersatz-Key automatisch ein ToDo anlegen.</summary>
+    public bool ReminderCreateTodos { get; set; }
+
+    public bool AnyReminderEnabled => RemindUnusedKeys || RemindNoSpareKey || RemindLeavers || RemindRetiredWithPasskey;
 }
 
 public sealed class YubiKey
@@ -220,6 +235,10 @@ public sealed class KeyRegistration
     public Guid? ProfileId { get; set; }
     public KeySource Source { get; set; }
     public DateTimeOffset? LastSeenInSyncAt { get; set; }
+    /// <summary>Letzte Anmeldung mit diesem Passkey laut Entra (lastUsedDateTime); null = Entra liefert keinen Wert.</summary>
+    public DateTimeOffset? LastUsedAt { get; set; }
+    /// <summary>Konto in Entra aktiviert? Nur erfasst, wenn die Erinnerung „Ausgeschiedene Personen“ an ist; null = unbekannt.</summary>
+    public bool? UserAccountEnabled { get; set; }
     public DateTimeOffset? RemovedAt { get; set; }
     public string? RemovedReason { get; set; }
     public YubiKey? Key { get; set; }
@@ -610,4 +629,35 @@ public sealed class Branding
     /// <summary>Aufbau des PIN-Briefs aus dem Brief-Editor als JSON (<see cref="Pdf.LetterLayout"/>); leer heißt: übernehmen (Tenant → Partner → Standard).</summary>
     public string? LetterLayout { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
+/// <summary>Art einer Lebenszyklus-Erinnerung.</summary>
+public enum ReminderKind
+{
+    /// <summary>Key laut Entra lange nicht benutzt.</summary>
+    UnusedKey = 0,
+    /// <summary>Person hat nur einen persönlichen Key.</summary>
+    NoSpareKey = 1,
+    /// <summary>Konto deaktiviert oder gelöscht, Key aber noch aktiv.</summary>
+    Leaver = 2,
+    /// <summary>Key gesperrt oder ausgemustert, Passkey in Entra aber noch vorhanden.</summary>
+    RetiredWithPasskey = 3,
+}
+
+/// <summary>
+/// Merkt sich je Erinnerung, seit wann sie besteht und ob ein Admin sie ausgeblendet hat.
+/// So wird jede Erinnerung nur einmal gemeldet (Audit-Log, Webhooks, Mail-Alarme).
+/// </summary>
+public sealed class ReminderState
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid TenantId { get; set; }
+    public ReminderKind Kind { get; set; }
+    /// <summary>Worum es geht: Key-ID, Entra-Objekt-ID der Person oder beides („key:user“).</summary>
+    public string Subject { get; set; } = "";
+    public DateTimeOffset FirstSeenAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset? DismissedAt { get; set; }
+    public string? DismissedByName { get; set; }
+    public string? DismissNote { get; set; }
+    public Guid? TodoId { get; set; }
 }
