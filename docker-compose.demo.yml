@@ -1,0 +1,54 @@
+# Yubikey Lifecycle Manager – DEMO with made-up sample data (no Microsoft Entra connection needed).
+#
+#   docker compose -f docker-compose.demo.yml up -d
+#   then open http://localhost:8099 and pick a role (Owner, Operator, Helpdesk, Auditor)
+#
+#   Stop:            docker compose -f docker-compose.demo.yml down
+#   Reset (wipe):    docker compose -f docker-compose.demo.yml down -v
+#   From source:     docker build -t ylm-demo .
+#                    YLM_DEMO_IMAGE=ylm-demo YLM_DEMO_PULL=never docker compose -f docker-compose.demo.yml up -d
+#
+# The demo runs separately from a real installation (own project name, own database, port 8099 on localhost only).
+# Never point it at real data: the server refuses to start in demo mode on a database that was set up for real use.
+# Details: docs/DEMO.md
+name: ylm-demo
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ylm
+      POSTGRES_USER: ylm
+      POSTGRES_PASSWORD: demo-only
+    volumes:
+      - db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ylm -d ylm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  server:
+    # Deliberately no "build:" here: a local build would get the release image's name and shadow a real installation
+    # on the same machine. Build under your own name instead (see "From source" above).
+    image: ${YLM_DEMO_IMAGE:-ghcr.io/panpakapancake/yubikey-lifecycle-manager:latest}
+    pull_policy: ${YLM_DEMO_PULL:-always}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      ConnectionStrings__Postgres: Host=db;Database=ylm;Username=ylm;Password=demo-only
+      Ylm__DemoMode: "true"
+      Ylm__PublicBaseUrl: http://localhost:8099
+      Ylm__UpdateCheckEnabled: "false"
+      TZ: ${TZ:-Europe/Berlin}
+    volumes:
+      - data:/data
+    ports:
+      - "127.0.0.1:8099:8080"
+
+volumes:
+  db:
+  data:
