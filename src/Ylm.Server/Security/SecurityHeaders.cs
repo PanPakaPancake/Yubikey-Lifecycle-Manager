@@ -10,6 +10,15 @@ public sealed class SecurityHeaders(RequestDelegate next)
 {
     public const string AuthRateLimit = "auth";
 
+    /// <summary>
+    /// Nur Skripte der Plattform selbst, eingebettete Objekte nur von hier (PDF-Vorschau als blob), keine fremden Ziele für Anfragen.
+    /// Inline-Styles bleiben erlaubt (Druckfenster, React-Styles). Die API-Dokumentation (/api/docs) lädt ihr Skript
+    /// von einem CDN und bekommt daher nur frame-ancestors.
+    /// </summary>
+    public const string ContentSecurityPolicy =
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; " +
+        "connect-src 'self'; frame-src 'self' blob:; worker-src 'self' blob:; object-src 'self' blob:; base-uri 'self'; frame-ancestors 'none'";
+
     public Task InvokeAsync(HttpContext ctx)
     {
         ctx.Response.OnStarting(() =>
@@ -17,7 +26,8 @@ public sealed class SecurityHeaders(RequestDelegate next)
             var h = ctx.Response.Headers;
             h.XContentTypeOptions = "nosniff";
             h.XFrameOptions = "DENY";
-            if (!h.ContainsKey("Content-Security-Policy")) h.ContentSecurityPolicy = "frame-ancestors 'none'";
+            if (!h.ContainsKey("Content-Security-Policy"))
+                h.ContentSecurityPolicy = ctx.Request.Path.StartsWithSegments("/api/docs") ? "frame-ancestors 'none'" : ContentSecurityPolicy;
             h["Referrer-Policy"] = "same-origin";
             return Task.CompletedTask;
         });

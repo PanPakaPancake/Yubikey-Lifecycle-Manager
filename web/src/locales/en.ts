@@ -2302,6 +2302,11 @@ const en: Record<string, string> = {
   "Landet auf der ToDo-Liste und erledigt sich, sobald die Person einen zweiten Key bekommt.": "Goes onto the to-do list and is resolved as soon as the person gets a second key.",
   "Konto in Entra deaktiviert oder gelöscht, der Key gilt aber noch als ausgegeben. Dann Key zurückholen, zurücksetzen oder ausmustern.": "Account disabled or deleted in Entra, but the key is still recorded as issued. Then get the key back, reset it or retire it.",
   "Der Key ist bei uns gesperrt bzw. ausgemustert, in Entra ist sein Passkey aber noch angemeldet und funktioniert.": "The key is locked or retired here, but its passkey is still registered in Entra and works.",
+  // demo.tsx
+  "Demo": "Demo",
+  "mit erfundenen Beispieldaten. Keine Verbindung zu Microsoft Entra, es werden keine Mails verschickt.": "with made-up sample data. No connection to Microsoft Entra, no mails are sent.",
+  "Demo-Modus:": "Demo mode:",
+  "Diese Installation läuft mit erfundenen Beispieldaten. Wählen Sie eine Rolle, um sich ohne Passwort anzumelden.": "This installation runs with made-up sample data. Choose a role to sign in without a password.",
 };
 
 export default en;

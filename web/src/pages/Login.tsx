@@ -7,6 +7,7 @@ import { Icon } from '../icons';
 import { getPasskey, passkeyError, passkeysSupported } from '../webauthn';
 import { tr } from '../i18n';
 import { LanguageToggle } from '../language';
+import { DemoLogin } from '../demo';
 
 const errorTexts: Record<string, string> = {
   not_registered: tr("Ihr Konto ist für diese Plattform nicht freigeschaltet oder deaktiviert. Bitte wenden Sie sich an einen Owner."),
@@ -33,7 +34,7 @@ function safeReturnUrl(value: string | null): string {
   }
 }
 
-type Methods = { entraSso: boolean; passkey: boolean; emergency: boolean; recovery?: boolean; development?: boolean };
+type Methods = { entraSso: boolean; passkey: boolean; emergency: boolean; recovery?: boolean; development?: boolean; demo?: boolean };
 
 const amrLabels: Record<string, string> = {
   pwd: tr("Passwort"), mfa: tr("Multi-Faktor"), otp: tr("Einmalcode"), sms: 'SMS', tel: tr("Anruf"), rsa: tr("Windows Hello oder Zertifikat"),
@@ -113,14 +114,15 @@ export default function LoginPage({ setupComplete }: { setupComplete: boolean })
         <h1>{tr("Anmelden")}</h1>
         {!setupComplete && <div className="alert warn">{tr("Die Einrichtung ist noch nicht abgeschlossen.")} <a href="/setup">{tr("Zur Einrichtung")}</a></div>}
         {err && <ErrorBox error={(errorTexts[err] ?? decodeURIComponent(err)) + (err === 'not_phishing_resistant' ? amrHint(params.get('amr')) : '')} />}
-        <p className="muted">{tr("Melden Sie sich mit Ihrem Microsoft-Konto an, am besten mit YubiKey oder Passkey.")} <a href="/passkey">{tr("Was ist ein Passkey?")}</a></p>
+        {methods.demo && <DemoLogin returnUrl={returnUrl} />}
+        {!methods.demo && <p className="muted">{tr("Melden Sie sich mit Ihrem Microsoft-Konto an, am besten mit YubiKey oder Passkey.")} <a href="/passkey">{tr("Was ist ein Passkey?")}</a></p>}
         <div className="login-buttons">
           {methods.entraSso && (
             err === 'not_phishing_resistant'
               ? <a className="btn primary" href={'/auth/login?reauth=true&returnUrl=' + encodeURIComponent(returnUrl)} title={tr("Microsoft fragt Konto und Anmeldemethode neu ab")}>{tr("Erneut mit YubiKey anmelden")}</a>
               : <a className="btn primary" href={'/auth/login?returnUrl=' + encodeURIComponent(returnUrl)}>{tr("Mit Microsoft anmelden")}</a>
           )}
-          {(methods.passkey || !methods.entraSso) && passkeysSupported() && (
+          {(methods.passkey || !methods.entraSso) && !methods.demo && passkeysSupported() && (
             <button className={methods.entraSso ? '' : 'primary'} disabled={passkey.busy} onClick={passkeyLogin}>
               {passkey.busy ? tr("Schlüssel berühren …") : tr("Mit Passkey anmelden")}
             </button>

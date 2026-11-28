@@ -28,9 +28,12 @@ function printCodes(codes: string[], upn: string, org?: string) {
     <p>${escape(tr("Jeder Code gilt genau einmal und meldet Sie ohne Microsoft oder Passkey an (Anmeldeseite → „Mit Notfallcode anmelden“). Verbrauchte Codes abhaken. Bitte sicher verwahren, z. B. im Tresor, und nicht digital ablegen."))}</p>
     <ol>${rows}</ol>
     <p class="meta">${escape(tr("Erzeugt am {date}. Neue Codes machen dieses Blatt ungültig.", { date: new Date().toLocaleString(locale()) }))}</p>
-    <script>window.onload=function(){window.print()}</script>
   </body></html>`);
   w.document.close();
+  // Ohne Inline-Skript im Druckfenster: Die Content-Security-Policy erlaubt nur Skripte der Plattform.
+  w.onafterprint = () => w.close();
+  w.focus();
+  w.print();
   return true;
 }
 

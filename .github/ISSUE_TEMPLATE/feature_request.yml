@@ -1,0 +1,21 @@
+name: Feature idea / Idee
+description: Suggest an improvement or a new feature. / Verbesserung oder neue Funktion vorschlagen.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What do you want to achieve? / Was möchten Sie erreichen?
+      description: Describe the situation and the problem, not only the solution. / Situation und Problem beschreiben, nicht nur die Lösung.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Idea / Vorschlag
+      description: How could the platform help? / Wie könnte die Plattform helfen?
+  - type: textarea
+    id: context
+    attributes:
+      label: Context / Umfeld
+      description: For example number of tenants and keys, MSP or internal IT, other tools involved. / Z. B. Anzahl Tenants und Keys, Dienstleister oder interne IT, beteiligte Tools.

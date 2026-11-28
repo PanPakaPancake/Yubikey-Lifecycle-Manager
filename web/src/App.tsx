@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { DemoBanner } from './demo';
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router';
 import { anyReminder, api, type Me } from './api';
 import { AuthContext } from './auth';
@@ -177,6 +178,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         </div>
       </aside>
       <main className="main">
+        <DemoBanner />
         <div className="topbar">
           <TenantSwitcher partnerContext={partner} />
           {partner
