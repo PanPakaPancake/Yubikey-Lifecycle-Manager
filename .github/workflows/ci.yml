@@ -146,6 +146,7 @@ jobs:
   e2e-browser:
     name: "E2E: Browser-Tests"
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -210,6 +211,7 @@ jobs:
     name: "E2E: Windows-Agent"
     needs: agent
     runs-on: windows-latest
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -230,6 +232,7 @@ jobs:
           (Get-Service $svc.Name).Status
       - name: Agent-Rauchtest
         shell: pwsh
+        timeout-minutes: 15
         run: ./tests/agent-smoke/Test-AgentSmoke.ps1 -Msi (Get-ChildItem installer/out/*.msi | Select-Object -First 1).FullName
       - uses: actions/upload-artifact@v4
         if: always()

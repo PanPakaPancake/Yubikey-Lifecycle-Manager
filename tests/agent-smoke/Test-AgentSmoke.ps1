@@ -38,7 +38,7 @@ $started = Get-Date
 $hostProcess = $null
 $certThumbprint = $null
 
-function Step([string]$text) { Write-Host "`n== $text" -ForegroundColor Cyan }
+function Step([string]$text) { Write-Host "`n== $(Get-Date -Format HH:mm:ss) $text" -ForegroundColor Cyan }
 function Fail([string]$text) { throw "FEHLER: $text" }
 
 function Wait-Until([scriptblock]$condition, [int]$seconds, [string]$what) {
@@ -48,6 +48,17 @@ function Wait-Until([scriptblock]$condition, [int]$seconds, [string]$what) {
         Start-Sleep -Milliseconds 500
     }
     Fail "Zeitüberschreitung: $what"
+}
+
+# Start-Process -Wait wartet in PowerShell 7 auf alle Kindprozesse (z. B. vom Installer gestartete Programme)
+# und kann so ewig hängen. Deshalb nur auf den Prozess selbst warten, mit Zeitlimit.
+function Invoke-Exe([string]$file, [string[]]$arguments, [int]$seconds) {
+    $p = Start-Process $file -ArgumentList $arguments -PassThru
+    if (-not $p.WaitForExit($seconds * 1000)) {
+        Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+        Fail "$file $($arguments -join ' ') läuft länger als $seconds s"
+    }
+    return $p.ExitCode
 }
 
 function Assert-TrayAlive {
@@ -63,8 +74,8 @@ function Get-CrashEvents {
 
 try {
     Step 'MSI installieren'
-    $p = Start-Process msiexec.exe -ArgumentList '/i', "`"$Msi`"", '/qn', '/norestart', '/l*v', "`"$LogDir\install.log`"" -Wait -PassThru
-    if ($p.ExitCode -ne 0) { Fail "msiexec /i beendet mit $($p.ExitCode) (siehe install.log)" }
+    $exit = Invoke-Exe msiexec.exe @('/i', "`"$Msi`"", '/qn', '/norestart', '/l*v', "`"$LogDir\install.log`"") 300
+    if ($exit -ne 0) { Fail "msiexec /i beendet mit $exit (siehe install.log)" }
     foreach ($exe in 'YlmAgent.exe', 'YlmTray.exe') {
         if (-not (Test-Path (Join-Path $agentDir $exe))) { Fail "$exe fehlt in $agentDir" }
     }
@@ -99,13 +110,13 @@ try {
     $store = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'LocalMachine')
     $store.Open('ReadWrite'); $store.Add($cert); $store.Close()
     $serverUrl = "https://localhost:$HttpsPort"
-    $null = Invoke-WebRequest "$serverUrl/healthz" -UseBasicParsing   # Zertifikat wird vertraut
+    $null = Invoke-WebRequest "$serverUrl/healthz" -UseBasicParsing -TimeoutSec 30   # Zertifikat wird vertraut
 
     Step 'Kopplungscode holen'
     $session = $null
     $null = Invoke-WebRequest "$base/auth/dev-login" -Method Post -ContentType 'application/json' -Headers @{ 'X-YLM-CSRF' = '1' } `
-        -Body '{"upn":"owner@muster-it.example","role":"Owner"}' -SessionVariable session -UseBasicParsing
-    $code = (Invoke-RestMethod "$base/api/agents/pairing-codes" -Method Post -Headers @{ 'X-YLM-CSRF' = '1' } -WebSession $session).code
+        -Body '{"upn":"owner@muster-it.example","role":"Owner"}' -SessionVariable session -UseBasicParsing -TimeoutSec 30
+    $code = (Invoke-RestMethod "$base/api/agents/pairing-codes" -Method Post -Headers @{ 'X-YLM-CSRF' = '1' } -WebSession $session -TimeoutSec 30).code
     if (-not $code) { Fail 'Kein Kopplungscode erhalten' }
 
     Step 'Dienst über die Named Pipe koppeln (wie die Tray-App)'
@@ -133,10 +144,10 @@ try {
 
     Step 'Agent meldet sich am Server'
     Wait-Until {
-        $agents = Invoke-RestMethod "$base/api/agents" -WebSession $session
+        $agents = Invoke-RestMethod "$base/api/agents" -WebSession $session -TimeoutSec 30
         @($agents | Where-Object { $_.online }).Count -ge 1
     } 60 'Agent ist nach der Kopplung nicht online'
-    $agent = @(Invoke-RestMethod "$base/api/agents" -WebSession $session | Where-Object { $_.online })[0]
+    $agent = @(Invoke-RestMethod "$base/api/agents" -WebSession $session -TimeoutSec 30 | Where-Object { $_.online })[0]
     Write-Host "Agent online: $($agent.machineName), Version $($agent.agentVersion)"
 
     Step 'Nach dem Koppeln: Tray-App läuft, keine Abstürze'
@@ -151,8 +162,8 @@ try {
 
     Step 'MSI deinstallieren'
     Get-Process YlmTray -ErrorAction SilentlyContinue | Stop-Process -Force
-    $p = Start-Process msiexec.exe -ArgumentList '/x', "`"$Msi`"", '/qn', '/norestart', '/l*v', "`"$LogDir\uninstall.log`"" -Wait -PassThru
-    if ($p.ExitCode -ne 0) { Fail "msiexec /x beendet mit $($p.ExitCode)" }
+    $exit = Invoke-Exe msiexec.exe @('/x', "`"$Msi`"", '/qn', '/norestart', '/l*v', "`"$LogDir\uninstall.log`"") 300
+    if ($exit -ne 0) { Fail "msiexec /x beendet mit $exit (siehe uninstall.log)" }
     if (Get-Service $serviceName -ErrorAction SilentlyContinue) { Fail 'Dienst ist nach der Deinstallation noch vorhanden' }
 
     Write-Host "`nAgent-Rauchtest bestanden." -ForegroundColor Green
@@ -163,6 +174,11 @@ finally {
     Get-WinEvent -FilterHashtable @{ LogName = 'Application'; StartTime = $started } -ErrorAction SilentlyContinue |
         Where-Object { $_.Message -match 'Ylm|Yubikey' } | Format-List TimeCreated, ProviderName, Id, Message |
         Out-File "$LogDir\eventlog.txt" -Width 300
+    # Ende der Protokolle direkt ins CI-Log (Installationsprotokolle sind zu lang, die liegen im Artefakt).
+    Get-ChildItem $LogDir -File -ErrorAction SilentlyContinue | Where-Object Name -notmatch 'install' | ForEach-Object {
+        Write-Host "`n--- $($_.Name) (Ende)"
+        Get-Content $_.FullName -Tail 40 -ErrorAction SilentlyContinue | ForEach-Object { Write-Host $_ }
+    }
     if ($hostProcess -and -not $hostProcess.HasExited) { Stop-Process -Id $hostProcess.Id -Force -ErrorAction SilentlyContinue }
     Get-Process Ylm.E2E.Host -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if ($certThumbprint) {
