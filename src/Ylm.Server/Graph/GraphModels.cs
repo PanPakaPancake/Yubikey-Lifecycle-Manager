@@ -12,7 +12,8 @@ public sealed record GraphUser(string Id, string UserPrincipalName, string? Disp
 
 public sealed record GraphGroup(string Id, string DisplayName);
 
-public sealed record GraphFido2Method(string Id, string? DisplayName, DateTimeOffset? CreatedDateTime, Guid? AaGuid, string? Model);
+/// <param name="LastUsedDateTime">Letzte Anmeldung mit dem Passkey; nur vom beta-Endpunkt und nicht in jedem Tenant gefüllt.</param>
+public sealed record GraphFido2Method(string Id, string? DisplayName, DateTimeOffset? CreatedDateTime, Guid? AaGuid, string? Model, DateTimeOffset? LastUsedDateTime = null);
 
 public sealed record GraphOrganization(string Id, string DisplayName, string? DefaultDomain);
 

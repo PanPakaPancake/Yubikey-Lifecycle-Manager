@@ -1,6 +1,6 @@
 # Testanleitung V1: Praxistest mit echtem Tenant und echtem YubiKey
 
-Diese Anleitung führt Schritt für Schritt durch den ersten echten Test von V1. Bisher ist V1 nur gegen einen simulierten YubiKey und ein simuliertes Microsoft Graph getestet. Jetzt prüfen wir:
+Diese Anleitung führt Schritt für Schritt durch einen kompletten Praxistest mit einem Test-Tenant und echten YubiKeys, z. B. vor dem ersten produktiven Einsatz. Geprüft werden:
 
 1. Server per Docker Compose starten
 2. Einrichtung im Web-Assistenten: Anmeldung bei Microsoft, die Plattform legt ihre App-Registrierung selbst an
@@ -26,7 +26,6 @@ Jeder Schritt hat eine Liste **Erwartet**. Weicht etwas ab, bitte am Abschnitt [
 | **Windows-Admin-PC** (Windows 10/11, x64) mit lokalen Adminrechten | Hier laufen Agent und Tray-App. |
 | **Docker Desktop** auf dem Admin-PC (Variante A) oder ein Linux-Server mit Docker (Variante B) | siehe 1. |
 | Nur für den Ausweichweg: **PowerShell 7** (`pwsh`) und das Modul **Microsoft.Graph** | `Install-Module Microsoft.Graph -Scope CurrentUser` |
-| **Git** | zum Klonen des Repos |
 | **Mindestens ein YubiKey 5** (ideal: einer mit Firmware **≥ 5.7** und einer mit **< 5.7**) | Achtung: Der Test kann den Key **zurücksetzen**. Keinen Key verwenden, auf dem wichtige Passkeys liegen. |
 | Optional: **Yubico Authenticator** oder `ykman` | Zum Gegenprüfen von Seriennummer und Firmware. Während des Wizards bitte **schließen**, damit er den Key nicht blockiert. |
 
@@ -51,11 +50,11 @@ Getestet wird das neueste Release. Die Version steht nach der Installation unter
 
 | | Variante A: alles auf dem Admin-PC (**empfohlen für den ersten Test**) | Variante B: Linux-Server/VPS mit Domain |
 |---|---|---|
-| Adresse | `http://localhost:8080` | `https://ylm.<deine-domain>` |
-| Aufwand | gering, kein DNS, kein Zertifikat | DNS-Eintrag, Ports 80/443; HTTPS richtet das Skript mit Caddy ein |
+| Adresse | `https://localhost` | `https://ylm.<deine-domain>` |
+| Aufwand | gering, kein DNS; das Zertifikat erzeugt das Skript selbst | DNS-Eintrag, Ports 80/443; HTTPS richtet das Skript mit Caddy ein |
 | Entspricht Produktion | nein | ja |
 
-Die Plattform erlaubt `http://` nur für `localhost`. Entra akzeptiert `http://localhost` als Umleitungs-URI, der Agent ebenfalls. Für andere Adressen ist HTTPS Pflicht. Alle Varianten sind in [BETRIEB.md](BETRIEB.md#1-server-installieren) beschrieben.
+Variante A läuft unter `https://localhost` mit einer internen Zertifizierungsstelle; deren Stammzertifikat trägt das Skript nach einer UAC-Abfrage in Windows ein. Port 8080 ist nur der interne Server-Port ohne HTTPS und nicht die Adresse für Browser und Agent. Für andere Adressen als `localhost` ist HTTPS Pflicht. Alle Varianten sind in [BETRIEB.md](BETRIEB.md#1-server-installieren) beschrieben.
 
 ### 1.1 Installationsskript ausführen
 
@@ -76,7 +75,8 @@ Variante 1 wählen und die Domain eingeben.
 **Erwartet:**
 
 - Das Skript legt den Installationsordner an (A: `%USERPROFILE%\YubikeyLifecycleManager`, B: `/opt/ylm`) und darin eine `.env` mit Zufallsgeheimnissen.
-- Es lädt die Images, startet `db`, `server`, `backup`, `updater` (B zusätzlich `caddy`) und meldet „Fertig“ mit Adresse und **Setup-Token**. Token kopieren.
+- Es lädt die Images, startet `db`, `server`, `backup`, `updater` und `caddy` und meldet „Fertig“ mit Adresse, **Setup-Token** und Passphrase der Sicherung. Token kopieren, Passphrase in den Passwortmanager übernehmen.
+- A: Eine UAC-Abfrage zum Eintragen des Stammzertifikats erscheint (bestätigen), danach öffnet sich `https://localhost/setup` ohne Zertifikatswarnung.
 - `docker compose ps` im Installationsordner zeigt `db` und nach ca. 30 Sekunden auch `server` als `healthy`.
 - B: `https://ylm.<deine-domain>/healthz` antwortet mit `{"status":"ok"}` und gültigem Zertifikat.
 
@@ -101,16 +101,16 @@ Die Plattform legt ihre App-Registrierung selbst an. Du meldest dich dazu im Ass
 
 ### 2.1 Setup-Assistent öffnen
 
-Browser (Edge oder Chrome): `http://localhost:8080/setup` (Variante B: `https://ylm.example.com/setup`).
+Browser (Edge oder Chrome): `https://localhost/setup` (Variante B: `https://ylm.example.com/setup`).
 
 1. **Setup-Token** einfügen → Weiter.
-2. **Grunddaten:** Organisation (z. B. „Test“) und öffentliche Adresse (`http://localhost:8080` bzw. deine HTTPS-Adresse) → Speichern und weiter.
+2. **Grunddaten:** Organisation (z. B. „Test“) und öffentliche Adresse (`https://localhost` bzw. deine Server-Adresse) → Speichern und weiter.
 
 ### 2.2 Bei Microsoft anmelden
 
 1. **Bei Microsoft anmelden** klicken. Es öffnet sich die normale Microsoft-Anmeldung in einem kleinen Fenster.
 2. Mit dem **Global Admin des Test-Tenants** anmelden. Microsoft fragt, ob du dich bei „Microsoft Graph Command Line Tools“ anmelden willst, und zeigt die Berechtigungen `Application.ReadWrite.All`, `AppRoleAssignment.ReadWrite.All`, `DelegatedPermissionGrant.ReadWrite.All` und `User.Read`. Bestätigen.
-3. Läuft die Plattform unter `http://localhost:8080`, meldet das Fenster „Angemeldet“ und schließt sich. Auf einem Server zeigt das Fenster „Seite nicht erreichbar“ unter `http://localhost/?code=…`: die komplette Adresse aus der Adresszeile kopieren, im Assistenten einfügen und **Anmeldung abschließen** klicken.
+3. Läuft die Plattform auf demselben PC (Variante A), meldet das Fenster in der Regel „Angemeldet“ und schließt sich. Auf einem Server zeigt das Fenster „Seite nicht erreichbar“ unter `http://localhost/?code=…`: die komplette Adresse aus der Adresszeile kopieren, im Assistenten einfügen und **Anmeldung abschließen** klicken.
 
 **Erwartet:**
 
@@ -238,15 +238,13 @@ Auf der Tenant-Seite **Jetzt synchronisieren**.
 
 ### 4.1 MSI besorgen
 
-Das MSI wird in der CI gebaut:
-
-GitHub → Actions → Workflow **CI** → letzter grüner Lauf auf `main` (für `e877d22`: [Lauf #7](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/actions/runs/43820908735)) → unten **Artifacts** → `agent-msi` herunterladen und entpacken. Darin liegt `YubikeyLifecycleManager-Agent.msi`.
+Plattform → **Mein Agent** → **Agent herunterladen**. Das MSI gehört zur installierten Server-Version. Alternativ `YubikeyLifecycleManager-Agent.msi` von der [Release-Seite](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/releases/latest).
 
 Alternativ selbst bauen (Windows, .NET 10 SDK): `pwsh installer/build.ps1`, Ergebnis in `installer\out\`.
 
 ### 4.2 Installieren
 
-Doppelklick auf das MSI. Solange die Signierung nicht eingerichtet ist (docs/SIGNIERUNG.md), ist das MSI nicht signiert; SmartScreen warnt dann („Weitere Informationen“ → „Trotzdem ausführen“). Die UAC-Abfrage bestätigen. Im letzten Dialog „Tray-App jetzt starten“ angehakt lassen.
+Doppelklick auf das MSI. Solange die Signierung nicht eingerichtet ist ([SIGNIERUNG.md](SIGNIERUNG.md)), ist das MSI nicht signiert; SmartScreen warnt dann („Weitere Informationen“ → „Trotzdem ausführen“). Die UAC-Abfrage bestätigen. Im letzten Dialog „Tray-App jetzt starten“ angehakt lassen.
 
 Wenn die Installation scheitert, bitte mit Protokoll wiederholen:
 
@@ -277,7 +275,7 @@ Get-ChildItem C:\ProgramData\YubikeyLifecycleManager\Agent\logs
   ```powershell
   Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Run | Select-Object YubikeyLifecycleManagerTray
   ```
-  Ab 0.5 endet der Wert mit `--autostart` (damit greift „Mit Windows starten“ in den Tray-Einstellungen).
+  Der Wert endet mit `--autostart` (damit greift „Mit Windows starten“ in den Tray-Einstellungen).
 
 ### 4.4 Tray-App prüfen (vor dem Koppeln)
 
@@ -292,15 +290,15 @@ Rechtsklick auf das Tray-Symbol.
 
 ### 4.5 Koppeln
 
-1. Plattform → **Agent** → **Kopplungscode erzeugen**. Der Code ist 10 Minuten gültig und nur einmal verwendbar.
-2. Tray → **Koppeln …** → Server-Adresse (`http://localhost:8080` bzw. `https://ylm.example.com`) und Code eingeben → Koppeln.
+1. Plattform → **Mein Agent** → **Kopplungscode erzeugen**. Der Code ist 10 Minuten gültig und nur einmal verwendbar.
+2. Tray → **Koppeln …** → Server-Adresse und Code eingeben → Koppeln. Die Adresse ist genau die aus der Adresszeile des Browsers: `https://localhost` (ohne Port) bzw. `https://ylm.example.com`.
 
 **Erwartet:**
 
 - Im Dialog erscheint eine Erfolgsmeldung.
 - Tray-Menü zeigt **„Verbunden – <PC-Name>“**.
 - Die Agent-Seite der Plattform listet den PC als verbunden.
-- In `C:\ProgramData\YubikeyLifecycleManager\Agent\agent.json` steht die Server-Adresse; das Token ist verschlüsselt (kein Klartext).
+- In `C:\ProgramData\YubikeyLifecycleManager\Agent\agent.json` steht die Server-Adresse. Die Datei ist nur für SYSTEM und Administratoren lesbar; das Token ist dort mit DPAPI verschlüsselt, sofern Windows das zulässt.
 - Im Audit-Log steht die Kopplung (Aktion `agent.paired`).
 
 ### 4.6 Neustart-Test
@@ -311,40 +309,32 @@ PC neu starten und neu anmelden.
 
 ---
 
-### 4.7 Agent-Einstellungen (ab 0.5)
+### 4.7 Agent-Einstellungen
 
 Tray → Rechtsklick → **Einstellungen …**
 
 | Test | Erwartet |
 |---|---|
-| Fenster öffnen | Abschnitte Allgemein, Updates, Verbindung. „Installiert: 0.5.x“, „Zuletzt geprüft“ erscheint spätestens 2 Minuten nach dem Dienststart. |
+| Fenster öffnen | Abschnitte Allgemein, Updates, Verbindung. „Installiert: {Version}“, „Zuletzt geprüft“ erscheint spätestens 2 Minuten nach dem Dienststart. |
 | „Mit Windows starten“ abwählen, abmelden, wieder anmelden | Kein Tray-Symbol. Start über das Startmenü („Yubikey Lifecycle Manager“) geht weiterhin. Wieder anhaken, abmelden/anmelden: Symbol ist da. Gespeichert unter `HKCU\Software\YubikeyLifecycleManager\Tray`, Wert `AutoStart`. |
 | „Hinweise anzeigen …“ abwählen, Dienst stoppen (`Stop-Service YubikeyLifecycleManagerAgent`), Key einstecken | Keine Sprechblase. Danach `Start-Service …` und wieder anhaken. |
-| „Updates automatisch installieren“ als Administrator abwählen | Meldung „Automatische Updates sind ausgeschaltet.“ Plattform → Globale Einstellungen → Version und Updates → „Alle Agents“: dein PC zeigt Auto-Update **aus**, unter **Agent** steht die Plakette „Auto-Update aus“. Wieder anhaken. |
+| „Updates automatisch installieren“ als Administrator abwählen | Meldung „Automatische Updates sind ausgeschaltet.“ Plattform → Globale Einstellungen → Version und Updates → „Alle Agents“: dein PC zeigt Auto-Update **aus**, unter **Mein Agent** steht die Plakette „Auto-Update aus“. Wieder anhaken. |
 | Als Standardbenutzer (ohne Adminrechte) anmelden und Einstellungen öffnen | Der Update-Schalter ist ausgegraut mit „Nur Administratoren dieses PCs können das ändern.“ (überspringen, wenn kein zweites Konto da ist) |
 | Plattform: **Agent-Updates** auf „Immer automatisch“, dann im Tray „Jetzt nach Updates suchen“ | Schalter im Tray ist angehakt und gesperrt: „Vom Server vorgegeben …“. Danach Vorgabe wieder auf Standard. |
-| „Jetzt nach Updates suchen“ ohne neue Version | „Aktuell (Version 0.5.x).“ Im Agent-Log eine Zeile `Update: Aktuell …` |
+| „Jetzt nach Updates suchen“ ohne neue Version | „Aktuell (Version {Version}).“ Im Agent-Log eine Zeile `Update: Aktuell …` |
 
 ### 4.8 Auto-Update in der Praxis
 
-Das Update lässt sich nur mit einer **höheren** Version testen. Vorschlag: v0.5.0 taggen, Server aktualisieren, dann v0.5.1 ohne weitere Änderungen taggen.
+Das Update lässt sich nur testen, wenn eine **höhere** Version erscheint, als der Agent hat. Am einfachsten: den Agent einer älteren Version von der [Release-Seite](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/releases) installieren und koppeln, während der Server schon die neueste Version hat. Im Folgenden steht {alt} für die Version des Agents und {neu} für die des Servers.
 
-**A) 0.4.x → 0.5.0** (dein jetziger Agent mit dem alten Update-Ablauf)
-
-1. Server auf 0.5.0 aktualisieren (Globale Einstellungen → Jetzt aktualisieren).
-2. Auf dem PC `Restart-Service YubikeyLifecycleManagerAgent`, damit der Agent nach 2 Minuten prüft (sonst bis zu 4 Stunden).
-3. **Erwartet:** Nach 2–4 Minuten zeigt die Plattform unter **Agent** Version 0.5.0. Der alte Ablauf beendet die Tray-App nicht: Steht im Tray-Menü noch die alte Version oder fehlt „Einstellungen …“, einmal ab- und wieder anmelden. Das ist nur bei diesem einen Sprung so.
-
-**B) 0.5.0 → 0.5.1** (neuer Ablauf)
-
-1. Server auf 0.5.1 aktualisieren. Plattform → **Agent**: Plakette „Update auf 0.5.1 folgt automatisch“ und der Link **Jetzt aktualisieren**.
+1. Plattform → **Mein Agent**: Plakette „Update auf {neu} folgt automatisch“ und der Link **Jetzt aktualisieren**.
 2. **Jetzt aktualisieren** klicken (oder Tray → Einstellungen → „Jetzt nach Updates suchen“).
 3. **Erwartet:**
    - Sprechblase „Agent wird aktualisiert“, das Tray-Symbol verschwindet.
-   - Nach etwa einer Minute ist das Symbol von selbst wieder da, Sprechblase „Agent aktualisiert … Version 0.5.1“.
-   - Tray → Einstellungen: „Aktualisiert von 0.5.0 auf 0.5.1 am …“. Kein Neustart des PCs nötig.
-   - Agent-Log: `Neue Agent-Version 0.5.1 verfügbar`, `Installiere Agent 0.5.1`, nach dem Neustart `Update: Aktualisiert von 0.5.0 auf 0.5.1` und `Tray-App in Sitzung N neu gestartet`.
-   - `C:\ProgramData\YubikeyLifecycleManager\Agent\updates\install-0.5.1.log` endet mit `Installation success or error status: 0` (bzw. „Erfolg- oder Fehlerstatus: 0“).
+   - Nach etwa einer Minute ist das Symbol von selbst wieder da, Sprechblase „Agent aktualisiert … Version {neu}“.
+   - Tray → Einstellungen: „Aktualisiert von {alt} auf {neu} am …“. Kein Neustart des PCs nötig.
+   - Agent-Log: `Neue Agent-Version {neu} verfügbar`, `Installiere Agent {neu}`, nach dem Neustart `Update: Aktualisiert von {alt} auf {neu}` und `Tray-App in Sitzung N neu gestartet`.
+   - `C:\ProgramData\YubikeyLifecycleManager\Agent\updates\install-{neu}.log` endet mit `Installation success or error status: 0` (bzw. „Erfolg- oder Fehlerstatus: 0“).
 4. Falls es fehlschlägt: Die Meldung steht im Tray unter Einstellungen und in der Plattform (Agent-Liste, rot). Bitte das msiexec-Protokoll und das Agent-Log mitschicken.
 
 ## 5. Echter YubiKey
@@ -673,7 +663,7 @@ Außerdem hilfreich: Commit (`git log -1 --oneline`), Version der Tray-App (steh
 | F2 | Nach der Microsoft-Anmeldung `/login?error=remote_failure` | Browser-Konsole und Server-Log schicken. Bei Variante A zusätzlich in einem anderen Browser (Edge/Chrome) testen. Notfalls auf Variante B (HTTPS) wechseln. |
 | F3 | Microsoft meldet `AADSTS50011` (Reply URL mismatch) | Die öffentliche Adresse in 2.1 weicht von der Adresse im Browser ab (z. B. `127.0.0.1` statt `localhost`, fehlender Port). Genau die Adresse aus der Einrichtung verwenden. |
 | F4 | Tray zeigt „Agent-Dienst nicht erreichbar“ | `Get-Service YubikeyLifecycleManagerAgent`; falls gestoppt, `Start-Service …` und Ereignisanzeige prüfen. |
-| F5 | Tray zeigt „Getrennt“ oder „Nicht angemeldet“ nach dem Koppeln | Server erreichbar? (`curl.exe <adresse>/healthz`). Bei „Nicht angemeldet“ wurde der Agent in der Oberfläche entkoppelt: neu koppeln. |
+| F5 | Tray zeigt „Getrennt“ oder „Kopplung ungültig – neu koppeln“ nach dem Koppeln | Server erreichbar? (`curl.exe <adresse>/healthz`). Bei „Kopplung ungültig“ wurde der Agent in der Oberfläche entfernt oder die Plattform neu installiert: neu koppeln. |
 | F6 | Key wird erkannt, aber ohne FIDO-Infos / PIN setzen scheitert | Agent-Log schicken. Ursache meist fehlende Rechte für FIDO über HID; der Dienst muss als LocalSystem laufen (4.3). |
 | F7 | Wizard scheitert bei Schritt 4 oder 5 (Passkey erzeugen / in Entra registrieren) | Das ist der spannendste Teil (Beta-Schnittstelle `fido2Methods/creationOptions`). Server-Log **und** Agent-Log aus demselben Zeitraum schicken. Der Key hat dann schon eine PIN; für den nächsten Versuch im Wizard den Werksreset ankreuzen. |
 | F8 | „Die FIDO2-Richtlinie des Tenants lässt diesen Key-Typ (AAGUID …) nicht zu“ | AAGUID notieren und melden (die AAGUID-Liste der Plattform muss evtl. ergänzt werden), dann Tenant-Prüfungen beheben. |
