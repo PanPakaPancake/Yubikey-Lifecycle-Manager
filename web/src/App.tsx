@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { DemoBanner } from './demo';
 import { Link, NavLink, Navigate, Route, Routes, useLocation, useParams } from 'react-router';
-import { api, type Me } from './api';
+import { anyReminder, api, type Me } from './api';
 import { AuthContext } from './auth';
 import { Empty, PageHeader, Spinner, useApi } from './ui';
 import { Icon, type IconName } from './icons';
@@ -15,6 +15,7 @@ import AccountPage from './pages/Account';
 import DashboardPage from './pages/Dashboard';
 import KeysPage from './pages/Keys';
 import AdvisoriesPage from './pages/Advisories';
+import RemindersPage from './pages/Reminders';
 import KeyDetailPage from './pages/KeyDetail';
 import WizardPage from './pages/Wizard';
 import BatchesPage, { NewBatchPage } from './pages/Batches';
@@ -99,6 +100,8 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   const { tenant, tenants } = useTenant();
   // Freigaben nur, wenn ein Tenant die Vier-Augen-Freigabe nutzt; offene Anträge verlinkt sonst der Handlungsbedarf auf der Übersicht.
   const fourEyes = tenants.some((t) => t.requireBreakglassApproval);
+  // Erinnerungen sind optional: der Menüpunkt erscheint erst, wenn ein Tenant sie eingeschaltet hat.
+  const reminders = tenants.some((t) => anyReminder(t.reminders));
   const partner = isPartnerPath(location.pathname);
   const [menuOpen, setMenuOpen] = useState(false);
   // Close the mobile menu on every navigation.
@@ -128,6 +131,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           {item('/', 'home', 'Übersicht', true)}
           {item('/keys', 'key', 'Inventar')}
           {item('/sicherheitshinweise', 'shield', 'Sicherheitshinweise')}
+          {reminders && item('/erinnerungen', 'bell', 'Erinnerungen')}
           {can('ReadReports') && item('/rollout', 'target', 'Rollout Übersicht')}
           {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" /><span className="nav-label">Registrieren</span></NavLink>}
           {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
@@ -189,6 +193,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/" element={<DashboardPage />} />
           <Route path="/keys" element={<KeysPage />} />
           <Route path="/sicherheitshinweise" element={<AdvisoriesPage />} />
+          <Route path="/erinnerungen" element={<RemindersPage />} />
           <Route path="/rollout" element={<RolloutPage />} />
           <Route path="/assignments" element={<ToPeopleView />} />
           <Route path="/keys/identify" element={<IdentifyPage />} />

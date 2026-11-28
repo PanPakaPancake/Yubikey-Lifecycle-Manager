@@ -447,6 +447,9 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<DateTimeOffset?>("LastSeenInSyncAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTimeOffset?>("LastUsedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<Guid?>("ProfileId")
                         .HasColumnType("uuid");
 
@@ -470,6 +473,9 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
+
+                    b.Property<bool?>("UserAccountEnabled")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("UserDisplayName")
                         .HasColumnType("text");
@@ -970,6 +976,46 @@ namespace Ylm.Server.Data.Migrations
                     b.ToTable("registration_todos", (string)null);
                 });
 
+            modelBuilder.Entity("Ylm.Server.Data.ReminderState", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("DismissNote")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("DismissedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DismissedByName")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("FirstSeenAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("TodoId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Kind", "Subject")
+                        .IsUnique();
+
+                    b.ToTable("reminder_states", (string)null);
+                });
+
             modelBuilder.Entity("Ylm.Server.Data.ReportSchedule", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1125,6 +1171,21 @@ namespace Ylm.Server.Data.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<bool>("RemindLeavers")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RemindNoSpareKey")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RemindRetiredWithPasskey")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("RemindUnusedKeys")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("ReminderCreateTodos")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("RequireBreakglassApproval")
                         .HasColumnType("boolean");
 
@@ -1149,6 +1210,11 @@ namespace Ylm.Server.Data.Migrations
 
                     b.Property<int?>("TargetUserCount")
                         .HasColumnType("integer");
+
+                    b.Property<int>("UnusedKeyDays")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(180);
 
                     b.HasKey("Id");
 
@@ -1540,6 +1606,15 @@ namespace Ylm.Server.Data.Migrations
                 });
 
             modelBuilder.Entity("Ylm.Server.Data.RegistrationTodo", b =>
+                {
+                    b.HasOne("Ylm.Server.Data.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Ylm.Server.Data.ReminderState", b =>
                 {
                     b.HasOne("Ylm.Server.Data.Tenant", null)
                         .WithMany()

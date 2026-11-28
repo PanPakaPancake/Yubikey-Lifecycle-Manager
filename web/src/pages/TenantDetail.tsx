@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
-import { api, fieldTypes, fmtDate, keyFromLabel, type CustomField, type GroupRef, type Profile, type ResolvedField, type Tenant } from '../api';
+import { api, fieldTypes, fmtDate, keyFromLabel, type CustomField, type GroupRef, type Profile, type ReminderSettings, type ResolvedField, type Tenant } from '../api';
 import { useCan } from '../auth';
 import { Badge, Card, download, ErrorBox, Field, GroupChips, GroupSearch, Info, Modal, OriginBadge, PageHeader, Spinner, useAction, useApi } from '../ui';
 import { useToast } from '../feedback';
@@ -122,6 +122,7 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const [fourEyesRemoval, setFourEyesRemoval] = useState(tenant.requireBreakglassRemovalApproval ?? true);
   const [protectAdmins, setProtectAdmins] = useState(tenant.protectAdmins ?? true);
   const [protectedGroups, setProtectedGroups] = useState<GroupRef[]>(tenant.protectedGroups ?? []);
+  const [reminders, setReminders] = useState<ReminderSettings>(tenant.reminders ?? { unusedKeys: false, unusedKeyDays: 180, noSpareKey: false, leavers: false, retiredWithPasskey: false, createTodos: false });
   const { busy, error, run } = useAction();
   const [saved, setSaved] = useState(false);
   const toast = useToast();
@@ -131,7 +132,7 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
   const used = [...include, ...exclude].map((g) => g.id);
 
   const save = () => run(async () => {
-    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude, requireBreakglassApproval: fourEyes, requireBreakglassRemovalApproval: fourEyesRemoval,
+    onSaved(await api.patch<Tenant>(`/api/tenants/${tenant.id}`, { displayName: name, syncIntervalMinutes: interval, targetIncludeGroups: include, targetExcludeGroups: exclude, requireBreakglassApproval: fourEyes, requireBreakglassRemovalApproval: fourEyesRemoval, reminders,
       ...(protectionEditable ? { protectAdmins, protectedGroups } : {}) }));
     setSaved(true);
     toast.ok('Einstellungen gespeichert.');
@@ -174,9 +175,39 @@ function SettingsCard({ tenant, onSaved }: { tenant: Tenant; onSaved: (t: Tenant
         {protectionEditable && <GroupSearch tenantId={tenant.id} exclude={protectedGroups.map((g) => g.id)} placeholder="z. B. Breakglass, Admins, Geschäftsführung" onPick={(g) => { setProtectedGroups([...protectedGroups, g]); changed(); }} />}
         {editable && !protectionEditable && <p className="field-hint" style={{ margin: '6px 0 0' }}>Ändern darf das nur, wer „Geschützte Konten bearbeiten“ hat.</p>}
       </div>
+      <ReminderFields value={reminders} editable={editable} onChange={(r) => { setReminders(r); changed(); }} />
       <ErrorBox error={error} />
       {editable && <button className="primary" disabled={busy} onClick={save}>{saved ? 'Gespeichert' : 'Speichern'}</button>}
     </Card>
+  );
+}
+
+/** Optionale Lebenszyklus-Erinnerungen: jede einzeln, alle standardmäßig aus. */
+function ReminderFields({ value, editable, onChange }: { value: ReminderSettings; editable: boolean; onChange: (r: ReminderSettings) => void }) {
+  const set = (patch: Partial<ReminderSettings>) => onChange({ ...value, ...patch });
+  const row = (key: 'unusedKeys' | 'noSpareKey' | 'leavers' | 'retiredWithPasskey', label: string, hint: string, extra?: ReactNode) => (
+    <label className="check" style={{ marginBottom: 8 }}>
+      <input type="checkbox" checked={value[key]} disabled={!editable} onChange={(e) => set({ [key]: e.target.checked })} />
+      <span>{label}{extra}<br /><span className="small muted">{hint}</span></span>
+    </label>
+  );
+  return (
+    <div className="field-group" id="erinnerungen">
+      <span className="field-label">Lebenszyklus-Erinnerungen (optional)</span>
+      <p className="field-hint" style={{ margin: '0 0 6px' }}>Eingeschaltete Erinnerungen erscheinen unter „Handlungsbedarf“ und auf der Seite <Link to="/erinnerungen">Erinnerungen</Link>. Neue Fälle meldet die Plattform einmal als Ereignis, das sich unter Benachrichtigungen als Webhook oder Mail-Alarm abonnieren lässt. Geprüft wird nach jeder Synchronisation.</p>
+      {row('unusedKeys', 'Keys lange nicht benutzt', 'Letzte Anmeldung mit dem Passkey laut Entra. Breakglass-Keys zählen nicht mit. Liefert Entra für einen Key kein Nutzungsdatum, wird er nicht gemeldet.',
+        value.unusedKeys && <> seit mehr als <input type="number" min={30} max={730} value={value.unusedKeyDays} disabled={!editable} style={{ width: 80, display: 'inline-block', margin: '0 4px' }}
+          onChange={(e) => set({ unusedKeyDays: Number(e.target.value) })} /> Tagen</>)}
+      {row('noSpareKey', 'Personen ohne Ersatz-Key', 'Personen mit genau einem persönlichen Key. Fällt er aus, kommt die Person nur noch mit einem befristeten Zugriffspass (TAP) hinein.')}
+      {value.noSpareKey && (
+        <label className="check" style={{ margin: '0 0 8px 26px' }}>
+          <input type="checkbox" checked={value.createTodos} disabled={!editable} onChange={(e) => set({ createTodos: e.target.checked })} />
+          <span>Dafür automatisch ein ToDo anlegen<br /><span className="small muted">Landet auf der ToDo-Liste und erledigt sich, sobald die Person einen zweiten Key bekommt.</span></span>
+        </label>
+      )}
+      {row('leavers', 'Ausgeschiedene Personen mit aktivem Key', 'Konto in Entra deaktiviert oder gelöscht, der Key gilt aber noch als ausgegeben. Dann Key zurückholen, zurücksetzen oder ausmustern.')}
+      {row('retiredWithPasskey', 'Gesperrte oder ausgemusterte Keys mit Passkey in Entra', 'Der Key ist bei uns gesperrt bzw. ausgemustert, in Entra ist sein Passkey aber noch angemeldet und funktioniert.')}
+    </div>
   );
 }
 

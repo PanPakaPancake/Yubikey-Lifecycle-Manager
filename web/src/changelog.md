@@ -7,6 +7,13 @@ Version als Beschreibung des GitHub-Releases (und damit als "Was ist neu" beim U
 Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:".
 -->
 
+## 0.14.0 · 2026-11-27
+- Neu: Optionale Lebenszyklus-Erinnerungen, je Tenant einzeln einschaltbar und standardmäßig aus (Tenant-Einstellungen → „Lebenszyklus-Erinnerungen“): Keys lange nicht benutzt (Schwelle einstellbar, Standard 180 Tage, letzte Nutzung laut Entra, Breakglass-Keys ausgenommen), Personen ohne Ersatz-Key, ausgeschiedene Personen mit aktivem Key (Konto in Entra deaktiviert oder gelöscht) und gesperrte oder ausgemusterte Keys, deren Passkey in Entra noch angemeldet ist.
+- Neu: Offene Erinnerungen stehen unter „Handlungsbedarf“ auf der Übersicht und auf der neuen Seite „Erinnerungen“ (Menüpunkt erscheint, sobald ein Tenant sie nutzt). Einzelne Fälle lassen sich mit Begründung ausblenden und wieder einblenden.
+- Neu: Neue Fälle meldet die Plattform einmal je Art als Ereignis. Unter Benachrichtigungen lassen sie sich als Webhook oder Mail-Alarm abonnieren (Gruppe „Erinnerungen“); die Mail listet die Betroffenen auf.
+- Neu: Für Personen ohne Ersatz-Key kann automatisch ein ToDo entstehen. Es erledigt sich, sobald die Person einen zweiten Key bekommt.
+- Neu: Lese-API GET /api/v1/reminders (Recht „Kennzahlen lesen“).
+
 ## 0.13.0 · 2026-11-27
 - Neu: Menüpunkt „Sicherheitshinweise“. Pro Yubico-Sicherheitshinweis (z. B. EUCLEAK YSA-2024-03) steht dort, wie viele Keys und Personen betroffen sind, wie Yubico ihn einstuft, ob er Passkeys betrifft und was zu tun ist. Darunter die Liste der Keys mit Person bzw. Verwahrer, Status und Tenant, ohne Tenant-Auswahl auch das Partnerlager. Export als Excel oder CSV, für alle Hinweise oder einen einzelnen.
 - Neu: Im Inventar filtert die Auswahl „Von Sicherheitshinweis betroffen“ nach Keys mit Hinweis zu Passkeys, nach irgendeinem Hinweis oder nach einem bestimmten Hinweis. „Im Inventar filtern“ auf der neuen Seite springt direkt dorthin.
