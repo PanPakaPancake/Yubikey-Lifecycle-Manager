@@ -1,0 +1,10 @@
+# Nur für die CI (Job "E2E: Browser-Tests"): Docker-Stack mit dem gerade gebauten Image und Entwicklungs-Anmeldung.
+#   docker compose -f docker-compose.yml -f tests/e2e/docker-compose.e2e.yml up -d
+# Niemals produktiv verwenden: AuthMode=Development erlaubt die Anmeldung ohne Passwort.
+services:
+  server:
+    image: ${YLM_E2E_IMAGE:-ylm-ci/server}
+    environment:
+      ASPNETCORE_ENVIRONMENT: Testing
+      Ylm__AuthMode: Development
+      Ylm__UpdateCheckEnabled: "false"

@@ -1,0 +1,15 @@
+{
+  "name": "ylm-e2e",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:docker": "playwright test --project=docker",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.10.0"
+  }
+}
