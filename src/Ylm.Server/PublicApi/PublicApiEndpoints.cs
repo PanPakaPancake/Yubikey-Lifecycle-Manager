@@ -134,6 +134,12 @@ public static class PublicApiEndpoints
             return TypedResults.Ok(await advisories.BuildAsync(tenantIds, includePartnerStock: false));
         }).WithTags("Berichte").WithSummary("Keys mit Yubico-Sicherheitshinweis").WithDescription("Alle bekannten Yubico-Sicherheitshinweise zur Key-Firmware mit den betroffenen Keys (nicht ausgemustert) und Personen. Die Bereiche hängen von Reihe und Modell ab (z. B. YubiKey Bio, FIPS)." + tenantHint).RequireScope(ApiScopes.ReportsRead);
 
+        g.MapGet("/reminders", async (ClaimsPrincipal p, string? tenant, YlmDbContext db, ReminderService reminders) =>
+        {
+            var tenantIds = await ScopeAsync(p, db, tenant);
+            return TypedResults.Ok(await reminders.BuildAsync(tenantIds));
+        }).WithTags("Berichte").WithSummary("Lebenszyklus-Erinnerungen").WithDescription("Offene Erinnerungen der Tenants, die sie eingeschaltet haben: Keys lange nicht benutzt (UnusedKey), Personen ohne Ersatz-Key (NoSpareKey), ausgeschiedene Personen mit aktivem Key (Leaver), gesperrte oder ausgemusterte Keys mit Passkey in Entra (RetiredWithPasskey). Ausgeblendete Erinnerungen fehlen." + tenantHint).RequireScope(ApiScopes.ReportsRead);
+
         g.MapGet("/summary", async (ClaimsPrincipal p, string? tenant, DashboardService dash, YlmDbContext db) =>
         {
             var tenantIds = await ScopeAsync(p, db, tenant);

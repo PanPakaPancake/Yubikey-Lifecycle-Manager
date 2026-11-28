@@ -11,7 +11,7 @@ namespace Ylm.Server.Inventory;
 public sealed record SyncResult(int UsersScanned, int Imported, int Updated, int Removed, int? TargetUsers);
 
 /// <summary>Takes over YubiKey passkeys from Entra (planning 5.1, self-registered keys without serial/firmware).</summary>
-public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactory, AuditService audit, ILogger<SyncService> logger)
+public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactory, AuditService audit, Reporting.ReminderService reminders, ILogger<SyncService> logger)
 {
     private static readonly SemaphoreSlim Gate = new(1, 1);
 
@@ -44,7 +44,8 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
             await foreach (var userId in graph.ListUserIdsWithPasskeysAsync(ct))
             {
                 users++;
-                var methods = await graph.ListFido2MethodsAsync(userId, ct);
+                // Nutzungsdatum nur, wenn die Erinnerung „Lange nicht benutzt“ es braucht (beta-Endpunkt).
+                var methods = tenant.RemindUnusedKeys ? await graph.ListFido2MethodsWithUsageAsync(userId, ct) : await graph.ListFido2MethodsAsync(userId, ct);
                 var yubi = methods.Where(m => YubicoAaguids.IsYubiKey(m.AaGuid, m.Model)).ToList();
                 if (yubi.Count == 0) continue;
                 GraphUser? user = null;
@@ -54,6 +55,7 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
                     if (byMethod.TryGetValue(m.Id, out var reg))
                     {
                         reg.LastSeenInSyncAt = now;
+                        if (m.LastUsedDateTime is { } used && used != reg.LastUsedAt) reg.LastUsedAt = used;
                         if (reg.DisplayName != m.DisplayName) { reg.DisplayName = m.DisplayName; updated++; }
                         if (reg.RemovedAt is not null) { reg.RemovedAt = null; reg.RemovedReason = null; updated++; }
                         continue;
@@ -83,6 +85,7 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
                         RegisteredAt = m.CreatedDateTime ?? now,
                         Source = KeySource.EntraSync,
                         LastSeenInSyncAt = now,
+                        LastUsedAt = m.LastUsedDateTime,
                     };
                     db.Keys.Add(key);
                     db.Registrations.Add(reg);
@@ -110,12 +113,32 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
                 }
             }
 
+            if (tenant.RemindLeavers)
+            {
+                // Ein Durchlauf über alle Benutzer statt einer Abfrage je Person.
+                var enabled = (await graph.ListDirectoryUsersAsync(ct)).ToDictionary(u => u.Id, u => u.AccountEnabled);
+                foreach (var reg in byMethod.Values.Where(r => r.RemovedAt is null))
+                {
+                    bool? state = enabled.TryGetValue(reg.EntraUserId, out var en) ? en : null;
+                    if (reg.UserAccountEnabled != state) reg.UserAccountEnabled = state;
+                }
+            }
+
             tenant.TargetUserCount = await TargetAudience.CountAsync(graph, tenant.TargetIncludeGroups, tenant.TargetExcludeGroups, ct) ?? tenant.TargetUserCount;
             tenant.LastSyncAt = now;
             tenant.LastSyncSucceeded = true;
             tenant.LastSyncMessage = $"{users} Personen mit Passkey geprüft, {imported} neu, {removed} entfernt.";
             audit.Add(actor, AuditActions.SyncCompleted, tenantId, details: new { users, imported, updated, removed });
             await db.SaveChangesAsync(ct);
+            if (tenant.AnyReminderEnabled)
+            {
+                try { await reminders.EvaluateAsync(tenant, actor, ct); }
+                catch (Exception ex) when (!ct.IsCancellationRequested)
+                {
+                    logger.LogWarning(ex, "Erinnerungen für {Tenant} konnten nicht ausgewertet werden", tenant.DisplayName);
+                    db.ChangeTracker.Clear();
+                }
+            }
             return new SyncResult(users, imported, updated, removed, tenant.TargetUserCount);
         }
         catch (Exception ex) when (ex is not ApiException && !ct.IsCancellationRequested)
@@ -195,6 +218,7 @@ public sealed class BackgroundJobs(IServiceScopeFactory scopes, IOptions<YlmOpti
             await db.CustomFieldOverrides.Where(o => o.TenantId == t.Id).ExecuteDeleteAsync(ct);
             await db.GroupProfiles.Where(a => a.TenantId == t.Id).ExecuteDeleteAsync(ct);
             await db.Brandings.Where(b => b.TenantId == t.Id).ExecuteDeleteAsync(ct);
+            await db.ReminderStates.Where(r => r.TenantId == t.Id).ExecuteDeleteAsync(ct);
             await db.Database.ExecuteSqlRawAsync("UPDATE api_keys SET \"TenantIds\" = array_remove(\"TenantIds\", {0})", [t.Id], ct);
             t.DataDeletionDueAt = null;
             audit.Add(AuditService.System, AuditActions.TenantDataDeleted, t.Id, target: t.DisplayName);

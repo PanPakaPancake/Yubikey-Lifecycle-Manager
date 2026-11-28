@@ -18,7 +18,10 @@ public static class TenantEndpoints
     public sealed record ConsentRequest(string? TenantHint);
     public sealed record FixRequest(List<string> CheckIds);
     public sealed record UpdateTenantRequest(string? DisplayName, List<GroupRef>? TargetIncludeGroups, List<GroupRef>? TargetExcludeGroups, int? SyncIntervalMinutes, bool? RequireBreakglassApproval = null,
-        bool? ProtectAdmins = null, List<GroupRef>? ProtectedGroups = null, bool? RequireBreakglassRemovalApproval = null);
+        bool? ProtectAdmins = null, List<GroupRef>? ProtectedGroups = null, bool? RequireBreakglassRemovalApproval = null, ReminderSettingsRequest? Reminders = null);
+
+    /// <summary>Lebenszyklus-Erinnerungen; fehlende Werte bleiben unverändert.</summary>
+    public sealed record ReminderSettingsRequest(bool? UnusedKeys, int? UnusedKeyDays, bool? NoSpareKey, bool? Leavers, bool? RetiredWithPasskey, bool? CreateTodos);
     public sealed record OffboardRequest(bool Confirm);
 
     private sealed record ConsentState(Guid UserId, DateTimeOffset ExpiresAt, string Nonce);
@@ -48,6 +51,11 @@ public static class TenantEndpoints
         t.RequireBreakglassRemovalApproval,
         t.ProtectAdmins,
         t.ProtectedGroups,
+        Reminders = new
+        {
+            UnusedKeys = t.RemindUnusedKeys, t.UnusedKeyDays, NoSpareKey = t.RemindNoSpareKey, Leavers = t.RemindLeavers,
+            RetiredWithPasskey = t.RemindRetiredWithPasskey, CreateTodos = t.ReminderCreateTodos,
+        },
     };
 
     private static List<GroupRef> NormalizeGroups(IEnumerable<GroupRef> groups)
@@ -148,7 +156,7 @@ public static class TenantEndpoints
             return Results.Redirect($"/tenants/{tenant.Id}?onboarded=1");
         });
 
-        g.MapPatch("/{id:guid}", async (Guid id, UpdateTenantRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
+        g.MapPatch("/{id:guid}", async (Guid id, UpdateTenantRequest body, CurrentUser cu, YlmDbContext db, AuditService audit, ReminderService reminders) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.ManageTenants);
             var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
@@ -182,6 +190,27 @@ public static class TenantEndpoints
                 if (body.ProtectAdmins is { } protectAdmins) t.ProtectAdmins = protectAdmins;
                 if (protectedGroups is not null) t.ProtectedGroups = protectedGroups;
             }
+            var remindersChanged = false;
+            if (body.Reminders is { } r)
+            {
+                if (r.UnusedKeyDays is { } days)
+                {
+                    if (days is < 30 or > 730) throw ApiException.BadRequest("invalid", "Die Schwelle für „lange nicht benutzt“ muss zwischen 30 und 730 Tagen liegen.");
+                    remindersChanged |= days != t.UnusedKeyDays;
+                    t.UnusedKeyDays = days;
+                }
+                void Set(bool? value, Func<bool> get, Action<bool> set)
+                {
+                    if (value is not { } v || v == get()) return;
+                    set(v);
+                    remindersChanged = true;
+                }
+                Set(r.UnusedKeys, () => t.RemindUnusedKeys, v => t.RemindUnusedKeys = v);
+                Set(r.NoSpareKey, () => t.RemindNoSpareKey, v => t.RemindNoSpareKey = v);
+                Set(r.Leavers, () => t.RemindLeavers, v => t.RemindLeavers = v);
+                Set(r.RetiredWithPasskey, () => t.RemindRetiredWithPasskey, v => t.RemindRetiredWithPasskey = v);
+                Set(r.CreateTodos, () => t.ReminderCreateTodos, v => t.ReminderCreateTodos = v);
+            }
             audit.Add(AuditService.User(user), AuditActions.TenantUpdated, t.Id, details: body);
             var protectionAfter = new { t.RequireBreakglassApproval, t.RequireBreakglassRemovalApproval, t.ProtectAdmins, protectedGroups = t.ProtectedGroups.Select(x => x.Name).ToList() };
             if (protectionBefore.RequireBreakglassApproval != protectionAfter.RequireBreakglassApproval
@@ -190,6 +219,9 @@ public static class TenantEndpoints
                 || !protectionBefore.protectedGroups.SequenceEqual(protectionAfter.protectedGroups))
                 audit.Add(AuditService.User(user), AuditActions.TenantProtectionChanged, t.Id, target: t.DisplayName, details: new { before = protectionBefore, after = protectionAfter });
             await db.SaveChangesAsync();
+            // Sofort auswerten, was das Inventar schon hergibt; Nutzungsdatum und Kontostatus kommen mit dem nächsten Sync.
+            if (remindersChanged && t.AnyReminderEnabled && t.Status == TenantStatus.Active)
+                await reminders.EvaluateAsync(t, AuditService.User(user));
             return Results.Ok(ToDto(t));
         });
 

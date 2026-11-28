@@ -53,6 +53,10 @@ public sealed class WebhookService(YlmDbContext db, IHttpClientFactory http, IDa
         new(AuditActions.TodoCompleted, "ToDo-Liste", "ToDo erledigt"),
         new(AuditActions.TodoCancelled, "ToDo-Liste", "ToDo zurückgezogen"),
         new(AuditActions.BatchCompleted, "Stapel", "Stapelregistrierung abgeschlossen"),
+        new(AuditActions.ReminderUnusedKeys, "Erinnerungen", "Keys lange nicht benutzt"),
+        new(AuditActions.ReminderNoSpareKey, "Erinnerungen", "Personen ohne Ersatz-Key"),
+        new(AuditActions.ReminderLeavers, "Erinnerungen", "Ausgeschiedene Personen mit aktivem Key"),
+        new(AuditActions.ReminderRetiredWithPasskey, "Erinnerungen", "Gesperrte Keys mit Passkey in Entra"),
         new(AuditActions.RecoveryCodeUsed, "Plattform", "Anmeldung mit Notfallcode"),
         new(AuditActions.HostingChanged, "Plattform", "Adresse oder Zertifikat geändert"),
         new(AuditActions.AppCertificateExpiring, "Plattform", "App-Zertifikat läuft bald ab"),
@@ -271,7 +275,21 @@ public sealed class WebhookService(YlmDbContext db, IHttpClientFactory http, IDa
             html.Append($"<tr><td style=\"color:#666\">{System.Net.WebUtility.HtmlEncode(n)}</td><td><strong>{System.Net.WebUtility.HtmlEncode(v)}</strong></td></tr>");
             text.Append($"{n}: {v}\n");
         }
-        html.Append("</table><p style=\"color:#888;font-size:12px\">Welche Ereignisse diese Mail auslösen, steht unter Integrationen → Mail-Alarme.</p>");
+        html.Append("</table>");
+        // Erinnerungen liefern eine Liste der Betroffenen (details.items).
+        if (r.TryGetProperty("details", out var det) && det.ValueKind == JsonValueKind.Object && det.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Array)
+        {
+            var lines = items.EnumerateArray().Select(i => string.Join(" · ", new[] { Str(i, "userDisplayName") ?? Str(i, "userPrincipalName"), Str(i, "serialNumber") is { } sn ? "Key " + sn : null, Str(i, "detail") }
+                .Where(x => !string.IsNullOrEmpty(x)))).Where(x => x.Length > 0).ToList();
+            if (lines.Count > 0)
+            {
+                html.Append("<ul style=\"font-family:sans-serif;font-size:14px\">");
+                foreach (var l in lines) html.Append($"<li>{System.Net.WebUtility.HtmlEncode(l)}</li>");
+                html.Append("</ul>");
+                text.Append('\n').Append(string.Join("\n", lines.Select(l => "- " + l))).Append('\n');
+            }
+        }
+        html.Append("<p style=\"color:#888;font-size:12px\">Welche Ereignisse diese Mail auslösen, steht unter Integrationen → Mail-Alarme.</p>");
         text.Append("\nWelche Ereignisse diese Mail auslösen, steht unter Integrationen → Mail-Alarme.\n");
         return new OutgoingMail(s.Recipients, subject, html.ToString(), text.ToString(), []);
     }

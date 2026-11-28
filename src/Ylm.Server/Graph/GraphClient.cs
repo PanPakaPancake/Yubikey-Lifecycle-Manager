@@ -30,6 +30,11 @@ public interface IGraphClient
     Task<IReadOnlyList<string>> CheckMemberGroupsAsync(string userId, IReadOnlyCollection<string> groupIds, CancellationToken ct = default);
     IAsyncEnumerable<string> ListUserIdsWithPasskeysAsync(CancellationToken ct = default);
     Task<IReadOnlyList<GraphFido2Method>> ListFido2MethodsAsync(string userId, CancellationToken ct = default);
+    /// <summary>
+    /// Wie <see cref="ListFido2MethodsAsync"/>, zusätzlich mit der letzten Nutzung (lastUsedDateTime, beta-Endpunkt).
+    /// Für die Erinnerung „Lange nicht benutzt“; ohne eigene Umsetzung ohne Nutzungsdatum.
+    /// </summary>
+    Task<IReadOnlyList<GraphFido2Method>> ListFido2MethodsWithUsageAsync(string userId, CancellationToken ct = default) => ListFido2MethodsAsync(userId, ct);
     Task DeleteFido2MethodAsync(string userId, string methodId, CancellationToken ct = default);
     Task<CreationOptions> GetCreationOptionsAsync(string userId, int challengeTimeoutMinutes = 5, CancellationToken ct = default);
     Task<GraphFido2Method> RegisterFido2MethodAsync(string userId, string displayName, NewFido2Credential credential, CancellationToken ct = default);
@@ -134,7 +139,8 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
     private static GraphFido2Method ToMethod(JsonElement m) => new(
         Str(m, "id")!, Str(m, "displayName"),
         DateTimeOffset.TryParse(Str(m, "createdDateTime"), out var c) ? c : null,
-        Guid.TryParse(Str(m, "aaGuid"), out var g) ? g : null, Str(m, "model"));
+        Guid.TryParse(Str(m, "aaGuid"), out var g) ? g : null, Str(m, "model"),
+        DateTimeOffset.TryParse(Str(m, "lastUsedDateTime"), out var used) ? used : null);
 
     public async Task<byte[]?> GetUserPhotoAsync(string userId, CancellationToken ct = default)
     {
@@ -459,6 +465,20 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
     {
         using var doc = await SendAsync(HttpMethod.Get, $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/fido2Methods", ct);
         return doc!.RootElement.GetProperty("value").EnumerateArray().Select(ToMethod).ToList();
+    }
+
+    public async Task<IReadOnlyList<GraphFido2Method>> ListFido2MethodsWithUsageAsync(string userId, CancellationToken ct = default)
+    {
+        try
+        {
+            using var doc = await SendAsync(HttpMethod.Get, $"{Beta}/users/{Uri.EscapeDataString(userId)}/authentication/fido2Methods", ct);
+            return doc!.RootElement.GetProperty("value").EnumerateArray().Select(ToMethod).ToList();
+        }
+        catch (GraphException ex) when (ex.StatusCode is 400 or 403 or 404 or 501)
+        {
+            // beta nicht verfügbar: ohne Nutzungsdatum weiter, der Sync selbst soll nicht scheitern.
+            return await ListFido2MethodsAsync(userId, ct);
+        }
     }
 
     public async Task DeleteFido2MethodAsync(string userId, string methodId, CancellationToken ct = default)
