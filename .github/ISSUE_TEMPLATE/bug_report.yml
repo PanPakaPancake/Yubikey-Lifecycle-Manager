@@ -1,0 +1,64 @@
+name: Bug report / Fehler melden
+description: Something does not work as expected. / Etwas funktioniert nicht wie erwartet.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Security problem?** Please do not report it here, see [SECURITY.md](https://github.com/PanPakaPancake/Yubikey-Lifecycle-Manager/blob/main/SECURITY.md).
+        **Sicherheitslücke?** Bitte nicht hier melden, siehe SECURITY.md.
+
+        Please remove tenant IDs, names, e-mail addresses and other personal data from logs and screenshots.
+        Bitte Tenant-IDs, Namen, E-Mail-Adressen und andere personenbezogene Daten aus Logs und Screenshots entfernen.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened? / Was ist passiert?
+      description: Including what you expected instead. / Und was stattdessen erwartet war.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / Schritte zum Nachstellen
+      placeholder: |
+        1. ...
+        2. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom left of the web UI. / Steht unten links in der Oberfläche.
+      placeholder: "0.13.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component / Komponente
+      multiple: true
+      options:
+        - Web UI / Oberfläche
+        - Server / API
+        - Agent / tray app (Windows)
+        - Installation / update / backup
+        - Demo
+        - Documentation / Doku
+  - type: dropdown
+    id: hosting
+    attributes:
+      label: Installation
+      options:
+        - Windows PC with Docker Desktop (install.ps1)
+        - Linux server (install.sh)
+        - Own reverse proxy / ZTNA
+        - Demo (docker-compose.demo.yml)
+        - Other / Sonstiges
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: "Server: docker compose logs server --tail 200. Agent: C:\\ProgramData\\YubikeyLifecycleManager\\Agent\\logs"
+      render: text

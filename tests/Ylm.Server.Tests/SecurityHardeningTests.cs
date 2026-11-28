@@ -35,6 +35,19 @@ public sealed class SecurityHardeningTests
         Assert.Equal(trusted, ProxyTrust.Networks([]).Any(n => n.Contains(ip)));
     }
 
+    [Theory]
+    [InlineData("169.254.169.254", true)]
+    [InlineData("::ffff:169.254.169.254", true)]
+    [InlineData("fe80::1", true)]
+    [InlineData("0.0.0.0", true)]
+    [InlineData("::", true)]
+    [InlineData("10.0.0.5", false)]
+    [InlineData("127.0.0.1", false)]
+    [InlineData("8.8.8.8", false)]
+    [InlineData("2001:db8::1", false)]
+    public void Webhook_targets_exclude_link_local_addresses(string address, bool blocked) =>
+        Assert.Equal(blocked, Ylm.Server.Integrations.WebhookTargets.IsBlocked(IPAddress.Parse(address)));
+
     [Fact]
     public void Configured_proxies_replace_the_default()
     {
@@ -68,7 +81,10 @@ public sealed class SecurityHeaderTests : IDisposable
         Assert.Equal(HttpStatusCode.OK, res.StatusCode);
         Assert.Equal("DENY", res.Headers.GetValues("X-Frame-Options").Single());
         Assert.Equal("nosniff", res.Headers.GetValues("X-Content-Type-Options").Single());
-        Assert.Contains("frame-ancestors 'none'", res.Headers.GetValues("Content-Security-Policy").Single());
+        var csp = res.Headers.GetValues("Content-Security-Policy").Single();
+        Assert.Contains("frame-ancestors 'none'", csp);
+        Assert.Contains("script-src 'self'", csp);
+        Assert.DoesNotContain("unsafe-eval", csp);
     }
 
     [Fact]

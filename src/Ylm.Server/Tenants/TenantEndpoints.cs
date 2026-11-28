@@ -170,6 +170,7 @@ public static class TenantEndpoints
                 if (interval is < 5 or > 1440) throw ApiException.BadRequest("invalid", "Das Sync-Intervall muss zwischen 5 und 1440 Minuten liegen.");
                 t.SyncIntervalMinutes = interval;
             }
+            var protectionBefore = new { t.RequireBreakglassApproval, t.RequireBreakglassRemovalApproval, t.ProtectAdmins, protectedGroups = t.ProtectedGroups.Select(x => x.Name).ToList() };
             if (body.RequireBreakglassApproval is { } four) t.RequireBreakglassApproval = four;
             if (body.RequireBreakglassRemovalApproval is { } removal && removal != t.RequireBreakglassRemovalApproval)
             {
@@ -211,6 +212,12 @@ public static class TenantEndpoints
                 Set(r.CreateTodos, () => t.ReminderCreateTodos, v => t.ReminderCreateTodos = v);
             }
             audit.Add(AuditService.User(user), AuditActions.TenantUpdated, t.Id, details: body);
+            var protectionAfter = new { t.RequireBreakglassApproval, t.RequireBreakglassRemovalApproval, t.ProtectAdmins, protectedGroups = t.ProtectedGroups.Select(x => x.Name).ToList() };
+            if (protectionBefore.RequireBreakglassApproval != protectionAfter.RequireBreakglassApproval
+                || protectionBefore.RequireBreakglassRemovalApproval != protectionAfter.RequireBreakglassRemovalApproval
+                || protectionBefore.ProtectAdmins != protectionAfter.ProtectAdmins
+                || !protectionBefore.protectedGroups.SequenceEqual(protectionAfter.protectedGroups))
+                audit.Add(AuditService.User(user), AuditActions.TenantProtectionChanged, t.Id, target: t.DisplayName, details: new { before = protectionBefore, after = protectionAfter });
             await db.SaveChangesAsync();
             // Sofort auswerten, was das Inventar schon hergibt; Nutzungsdatum und Kontostatus kommen mit dem nächsten Sync.
             if (remindersChanged && t.AnyReminderEnabled && t.Status == TenantStatus.Active)

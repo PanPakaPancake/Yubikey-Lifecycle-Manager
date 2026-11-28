@@ -43,16 +43,4 @@ internal static class TraySettings
         using var key = Registry.CurrentUser.CreateSubKey(KeyPath);
         key.SetValue(name, value, RegistryValueKind.DWord);
     }
-
-    /// <summary>Ist der angemeldete Benutzer lokaler Administrator (auch ohne erhöhte Rechte)? Dieselbe Prüfung macht der Dienst.</summary>
-    public static bool IsAdministrator()
-    {
-        try
-        {
-            using var identity = System.Security.Principal.WindowsIdentity.GetCurrent();
-            return new System.Security.Principal.WindowsPrincipal(identity).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator)
-                   || identity.Claims.Any(c => c.Type == System.Security.Claims.ClaimTypes.DenyOnlySid && c.Value == "S-1-5-32-544");
-        }
-        catch (Exception) { return false; }
-    }
 }

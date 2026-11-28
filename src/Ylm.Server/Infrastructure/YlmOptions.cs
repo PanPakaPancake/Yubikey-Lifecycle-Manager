@@ -67,6 +67,12 @@ public sealed class YlmOptions
     /// </summary>
     public string[] TrustedProxies { get; set; } = [];
 
+    /// <summary>
+    /// Demo mit Beispieldaten ohne Entra-Anbindung (docker-compose.demo.yml). Nur mit eigener, leerer Datenbank;
+    /// eine eingerichtete Installation startet nicht im Demo-Modus.
+    /// </summary>
+    public bool DemoMode { get; set; }
+
     /// <summary>Run background jobs (sync, retention). Disabled in tests.</summary>
     public bool EnableBackgroundJobs { get; set; } = true;
 }

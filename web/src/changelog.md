@@ -13,6 +13,12 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 - Neu: Neue Fälle meldet die Plattform einmal je Art als Ereignis. Unter Benachrichtigungen lassen sie sich als Webhook oder Mail-Alarm abonnieren (Gruppe „Erinnerungen“); die Mail listet die Betroffenen auf.
 - Neu: Für Personen ohne Ersatz-Key kann automatisch ein ToDo entstehen. Es erledigt sich, sobald die Person einen zweiten Key bekommt.
 - Neu: Lese-API GET /api/v1/reminders (Recht „Kennzahlen lesen“).
+- Sicherheit: Neue Mail- und Webhook-Ereignisse für sicherheitsrelevante Änderungen: Plattform-Benutzer angelegt oder geändert, Rolle geändert, Schutz geändert (Vier-Augen für Breakglass, geschützte Konten), Anmeldeeinstellungen geändert, API-Schlüssel angelegt oder in den Rechten geändert, Agent gekoppelt und TAP erzeugt. So fällt auf, wenn jemand die Vier-Augen-Freigabe abschaltet oder sich ein zweites Konto anlegt. Abos mit „alle Ereignisse“ bekommen diese Ereignisse ab jetzt mit.
+- Sicherheit: Webhooks gehen nicht mehr an link-lokale Adressen wie 169.254.169.254 (Cloud-Metadaten), auch nicht über einen Hostnamen, der dorthin zeigt.
+- Sicherheit: Ein Kopplungscode für den Agent gilt auch bei zwei gleichzeitigen Versuchen garantiert nur einmal.
+- Sicherheit: Die Weboberfläche sendet eine strenge Content-Security-Policy (nur eigene Skripte). Das Druckfenster der Notfallcodes kommt dafür ohne eingebettetes Skript aus.
+- Sicherheit: Koppeln, Entkoppeln und das Ändern der automatischen Updates im Agent verlangen jetzt die Bestätigung als Administrator per UAC. Bisher reichte ein Administratorkonto ohne erhöhte Rechte, damit hätte Schadsoftware im Benutzerkonto den Agent still an einen fremden Server koppeln können. Standardbenutzer können mit Administrator-Anmeldedaten bestätigen.
+- Sicherheit: Der Updater prüft die Hosting-Einstellungen strenger, bevor er sie in die .env schreibt (keine geschweiften Klammern, nur bekannte TLS-Formen, kein Zeilenumbruch am Ende).
 
 ## 0.13.0 · 2026-11-27
 - Neu: Menüpunkt „Sicherheitshinweise“. Pro Yubico-Sicherheitshinweis (z. B. EUCLEAK YSA-2024-03) steht dort, wie viele Keys und Personen betroffen sind, wie Yubico ihn einstuft, ob er Passkeys betrifft und was zu tun ist. Darunter die Liste der Keys mit Person bzw. Verwahrer, Status und Tenant, ohne Tenant-Auswahl auch das Partnerlager. Export als Excel oder CSV, für alle Hinweise oder einen einzelnen.
