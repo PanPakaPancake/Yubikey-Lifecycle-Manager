@@ -9,6 +9,7 @@ using Ylm.Server.Integrations;
 using Ylm.Server.Inventory;
 using Ylm.Server.Security;
 using Ylm.Server.Tenants;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Demo;
 
@@ -24,13 +25,13 @@ public static class DemoMode
 
     public sealed record DemoAccount(PlatformRole Role, string Upn, string DisplayName, string Description);
 
-    public static readonly DemoAccount[] Accounts =
-    [
-        new(PlatformRole.Owner, "owner@demo.example", "Olivia Owner", "Darf alles, auch Einstellungen, Rollen und Tenants."),
-        new(PlatformRole.Operator, "operator@demo.example", "Oskar Operator", "Registriert, sperrt und verwaltet Keys."),
-        new(PlatformRole.Helpdesk, "helpdesk@demo.example", "Hanna Helpdesk", "Sucht Personen und Keys, sperrt verlorene Keys."),
-        new(PlatformRole.Auditor, "auditor@demo.example", "Arne Auditor", "Liest alles, ändert nichts."),
-    ];
+    public static DemoAccount[] Accounts => _accounts.Value;
+    private static readonly L.PerLanguage<DemoAccount[]> _accounts = new(() => [
+        new(PlatformRole.Owner, "owner@demo.example", "Olivia Owner", L.T("Darf alles, auch Einstellungen, Rollen und Tenants.")),
+        new(PlatformRole.Operator, "operator@demo.example", "Oskar Operator", L.T("Registriert, sperrt und verwaltet Keys.")),
+        new(PlatformRole.Helpdesk, "helpdesk@demo.example", "Hanna Helpdesk", L.T("Sucht Personen und Keys, sperrt verlorene Keys.")),
+        new(PlatformRole.Auditor, "auditor@demo.example", "Arne Auditor", L.T("Liest alles, ändert nichts.")),
+    ]);
 
     public static void AddDemoServices(this IServiceCollection services)
     {
@@ -47,11 +48,9 @@ public static class DemoMode
         var settings = await db.Installation.AsNoTracking().FirstOrDefaultAsync();
         var used = settings?.IsSetupComplete == true || await db.Keys.AnyAsync();
         if (demoMode && used && !marker)
-            throw new InvalidOperationException("Demo-Modus abgebrochen: Diese Datenbank gehört zu einer eingerichteten Installation. " +
-                                                "Die Demo braucht eine eigene, leere Datenbank (docker-compose.demo.yml).");
+            throw new InvalidOperationException(L.T("Demo-Modus abgebrochen: Diese Datenbank gehört zu einer eingerichteten Installation. Die Demo braucht eine eigene, leere Datenbank (docker-compose.demo.yml)."));
         if (!demoMode && marker)
-            throw new InvalidOperationException("Dieser Datenordner gehört zur Demo (Datei 'demo-mode'). Für den Echtbetrieb eine neue Installation " +
-                                                "mit eigener Datenbank anlegen, statt die Demodaten weiterzuverwenden.");
+            throw new InvalidOperationException(L.T("Dieser Datenordner gehört zur Demo (Datei 'demo-mode'). Für den Echtbetrieb eine neue Installation mit eigener Datenbank anlegen, statt die Demodaten weiterzuverwenden."));
     }
 
     public static void MapDemo(this IEndpointRouteBuilder app)
@@ -60,9 +59,9 @@ public static class DemoMode
 
         app.MapPost("/auth/demo-login", async (DemoLoginRequest body, HttpContext ctx, YlmDbContext db, AuditService audit) =>
         {
-            var account = Accounts.FirstOrDefault(a => a.Role == body.Role) ?? throw ApiException.BadRequest("invalid", "Unbekannte Rolle.");
+            var account = Accounts.FirstOrDefault(a => a.Role == body.Role) ?? throw ApiException.BadRequest("invalid", L.T("Unbekannte Rolle."));
             var user = await db.PlatformUsers.FirstOrDefaultAsync(u => u.Upn == account.Upn)
-                       ?? throw ApiException.NotFound("Demokonto");
+                       ?? throw ApiException.NotFound(L.T("Demokonto"));
             user.LastLoginAt = DateTimeOffset.UtcNow;
             audit.Add(AuditService.User(user), AuditActions.Login, details: new { mode = "demo" });
             await db.SaveChangesAsync();

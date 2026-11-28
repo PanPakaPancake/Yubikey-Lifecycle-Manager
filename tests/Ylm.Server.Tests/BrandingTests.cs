@@ -165,10 +165,11 @@ public sealed class BrandingTests : IAsyncLifetime
     {
         var dir = Environment.GetEnvironmentVariable("YLM_SAMPLE_DIR");
         // Mit Firmenname, Logo und Kontakt: so wird der Brief am längsten und muss trotzdem auf eine Seite passen.
-        await Json(await _owner.PutAsJsonAsync("/api/branding", new { companyName = "Muster IT GmbH", contact = "IT-Service · 0800 123 456" }));
         await Json(await _owner.PutAsync("/api/branding/logo", new ByteArrayContent(Png)));
+        foreach (var language in new[] { "de", "en" })
         foreach (var forced in new[] { false, true })
         {
+            await Json(await _owner.PutAsJsonAsync("/api/branding", new { companyName = "Muster IT GmbH", contact = "IT-Service · 0800 123 456", language }));
             var res = await _owner.PostAsJsonAsync("/api/branding/letter/preview.pdf", new { layout = (object?)null, pinChangeForced = forced });
             Assert.Equal(HttpStatusCode.OK, res.StatusCode);
             var pdf = await res.Content.ReadAsByteArrayAsync();
@@ -176,10 +177,13 @@ public sealed class BrandingTests : IAsyncLifetime
             if (!string.IsNullOrEmpty(dir))
             {
                 Directory.CreateDirectory(dir);
-                await File.WriteAllBytesAsync(Path.Combine(dir, forced ? "PIN-Brief-PIN-Wechsel-erzwungen.pdf" : "PIN-Brief-PIN-selbst-aendern.pdf"), pdf);
+                var name = language == "en"
+                    ? (forced ? "PIN-letter-PIN-change-enforced.pdf" : "PIN-letter-change-PIN-yourself.pdf")
+                    : (forced ? "PIN-Brief-PIN-Wechsel-erzwungen.pdf" : "PIN-Brief-PIN-selbst-aendern.pdf");
+                await File.WriteAllBytesAsync(Path.Combine(dir, name), pdf);
             }
             using (var doc = PdfSharp.Pdf.IO.PdfReader.Open(new MemoryStream(pdf), PdfSharp.Pdf.IO.PdfDocumentOpenMode.Import))
-                Assert.Equal(1, doc.PageCount); // der Standardbrief passt auf eine Seite
+                Assert.Equal(1, doc.PageCount); // der Standardbrief passt auf eine Seite, auch auf Englisch
         }
     }
 

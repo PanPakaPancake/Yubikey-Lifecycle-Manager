@@ -628,6 +628,8 @@ public sealed class Branding
     public string? LetterTexts { get; set; }
     /// <summary>Aufbau des PIN-Briefs aus dem Brief-Editor als JSON (<see cref="Pdf.LetterLayout"/>); leer heißt: übernehmen (Tenant → Partner → Standard).</summary>
     public string? LetterLayout { get; set; }
+    /// <summary>Sprache der PIN-Briefe ("de"/"en"); beim Partner zugleich die Sprache von Mails und Webhooks. Leer: übernehmen, zuletzt Deutsch.</summary>
+    public string? Language { get; set; }
     public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 

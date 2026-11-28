@@ -1,6 +1,7 @@
 using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using static Ylm.Server.Pdf.Theme;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Pdf;
 
@@ -39,9 +40,11 @@ public static class PinLetterPdf
 
     public static byte[] Create(PinLetterData d)
     {
+        // Der Brief erscheint in der Sprache aus dem Erscheinungsbild (Tenant, sonst Partner, sonst Deutsch), unabhängig vom Admin.
+        using var language = L.Use(Brand.Language ?? L.German);
         YlmFontResolver.Install();
         using var doc = new PdfDocument();
-        doc.Info.Title = d.PinChangeForced ? "Initial-PIN für Ihren YubiKey" : "PIN für Ihren YubiKey";
+        doc.Info.Title = d.PinChangeForced ? L.T("Initial-PIN für Ihren YubiKey") : L.T("PIN für Ihren YubiKey");
         doc.Info.Creator = Brand.CompanyName ?? "Yubikey Lifecycle Manager";
         new Renderer(doc, d).Run();
         using var ms = new MemoryStream();
@@ -59,7 +62,7 @@ public static class PinLetterPdf
         ["Tenant"] = d.TenantName,
         ["Modell"] = d.KeyModel,
         ["Seriennummer"] = d.SerialNumber?.ToString() ?? "–",
-        ["Datum"] = d.CreatedAt.ToString("dd.MM.yyyy"),
+        ["Datum"] = d.CreatedAt.ToString("d", L.Culture),
         ["Kontakt"] = Brand.Contact ?? "",
         ["KontaktMitDoppelpunkt"] = Brand.Contact is { Length: > 0 } c ? ": " + c : "",
     };
@@ -123,8 +126,8 @@ public static class PinLetterPdf
             for (var i = 0; i < _pages.Count; i++)
             {
                 using var g = XGraphics.FromPdfPage(_pages[i], XGraphicsPdfPageOptions.Append);
-                var parts = new[] { _pages.Count > 1 ? $"Seite {i + 1} von {_pages.Count}" : null, d.OrganizationName, d.TenantName,
-                    $"{Brand.Footer ?? "Erstellt mit dem Yubikey Lifecycle Manager."} Die PIN wurde nicht gespeichert." };
+                var parts = new[] { _pages.Count > 1 ? L.F($"Seite {i + 1} von {_pages.Count}") : null, d.OrganizationName, d.TenantName,
+                    L.F($"{Brand.Footer ?? L.T("Erstellt mit dem Yubikey Lifecycle Manager.")} Die PIN wurde nicht gespeichert.") };
                 g.DrawLine(new XPen(Line, 0.7), M, FooterY, M + w, FooterY);
                 Text(g, string.Join(" · ", parts.Where(p => !string.IsNullOrWhiteSpace(p))), F(7.5), Muted, M, FooterY + 6, w, 12);
             }
@@ -178,11 +181,11 @@ public static class PinLetterPdf
         private double Recipient(LetterBlock b, double x, double y, double w)
         {
             var text = d.SharedAccounts is { Count: > 0 }
-                ? $"Für den Verwahrer {d.UserDisplayName} · {d.UserPrincipalName} für {d.SharedAccounts.Count} Konto/Konten: {Shorten(string.Join(", ", d.SharedAccounts), 110)}"
+                ? L.F($"Für den Verwahrer {d.UserDisplayName} · {d.UserPrincipalName} für {d.SharedAccounts.Count} Konto/Konten: {Shorten(string.Join(", ", d.SharedAccounts), 110)}")
                 : R(b.P("text"));
             var h = Block(_g, text, F(11), Ink, x, y, w);
             if (b.P("keyLine") != "false")
-                h += 2 + Block(_g, $"{d.KeyModel}{(d.SerialNumber is { } s ? $" · Seriennummer {s}" : "")} · erstellt am {d.CreatedAt:dd.MM.yyyy}", F(8.8), Muted, x, y + h + 2, w);
+                h += 2 + Block(_g, d.SerialNumber is { } s ? L.F($"{d.KeyModel} · Seriennummer {s} · erstellt am {d.CreatedAt:d}") : L.F($"{d.KeyModel} · erstellt am {d.CreatedAt:d}"), F(8.8), Muted, x, y + h + 2, w);
             return h;
         }
 
@@ -363,7 +366,7 @@ public static class PinLetterPdf
             Block(_g, shown, urlFont, Ink, x + 16, y + 9 + titleH + 3, inner);
             // Klickbarer Bereich über dem ganzen Kasten.
             var rect = _g.Transformer.WorldToDefaultPage(new XRect(x, y, w, h));
-            _page.AddWebLink(new PdfRectangle(rect), d.InfoUrl);
+            _page.AddWebLink(new PdfRectangle(rect), L.IsEnglish ? d.InfoUrl + (d.InfoUrl!.Contains('?') ? "&" : "?") + "lang=en" : d.InfoUrl);
             return h;
         }
     }
@@ -478,22 +481,22 @@ public static class PinLetterPdf
         g.DrawRectangle(new XSolidBrush(XColor.FromArgb(0x7f, 0xba, 0x00)), win.X + 14, win.Y + 8, 5, 5);
         g.DrawRectangle(new XSolidBrush(XColor.FromArgb(0x00, 0xa4, 0xef)), win.X + 8, win.Y + 14, 5, 5);
         g.DrawRectangle(new XSolidBrush(XColor.FromArgb(0xff, 0xb9, 0x00)), win.X + 14, win.Y + 14, 5, 5);
-        g.DrawString("Anmelden", Fit(g, "Anmelden", 7, true, win.Width - 32, 4), new XSolidBrush(Ink), win.X + 26, win.Y + 16);
+        g.DrawString(L.T("Anmelden"), Fit(g, L.T("Anmelden"), 7, true, win.Width - 32, 4), new XSolidBrush(Ink), win.X + 26, win.Y + 16);
         g.DrawRectangle(new XSolidBrush(Line), win.X + 8, win.Y + 26, win.Width - 16, 7);
         var btn = new XRect(win.X + 8, win.Y + 40, win.Width - 16, 18);
         g.DrawRoundedRectangle(new XPen(Accent, 1), new XSolidBrush(AccentSoft), btn.X, btn.Y, btn.Width, btn.Height, 3, 3);
         DrawKey(g, btn.X + 4, btn.Y + 5, 18, 8, false, false);
         // Schrift an die Breite der Schaltfläche anpassen, damit der Text nicht aus dem Rahmen läuft.
-        var label = "Sicherheitsschlüssel";
+        var label = L.T("Sicherheitsschlüssel");
         var font = Fit(g, label, 5.4, true, btn.Width - 30, 3.2);
-        if (g.MeasureString(label, font).Width > btn.Width - 30) { label = "Schlüssel"; font = Fit(g, label, 5.4, true, btn.Width - 30, 3.2); }
+        if (g.MeasureString(label, font).Width > btn.Width - 30) { label = L.T("Schlüssel"); font = Fit(g, label, 5.4, true, btn.Width - 30, 3.2); }
         g.DrawString(label, font, new XSolidBrush(Accent), new XRect(btn.X + 26, btn.Y, btn.Width - 28, btn.Height), XStringFormats.CenterLeft);
     }
 
     private static void DrawPinEntry(XGraphics g, XRect a)
     {
         var box = new XRect(a.X + 10, a.Y + a.Height * 0.32, a.Width - 20, 22);
-        g.DrawString("Sicherheitsschlüssel-PIN", Fit(g, "Sicherheitsschlüssel-PIN", 7, true, a.Width - 20, 4), new XSolidBrush(Ink), a.X + 10, a.Y + a.Height * 0.25);
+        g.DrawString(L.T("Sicherheitsschlüssel-PIN"), Fit(g, L.T("Sicherheitsschlüssel-PIN"), 7, true, a.Width - 20, 4), new XSolidBrush(Ink), a.X + 10, a.Y + a.Height * 0.25);
         g.DrawRoundedRectangle(new XPen(Accent, 1), XBrushes.White, box.X, box.Y, box.Width, box.Height, 3, 3);
         var dots = Math.Min(6, (int)((box.Width - 12) / 9));
         for (var i = 0; i < dots; i++) g.DrawEllipse(new XSolidBrush(Muted), box.X + 8 + i * 9, box.Y + 8, 5, 5);

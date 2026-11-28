@@ -14,6 +14,11 @@ const storageKey = 'ylm-language';
 const dictionaries: Record<Language, Record<string, string> | null> = { de: null, en };
 
 function detect(): Language {
+  // ?lang=en aus dem Link im PIN-Brief: die Infoseite erscheint in der Sprache des Briefs.
+  try {
+    const fromUrl = new URLSearchParams(window.location.search).get('lang');
+    if (fromUrl === 'de' || fromUrl === 'en') return fromUrl;
+  } catch { /* kein Browser */ }
   try {
     const stored = localStorage.getItem(storageKey);
     if (stored === 'de' || stored === 'en') return stored;
@@ -28,7 +33,11 @@ function detect(): Language {
 
 // Wird beim ersten Import festgelegt, also bevor irgendein Modul Texte erzeugt.
 let current: Language = detect();
-if (typeof document !== 'undefined') document.documentElement.lang = current;
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = current;
+  // Für Downloads per Link (PDF, Excel): der Server liest die Sprache dann aus dem Cookie.
+  try { document.cookie = `ylm-lang=${current}; path=/; max-age=31536000; SameSite=Lax`; } catch { /* Cookies gesperrt */ }
+}
 
 export const language = (): Language => current;
 /** Gebietsschema für Datums- und Zahlenformate. */

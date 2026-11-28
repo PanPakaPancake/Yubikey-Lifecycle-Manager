@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Registration;
 
@@ -13,7 +14,7 @@ public sealed class OperationJob
     public required Guid? TenantId { get; init; }
     public required string Kind { get; init; }
     public JobState State { get; set; } = JobState.Running;
-    public string Step { get; set; } = "Wird gestartet …";
+    public string Step { get; set; } = L.T("Wird gestartet …");
     public string? Prompt { get; set; }
     public int StepNumber { get; set; }
     public int TotalSteps { get; set; }

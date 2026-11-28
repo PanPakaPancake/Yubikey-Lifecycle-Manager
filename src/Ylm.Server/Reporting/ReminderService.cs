@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Ylm.Core;
 using Ylm.Server.Audit;
 using Ylm.Server.Data;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Reporting;
 
@@ -190,8 +191,8 @@ public sealed class ReminderService(YlmDbContext db, AuditService audit)
                 var todo = new RegistrationTodo
                 {
                     TenantId = tenant.Id, EntraUserId = uid, UserPrincipalName = f.UserPrincipalName ?? uid, UserDisplayName = f.UserDisplayName,
-                    Note = $"Ersatz-Key ausgeben: bisher nur Key {f.SerialNumber?.ToString() ?? f.Model ?? ""}".TrimEnd(),
-                    Source = "Erinnerung: Ersatz-Key", CreatedByName = "Erinnerungen",
+                    Note = L.F($"Ersatz-Key ausgeben: bisher nur Key {f.SerialNumber?.ToString() ?? f.Model ?? ""}").TrimEnd(),
+                    Source = L.T("Erinnerung: Ersatz-Key"), CreatedByName = L.T("Erinnerungen"),
                 };
                 db.Todos.Add(todo);
                 state.TodoId = todo.Id;

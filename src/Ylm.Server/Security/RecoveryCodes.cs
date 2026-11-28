@@ -4,6 +4,7 @@ using Ylm.Core;
 using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Security;
 
@@ -45,7 +46,7 @@ public sealed class RecoveryCodeService(YlmDbContext db, AuditService audit, Loc
     /// <summary>Erzeugt neue Codes; alle bisherigen werden ungültig. Die Codes gibt es nur in dieser Antwort.</summary>
     public async Task<IReadOnlyList<string>> CreateAsync(PlatformUser user)
     {
-        if (!Eligible(user)) throw ApiException.Forbidden("Notfallcodes gibt es nur für Owner.");
+        if (!Eligible(user)) throw ApiException.Forbidden(L.T("Notfallcodes gibt es nur für Owner."));
         await db.RecoveryCodes.Where(c => c.PlatformUserId == user.Id).ExecuteDeleteAsync();
         var codes = Enumerable.Range(0, CodeCount).Select(_ => NewCode()).ToList();
         var now = DateTimeOffset.UtcNow;
@@ -79,8 +80,8 @@ public sealed class RecoveryCodeService(YlmDbContext db, AuditService audit, Loc
 
     private async Task<(PlatformUser, int)> DenyAsync(string? upn)
     {
-        const string message = "Der Notfallcode ist ungültig oder wurde schon verwendet.";
-        await audit.WriteAsync(new AuditActor(ActorType.User, null, upn ?? "unbekannt"), AuditActions.LoginDenied, details: new { code = "invalid_recovery_code", message });
+        var message = L.T("Der Notfallcode ist ungültig oder wurde schon verwendet.");
+        await audit.WriteAsync(new AuditActor(ActorType.User, null, upn ?? L.T("unbekannt")), AuditActions.LoginDenied, details: new { code = "invalid_recovery_code", message });
         throw new ApiException(401, "invalid_recovery_code", message);
     }
 }

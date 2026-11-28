@@ -1,11 +1,12 @@
 using System.Globalization;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Core;
 
 public readonly record struct FirmwareVersion(int Major, int Minor, int Patch) : IComparable<FirmwareVersion>
 {
     public static FirmwareVersion Parse(string value) =>
-        TryParse(value, out var v) ? v : throw new FormatException($"Ungültige Firmware-Version: {value}");
+        TryParse(value, out var v) ? v : throw new FormatException(L.F($"Ungültige Firmware-Version: {value}"));
 
     public static bool TryParse(string? value, out FirmwareVersion version)
     {
@@ -56,7 +57,7 @@ public static class KeySeriesInfo
         KeySeries.YubiKey4 => "YubiKey 4",
         KeySeries.YubiKey4Fips => "YubiKey 4 FIPS",
         KeySeries.Neo => "YubiKey NEO",
-        _ => "unbekannt",
+        _ => L.T("unbekannt"),
     };
 
     /// <summary>
@@ -99,10 +100,10 @@ public sealed record AdvisoryRange(KeySeries[] Series, FirmwareVersion? FromIncl
 
     public string Describe()
     {
-        var who = string.Join(", ", Series.Select(KeySeriesInfo.DisplayName)) + (ModelContains is null ? "" : $" (nur {ModelContains})");
+        var who = string.Join(", ", Series.Select(KeySeriesInfo.DisplayName)) + (ModelContains is null ? "" : L.F($" (nur {ModelContains})"));
         var to = new FirmwareVersion(ToExclusive.Major, ToExclusive.Minor, Math.Max(0, ToExclusive.Patch - 1));
         if (FromInclusive is null) return $"{who} vor {ToExclusive}";
-        if (ToExclusive.Patch == 0) return $"{who} ab {FromInclusive} bis vor {ToExclusive}";
+        if (ToExclusive.Patch == 0) return L.F($"{who} ab {FromInclusive} bis vor {ToExclusive}");
         return FromInclusive.Value == to ? $"{who} {to}" : $"{who} {FromInclusive} bis {to}";
     }
 }
@@ -134,69 +135,69 @@ public static class FirmwareAdvisories
     private static readonly KeySeries[] Five = [KeySeries.YubiKey5];
     private static readonly KeySeries[] FiveAll = [KeySeries.YubiKey5, KeySeries.YubiKey5Fips, KeySeries.YubiKey5Cspn, KeySeries.SecurityKey];
 
-    public static readonly IReadOnlyList<FirmwareAdvisory> Known =
-    [
-        new("YSA-2025-02", "PIN/UV-Protokoll 2 weicht vom FIDO-Standard ab", "niedrig",
+    public static IReadOnlyList<FirmwareAdvisory> Known => _known.Value;
+    private static readonly L.PerLanguage<IReadOnlyList<FirmwareAdvisory>> _known = new(() => [
+        new("YSA-2025-02", L.T("PIN/UV-Protokoll 2 weicht vom FIDO-Standard ab"), L.T("niedrig"),
             "https://www.yubico.com/support/security-advisories/ysa-2025-02/", new(2025, 4, 2), true,
-            "FIDO2 (Passkeys)",
-            "Bei PIN/UV-Protokoll 2 verhält sich die Firmware nicht ganz standardgemäß (CVE-2025-29991). Yubico stuft das Risiko als gering ein.",
-            "Kein Tausch nötig. Bei Neubeschaffung auf Firmware 5.7.4 oder neuer achten.",
+            L.T("FIDO2 (Passkeys)"),
+            L.T("Bei PIN/UV-Protokoll 2 verhält sich die Firmware nicht ganz standardgemäß (CVE-2025-29991). Yubico stuft das Risiko als gering ein."),
+            L.T("Kein Tausch nötig. Bei Neubeschaffung auf Firmware 5.7.4 oder neuer achten."),
             "5.7.4",
             [
                 new([KeySeries.YubiKey5, KeySeries.YubiKey5Fips, KeySeries.SecurityKey], V(5, 4, 1), V(5, 7, 4)),
                 new([KeySeries.YubiKey5Cspn], V(5, 4, 2), V(5, 4, 3)),
                 new([KeySeries.YubiKeyBio], V(5, 5, 0), V(5, 7, 4)),
             ]),
-        new("YSA-2024-03", "EUCLEAK: Seitenkanal in der ECDSA-Implementierung (Infineon)", "mittel",
+        new("YSA-2024-03", L.T("EUCLEAK: Seitenkanal in der ECDSA-Implementierung (Infineon)"), L.T("mittel"),
             "https://www.yubico.com/support/security-advisories/ysa-2024-03/", new(2024, 9, 3), true,
-            "FIDO2 (Passkeys), PIV und OpenPGP mit ECC-Schlüsseln",
-            "Wer den Key längere Zeit in der Hand hat und teure Spezialausrüstung besitzt, kann einen privaten Schlüssel rekonstruieren und den Key klonen. Für einen Angriff braucht es zusätzlich das Konto und in der Regel die PIN.",
-            "Firmware lässt sich nicht aktualisieren. Keys schrittweise gegen Firmware 5.7 oder neuer tauschen, zuerst für Admin- und Breakglass-Konten. Verlorene Keys sofort sperren.",
+            L.T("FIDO2 (Passkeys), PIV und OpenPGP mit ECC-Schlüsseln"),
+            L.T("Wer den Key längere Zeit in der Hand hat und teure Spezialausrüstung besitzt, kann einen privaten Schlüssel rekonstruieren und den Key klonen. Für einen Angriff braucht es zusätzlich das Konto und in der Regel die PIN."),
+            L.T("Firmware lässt sich nicht aktualisieren. Keys schrittweise gegen Firmware 5.7 oder neuer tauschen, zuerst für Admin- und Breakglass-Konten. Verlorene Keys sofort sperren."),
             "5.7.0 (YubiKey Bio: 5.7.2)",
             [
                 new(FiveAll, null, V(5, 7, 0)),
                 new([KeySeries.YubiKeyBio], null, V(5, 7, 2)),
             ]),
-        new("YSA-2024-02", "Auflisten der Dienste mit gespeichertem Passkey", "niedrig",
+        new("YSA-2024-02", L.T("Auflisten der Dienste mit gespeichertem Passkey"), L.T("niedrig"),
             "https://www.yubico.com/support/security-advisories/ysa-2024-02/", new(2024, 5, 21), true,
-            "FIDO2 (nur gespeicherte Passkeys, nicht U2F)",
-            "Wer den Key in der Hand hat, kann unter Umständen auslesen, für welche Dienste Passkeys darauf gespeichert sind (CVE-2024-35311). Anmelden kann er sich damit nicht.",
-            "Kein Tausch nötig. Verlorene Keys wie immer sofort sperren.",
+            L.T("FIDO2 (nur gespeicherte Passkeys, nicht U2F)"),
+            L.T("Wer den Key in der Hand hat, kann unter Umständen auslesen, für welche Dienste Passkeys darauf gespeichert sind (CVE-2024-35311). Anmelden kann er sich damit nicht."),
+            L.T("Kein Tausch nötig. Verlorene Keys wie immer sofort sperren."),
             "5.7.0 (YubiKey Bio: 5.6.4, YubiKey 5 FIPS: 5.7.2)",
             [
                 new([KeySeries.YubiKey5, KeySeries.SecurityKey, KeySeries.YubiKey5Fips], null, V(5, 4, 4)),
                 new([KeySeries.YubiKeyBio], null, V(5, 6, 4)),
                 new([KeySeries.YubiKey5Cspn], V(5, 4, 2), V(5, 4, 3)),
             ]),
-        new("YSA-2020-05", "OpenPGP: Fehler beim Resetting Code", "mittel",
+        new("YSA-2020-05", L.T("OpenPGP: Fehler beim Resetting Code"), L.T("mittel"),
             "https://www.yubico.com/support/security-advisories/ysa-2020-05/", new(2020, 7, 8), false,
-            "nur OpenPGP",
-            "In der OpenPGP-Anwendung ließ sich die PIN mit einem nicht gesetzten Resetting Code zurücksetzen (CVE-2020-15000). Passkeys sind nicht betroffen.",
-            "Für Entra ohne Bedeutung. Wer OpenPGP nutzt: Resetting Code setzen und Berührung erzwingen.",
+            L.T("nur OpenPGP"),
+            L.T("In der OpenPGP-Anwendung ließ sich die PIN mit einem nicht gesetzten Resetting Code zurücksetzen (CVE-2020-15000). Passkeys sind nicht betroffen."),
+            L.T("Für Entra ohne Bedeutung. Wer OpenPGP nutzt: Resetting Code setzen und Berührung erzwingen."),
             "5.2.7",
             [new(Five, V(5, 2, 0), V(5, 2, 7))]),
-        new("YSA-2020-04", "NFC: Zugangscode beim Ändern der NDEF-Daten nicht geprüft", "mittel",
+        new("YSA-2020-04", L.T("NFC: Zugangscode beim Ändern der NDEF-Daten nicht geprüft"), L.T("mittel"),
             "https://www.yubico.com/support/security-advisories/ysa-2020-04/", new(2020, 7, 8), false,
-            "nur OTP über NFC",
-            "Über NFC ließ sich die OTP-Konfiguration ohne Zugangscode ändern (CVE-2020-15001). Nur YubiKey 5 NFC, Passkeys sind nicht betroffen.",
-            "Für Entra ohne Bedeutung. Wer OTP nutzt: OTP über NFC abschalten oder statisches Passwort neu setzen.",
+            L.T("nur OTP über NFC"),
+            L.T("Über NFC ließ sich die OTP-Konfiguration ohne Zugangscode ändern (CVE-2020-15001). Nur YubiKey 5 NFC, Passkeys sind nicht betroffen."),
+            L.T("Für Entra ohne Bedeutung. Wer OTP nutzt: OTP über NFC abschalten oder statisches Passwort neu setzen."),
             "5.2.7 bzw. 5.3.2",
             [new(Five, V(5, 0, 0), V(5, 2, 7), "NFC"), new(Five, V(5, 3, 0), V(5, 3, 2), "NFC")]),
-        new("YSA-2019-02", "YubiKey FIPS: wenig Zufall direkt nach dem Einstecken", "nicht angegeben",
+        new("YSA-2019-02", L.T("YubiKey FIPS: wenig Zufall direkt nach dem Einstecken"), L.T("nicht angegeben"),
             "https://www.yubico.com/support/security-advisories/ysa-2019-02/", new(2019, 6, 13), true,
             "FIDO U2F, PIV, OpenPGP, OATH",
-            "Die ersten Zufallswerte nach dem Einstecken waren schwächer als vorgesehen. Yubico hat die FIPS-Zulassung dieser Firmware zurückgezogen und die Keys getauscht.",
-            "Keys austauschen.",
+            L.T("Die ersten Zufallswerte nach dem Einstecken waren schwächer als vorgesehen. Yubico hat die FIPS-Zulassung dieser Firmware zurückgezogen und die Keys getauscht."),
+            L.T("Keys austauschen."),
             "4.4.5",
             [new([KeySeries.YubiKey4Fips], V(4, 4, 2), V(4, 4, 5))]),
-        new("YSA-2017-01", "ROCA: schwache RSA-Schlüssel (betrifft PIV/OpenPGP, nicht FIDO2)", "nicht angegeben",
+        new("YSA-2017-01", L.T("ROCA: schwache RSA-Schlüssel (betrifft PIV/OpenPGP, nicht FIDO2)"), L.T("nicht angegeben"),
             "https://www.yubico.com/support/security-advisories/ysa-2017-01/", new(2017, 10, 16), false,
-            "nur RSA-Schlüssel aus PIV und OpenPGP",
-            "Auf dem Key erzeugte RSA-Schlüssel sind zu schwach (CVE-2017-15361). FIDO2/U2F ist nicht betroffen.",
-            "Für Entra ohne Bedeutung. Auf dem Key erzeugte RSA-Schlüssel ersetzen oder Key tauschen.",
+            L.T("nur RSA-Schlüssel aus PIV und OpenPGP"),
+            L.T("Auf dem Key erzeugte RSA-Schlüssel sind zu schwach (CVE-2017-15361). FIDO2/U2F ist nicht betroffen."),
+            L.T("Für Entra ohne Bedeutung. Auf dem Key erzeugte RSA-Schlüssel ersetzen oder Key tauschen."),
             "4.3.5",
             [new([KeySeries.YubiKey4], V(4, 2, 6), V(4, 3, 5))]),
-    ];
+    ]);
 
     public static FirmwareAdvisory? Find(string? id) => Known.FirstOrDefault(a => string.Equals(a.Id, id, StringComparison.OrdinalIgnoreCase));
 

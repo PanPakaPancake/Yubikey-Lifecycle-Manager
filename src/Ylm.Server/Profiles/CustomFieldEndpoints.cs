@@ -5,6 +5,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Inventory;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Profiles;
 
@@ -27,15 +28,15 @@ public static class CustomFieldEndpoints
 
     private static void Validate(IReadOnlyList<FieldRequest> body)
     {
-        if (body.Count > 50) throw ApiException.BadRequest("invalid", "Höchstens 50 Felder.");
+        if (body.Count > 50) throw ApiException.BadRequest("invalid", L.T("Höchstens 50 Felder."));
         foreach (var f in body)
         {
-            if (!CustomFieldValidator.IsValidKey(f.Key)) throw ApiException.BadRequest("invalid", $"Ungültiger Feldschlüssel „{f.Key}“ (erlaubt: Buchstaben, Ziffern, _ und -, höchstens 40 Zeichen).");
-            if (string.IsNullOrWhiteSpace(f.Label)) throw ApiException.BadRequest("invalid", "Jedes Feld braucht eine Bezeichnung.");
+            if (!CustomFieldValidator.IsValidKey(f.Key)) throw ApiException.BadRequest("invalid", L.F($"Ungültiger Feldschlüssel „{f.Key}“ (erlaubt: Buchstaben, Ziffern, _ und -, höchstens 40 Zeichen)."));
+            if (string.IsNullOrWhiteSpace(f.Label)) throw ApiException.BadRequest("invalid", L.T("Jedes Feld braucht eine Bezeichnung."));
             if (f.Type == CustomFieldType.Select && (f.Options is null || f.Options.Count(o => !string.IsNullOrWhiteSpace(o)) == 0))
-                throw ApiException.BadRequest("invalid", $"Auswahlfeld „{f.Label}“ braucht Optionen.");
+                throw ApiException.BadRequest("invalid", L.F($"Auswahlfeld „{f.Label}“ braucht Optionen."));
         }
-        if (body.Select(f => f.Key.ToLowerInvariant()).Distinct().Count() != body.Count) throw ApiException.BadRequest("invalid", "Feldschlüssel müssen eindeutig sein.");
+        if (body.Select(f => f.Key.ToLowerInvariant()).Distinct().Count() != body.Count) throw ApiException.BadRequest("invalid", L.T("Feldschlüssel müssen eindeutig sein."));
     }
 
     private static List<string> CleanOptions(IEnumerable<string>? options) =>
@@ -83,16 +84,14 @@ public static class CustomFieldEndpoints
         global.MapPut("", async (List<FieldRequest> body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
             var user = await cu.RequireAsync(Permission.ManageProfiles);
-            if (!user.AllTenants) throw ApiException.Forbidden("Globale Felder können nur Benutzer mit Zugriff auf alle Tenants bearbeiten.");
+            if (!user.AllTenants) throw ApiException.Forbidden(L.T("Globale Felder können nur Benutzer mit Zugriff auf alle Tenants bearbeiten."));
             Validate(body);
             var keys = body.Select(f => f.Key.ToLower()).ToList();
             var conflicts = await db.CustomFields.Where(f => f.TenantId != null && keys.Contains(f.Key.ToLower()))
                 .Join(db.Tenants, f => f.TenantId, t => t.Id, (f, t) => new { f.Key, t.DisplayName }).ToListAsync();
             if (conflicts.Count > 0)
                 throw ApiException.Conflict("field_conflict",
-                    "Diese Schlüssel gibt es schon als lokale Felder in Tenants: " +
-                    string.Join("; ", conflicts.GroupBy(c => c.Key).Select(g => $"„{g.Key}“ in {string.Join(", ", g.Select(x => x.DisplayName))}")) +
-                    ". Bitte dort zuerst entfernen oder einen anderen Schlüssel wählen.");
+                    L.F($"Diese Schlüssel gibt es schon als lokale Felder in Tenants: {string.Join("; ", conflicts.GroupBy(c => c.Key).Select(g => L.F($"„{g.Key}“ in {string.Join(", ", g.Select(x => x.DisplayName))}")))}. Bitte dort zuerst entfernen oder einen anderen Schlüssel wählen."));
             var existing = await db.CustomFields.Where(f => f.TenantId == null).ToListAsync();
             ApplyList(db, null, existing, body);
             audit.Add(AuditService.User(user), AuditActions.FieldsUpdated, null, target: "global", details: body);
@@ -124,7 +123,7 @@ public static class CustomFieldEndpoints
             var globals = await db.CustomFields.Where(f => f.TenantId == null).ToListAsync();
             var clash = body.Local.FirstOrDefault(l => globals.Any(gl => gl.Key.Equals(l.Key, StringComparison.OrdinalIgnoreCase)));
             if (clash is not null)
-                throw ApiException.BadRequest("invalid", $"Der Schlüssel „{clash.Key}“ ist bereits ein globales Feld. Ändern Sie stattdessen das geerbte Feld.");
+                throw ApiException.BadRequest("invalid", L.F($"Der Schlüssel „{clash.Key}“ ist bereits ein globales Feld. Ändern Sie stattdessen das geerbte Feld."));
 
             var existing = await db.CustomFields.Where(f => f.TenantId == tenantId).ToListAsync();
             ApplyList(db, tenantId, existing, body.Local);
@@ -133,7 +132,7 @@ public static class CustomFieldEndpoints
             db.CustomFieldOverrides.RemoveRange(oldOverrides);
             foreach (var o in body.Overrides.DistinctBy(o => o.FieldId))
             {
-                var field = globals.FirstOrDefault(f => f.Id == o.FieldId) ?? throw ApiException.BadRequest("invalid", "Unbekanntes globales Feld.");
+                var field = globals.FirstOrDefault(f => f.Id == o.FieldId) ?? throw ApiException.BadRequest("invalid", L.T("Unbekanntes globales Feld."));
                 var spec = new CustomFieldOverrideSpec(o.Disabled, string.IsNullOrWhiteSpace(o.Label) ? null : o.Label.Trim(), o.Required,
                     field.Type == CustomFieldType.Select && o.Options is not null ? CleanOptions(o.Options) : null);
                 if (CustomFieldInheritance.IsNoOp(field.ToSpec(), spec)) continue;
@@ -174,12 +173,12 @@ public static class GroupProfileEndpoints
         g.MapPut("/group-profiles", async (Guid tenantId, List<AssignmentRequest> body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
             var user = await cu.RequireTenantAsync(tenantId, Permission.ManageProfiles);
-            if (body.Count > 50) throw ApiException.BadRequest("invalid", "Höchstens 50 Zuordnungen.");
-            if (body.Any(a => string.IsNullOrWhiteSpace(a.GroupId))) throw ApiException.BadRequest("invalid", "Jede Zuordnung braucht eine Gruppe.");
-            if (body.Select(a => a.GroupId).Distinct().Count() != body.Count) throw ApiException.BadRequest("invalid", "Jede Gruppe darf nur einmal zugeordnet sein.");
+            if (body.Count > 50) throw ApiException.BadRequest("invalid", L.T("Höchstens 50 Zuordnungen."));
+            if (body.Any(a => string.IsNullOrWhiteSpace(a.GroupId))) throw ApiException.BadRequest("invalid", L.T("Jede Zuordnung braucht eine Gruppe."));
+            if (body.Select(a => a.GroupId).Distinct().Count() != body.Count) throw ApiException.BadRequest("invalid", L.T("Jede Gruppe darf nur einmal zugeordnet sein."));
             var profileIds = body.Select(a => a.ProfileId).Distinct().ToList();
             var valid = await db.Profiles.CountAsync(p => profileIds.Contains(p.Id) && (p.TenantId == null || p.TenantId == tenantId));
-            if (valid != profileIds.Count) throw ApiException.BadRequest("invalid", "Mindestens ein Profil gilt nicht für diesen Tenant.");
+            if (valid != profileIds.Count) throw ApiException.BadRequest("invalid", L.T("Mindestens ein Profil gilt nicht für diesen Tenant."));
 
             db.GroupProfiles.RemoveRange(await db.GroupProfiles.Where(a => a.TenantId == tenantId).ToListAsync());
             var prio = 0;
@@ -195,7 +194,7 @@ public static class GroupProfileEndpoints
             await cu.RequireTenantAsync(tenantId, Permission.RegisterKeys);
             var assignments = await db.GroupProfiles.AsNoTracking().Where(a => a.TenantId == tenantId).OrderBy(a => a.Priority).ToListAsync();
             if (assignments.Count == 0) return Results.Ok(new { profileId = (Guid?)null, groupName = (string?)null });
-            var t = await db.Tenants.FindAsync(tenantId) ?? throw ApiException.NotFound("Tenant");
+            var t = await db.Tenants.FindAsync(tenantId) ?? throw ApiException.NotFound(L.T("Tenant"));
             var member = await (await gf.ForTenantAsync(t.EntraTenantId)).CheckMemberGroupsAsync(userId, assignments.Select(a => a.GroupId).ToList());
             var match = assignments.FirstOrDefault(a => member.Contains(a.GroupId));
             return Results.Ok(new { profileId = match?.ProfileId, groupName = match?.GroupName });

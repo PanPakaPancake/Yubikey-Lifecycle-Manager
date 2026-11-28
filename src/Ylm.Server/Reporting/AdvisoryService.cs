@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Ylm.Core;
 using Ylm.Server.Data;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Reporting;
 
@@ -53,7 +54,7 @@ public sealed class AdvisoryService(YlmDbContext db)
         items.SelectMany(i => i.People).Select(p => p.UserPrincipalName.ToLowerInvariant()).Distinct().Count();
 
     private static AdvisoryKey Map(YubiKey k) => new(
-        k.Id, k.TenantId, k.TenantId is null ? "Partnerlager" : k.Tenant?.DisplayName ?? "", k.SerialNumber, k.Model,
+        k.Id, k.TenantId, k.TenantId is null ? L.T("Partnerlager") : k.Tenant?.DisplayName ?? "", k.SerialNumber, k.Model,
         KeySeriesInfo.DisplayName(KeySeriesInfo.Detect(k.Model, k.IsFips, k.FirmwareVersion)), k.FirmwareVersion,
         k.Status.ToString(), k.Usage.ToString(), k.Custodian,
         k.Registrations.Where(r => r.RemovedAt == null).OrderBy(r => r.UserDisplayName ?? r.UserPrincipalName)
@@ -62,13 +63,13 @@ public sealed class AdvisoryService(YlmDbContext db)
     /// <summary>Tabelle für CSV und Excel: eine Zeile pro Hinweis und Key. advisory: nur dieser Hinweis.</summary>
     public static (string[] Header, List<object?[]> Rows) Table(AdvisoryOverview o, string? advisory, bool includeTenant)
     {
-        string[] header = ["Hinweis", "Titel", "Einstufung", "Betrifft Passkeys", .. (includeTenant ? new[] { "Tenant" } : []),
-            "Seriennummer", "Modell", "Reihe", "Firmware", "Status", "Nutzung", "Personen", "Verwahrer", "Behoben ab Firmware", "Empfehlung"];
+        string[] header = [L.T("Hinweis"), L.T("Titel"), L.T("Einstufung"), L.T("Betrifft Passkeys"), .. (includeTenant ? new[] { L.T("Tenant") } : []),
+            L.T("Seriennummer"), L.T("Modell"), L.T("Reihe"), L.T("Firmware"), L.T("Status"), L.T("Nutzung"), L.T("Personen"), L.T("Verwahrer"), L.T("Behoben ab Firmware"), L.T("Empfehlung")];
         var rows = new List<object?[]>();
         foreach (var a in o.Advisories.Where(a => advisory is null || string.Equals(a.Id, advisory, StringComparison.OrdinalIgnoreCase)))
         foreach (var k in a.Items)
         {
-            rows.Add([a.Id, a.Title, a.Severity, a.AffectsFido ? "ja" : "nein", .. (includeTenant ? new object?[] { k.TenantName } : []),
+            rows.Add([a.Id, a.Title, a.Severity, a.AffectsFido ? L.T("ja") : L.T("nein"), .. (includeTenant ? new object?[] { k.TenantName } : []),
                 k.SerialNumber, k.Model, k.Series, k.FirmwareVersion, KeyLifecycle.DisplayName(Enum.Parse<KeyStatus>(k.Status)), UsageLabel(k.Usage),
                 string.Join(", ", k.People.Select(p => p.DisplayName is null ? p.UserPrincipalName : $"{p.DisplayName} ({p.UserPrincipalName})")),
                 k.Custodian, a.FixedIn, a.Recommendation]);
@@ -78,8 +79,8 @@ public sealed class AdvisoryService(YlmDbContext db)
 
     private static string UsageLabel(string usage) => usage switch
     {
-        nameof(KeyUsage.Shared) => "Geteilt",
-        nameof(KeyUsage.Breakglass) => "Breakglass",
-        _ => "Persönlich",
+        nameof(KeyUsage.Shared) => L.T("Geteilt"),
+        nameof(KeyUsage.Breakglass) => L.T("Breakglass"),
+        _ => L.T("Persönlich"),
     };
 }

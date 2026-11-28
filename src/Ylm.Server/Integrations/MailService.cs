@@ -10,6 +10,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Pdf;
 using Ylm.Server.Reporting;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Integrations;
 
@@ -72,13 +73,13 @@ public sealed class ReportMailService(YlmDbContext db, IMailSender sender, Dashb
     private async Task SendAsync(OutgoingMail mail, CancellationToken ct)
     {
         var s = await SettingsAsync(ct);
-        if (!s.IsConfigured) throw ApiException.Conflict("smtp_missing", "Bitte zuerst den Mailserver einrichten.");
+        if (!s.IsConfigured) throw ApiException.Conflict("smtp_missing", L.T("Bitte zuerst den Mailserver einrichten."));
         var password = s.PasswordProtected is null ? null : dataProtection.CreateProtector(PasswordPurpose).Unprotect(s.PasswordProtected);
         await sender.SendAsync(s, password, mail, ct);
     }
 
-    public Task SendTestAsync(string to, CancellationToken ct = default) => SendAsync(new OutgoingMail([to], "Testmail vom Yubikey Lifecycle Manager",
-        "<p>Der Mailversand für die Mail-Berichte funktioniert.</p>", "Der Mailversand für die Mail-Berichte funktioniert.", []), ct);
+    public Task SendTestAsync(string to, CancellationToken ct = default) => SendAsync(new OutgoingMail([to], L.T("Testmail vom Yubikey Lifecycle Manager"),
+        L.T("<p>Der Mailversand für die Mail-Berichte funktioniert.</p>"), L.T("Der Mailversand für die Mail-Berichte funktioniert."), []), ct);
 
     /// <summary>Next run after <paramref name="after"/> in the schedule's time zone.</summary>
     public static DateTimeOffset NextRun(ReportSchedule s, DateTimeOffset after)
@@ -106,24 +107,25 @@ public sealed class ReportMailService(YlmDbContext db, IMailSender sender, Dashb
 
     public static string Describe(ReportSchedule s)
     {
-        string[] days = ["Sonntag", "Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag"];
+        string[] days = [L.T("Sonntag"), L.T("Montag"), L.T("Dienstag"), L.T("Mittwoch"), L.T("Donnerstag"), L.T("Freitag"), L.T("Samstag")];
         return s.Frequency switch
         {
-            ReportFrequency.Daily => $"täglich um {s.Hour}:00 Uhr",
-            ReportFrequency.Weekly => $"jeden {days[Math.Clamp(s.DayOfWeek, 0, 6)]} um {s.Hour}:00 Uhr",
-            _ => $"monatlich am {s.DayOfMonth}. um {s.Hour}:00 Uhr",
+            ReportFrequency.Daily => L.F($"täglich um {s.Hour}:00 Uhr"),
+            ReportFrequency.Weekly => L.F($"jeden {days[Math.Clamp(s.DayOfWeek, 0, 6)]} um {s.Hour}:00 Uhr"),
+            _ => L.F($"monatlich am {s.DayOfMonth}. um {s.Hour}:00 Uhr"),
         };
     }
 
     public async Task SendReportAsync(ReportSchedule s, AuditActor actor, CancellationToken ct = default)
     {
+        using var language = L.Use(await Setup.BrandingService.PlatformLanguageAsync(db, ct));
         var tenants = await db.Tenants.AsNoTracking().Where(t => t.Status == TenantStatus.Active && (s.AllTenants || s.TenantIds.Contains(t.Id))).OrderBy(t => t.DisplayName).ToListAsync(ct);
         var ids = tenants.Select(t => t.Id).ToList();
         try
         {
-            if (s.Recipients.Count == 0) throw ApiException.BadRequest("no_recipients", "Der Bericht hat keine Empfänger.");
+            if (s.Recipients.Count == 0) throw ApiException.BadRequest("no_recipients", L.T("Der Bericht hat keine Empfänger."));
             var org = (await db.Installation.AsNoTracking().FirstAsync(ct)).OrganizationName;
-            var scope = s.AllTenants ? "Alle Tenants" : tenants.Count == 1 ? tenants[0].DisplayName : $"{tenants.Count} Tenants";
+            var scope = s.AllTenants ? L.T("Alle Tenants") : tenants.Count == 1 ? tenants[0].DisplayName : $"{tenants.Count} Tenants";
             var d = await dashboards.BuildAsync(ids, ct: ct);
             var openTodos = await db.Todos.CountAsync(t => ids.Contains(t.TenantId) && t.Status == TodoStatus.Open, ct);
             var pendingApprovals = await db.Approvals.CountAsync(a => ids.Contains(a.TenantId) && a.Status == ApprovalStatus.Pending, ct);
@@ -134,25 +136,25 @@ public sealed class ReportMailService(YlmDbContext db, IMailSender sender, Dashb
             if (s.IncludeCsv) attachments.Add(new($"yubikeys-{DateTime.Today:yyyy-MM-dd}.csv", "text/csv", await exports.KeysCsvAsync(ids, ct)));
             var rows = new List<(string Label, string Value)>
             {
-                ("Keys gesamt", d.Total.ToString()),
-                ("Aktiv", d.ByStatus.GetValueOrDefault("Active").ToString()),
-                ("Im Lager", d.InStock.ToString()),
-                ("Gesperrt", d.ByStatus.GetValueOrDefault("Locked").ToString()),
-                ("Personen mit Key", d.UsersWithKey.ToString()),
-                ("Abdeckung der Zielgruppe", d.CoveragePercent is { } c ? $"{c:0.#} %" : "–"),
-                ("Keys mit Sicherheitshinweis", d.VulnerableKeys.ToString()),
-                ("Ohne Seriennummer (nachzuerfassen)", d.NeedsDetails.ToString()),
-                ("Offene ToDos", openTodos.ToString()),
-                ("Offene Freigaben", pendingApprovals.ToString()),
+                (L.T("Keys gesamt"), d.Total.ToString()),
+                (L.T("Aktiv"), d.ByStatus.GetValueOrDefault("Active").ToString()),
+                (L.T("Im Lager"), d.InStock.ToString()),
+                (L.T("Gesperrt"), d.ByStatus.GetValueOrDefault("Locked").ToString()),
+                (L.T("Personen mit Key"), d.UsersWithKey.ToString()),
+                (L.T("Abdeckung der Zielgruppe"), d.CoveragePercent is { } c ? $"{c:0.#} %" : "–"),
+                (L.T("Keys mit Sicherheitshinweis"), d.VulnerableKeys.ToString()),
+                (L.T("Ohne Seriennummer (nachzuerfassen)"), d.NeedsDetails.ToString()),
+                (L.T("Offene ToDos"), openTodos.ToString()),
+                (L.T("Offene Freigaben"), pendingApprovals.ToString()),
             };
             var html = new StringBuilder();
             html.Append($"<h2 style=\"font-family:sans-serif\">{WebUtility.HtmlEncode(s.Name)}</h2>");
-            html.Append($"<p style=\"font-family:sans-serif;color:#555\">{WebUtility.HtmlEncode(org)} · {WebUtility.HtmlEncode(scope)} · Stand {DateTime.Now:dd.MM.yyyy HH:mm}</p>");
+            html.Append(L.F($"<p style=\"font-family:sans-serif;color:#555\">{WebUtility.HtmlEncode(org)} · {WebUtility.HtmlEncode(scope)} · Stand {DateTime.Now:dd.MM.yyyy HH:mm}</p>"));
             html.Append("<table style=\"font-family:sans-serif;border-collapse:collapse\">");
             foreach (var (label, value) in rows)
                 html.Append($"<tr><td style=\"padding:4px 16px 4px 0;color:#555\">{WebUtility.HtmlEncode(label)}</td><td style=\"padding:4px 0;font-weight:600\">{WebUtility.HtmlEncode(value)}</td></tr>");
-            html.Append("</table><p style=\"font-family:sans-serif;color:#555\">Den vollständigen Bericht finden Sie im PDF im Anhang.</p>");
-            var text = $"{s.Name}\n{org} · {scope}\n\n" + string.Join("\n", rows.Select(r => $"{r.Label}: {r.Value}")) + "\n\nDer vollständige Bericht steht im PDF im Anhang.";
+            html.Append(L.T("</table><p style=\"font-family:sans-serif;color:#555\">Den vollständigen Bericht finden Sie im PDF im Anhang.</p>"));
+            var text = L.F($"{s.Name}\n{org} · {scope}\n\n{(string.Join("\n", rows.Select(r => $"{r.Label}: {r.Value}")))}\n\nDer vollständige Bericht steht im PDF im Anhang.");
             await SendAsync(new OutgoingMail(s.Recipients, $"{s.Name} · {scope} · {DateTime.Today:dd.MM.yyyy}", html.ToString(), text, attachments), ct);
             s.LastSentAt = DateTimeOffset.UtcNow;
             s.LastSucceeded = true;

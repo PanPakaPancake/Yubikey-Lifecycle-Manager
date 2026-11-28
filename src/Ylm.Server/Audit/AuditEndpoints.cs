@@ -4,6 +4,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Reporting;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Audit;
 
@@ -41,7 +42,7 @@ public static class AuditEndpoints
         g.MapGet("/verify", async (CurrentUser cu, AuditService audit) =>
         {
             var user = await cu.RequireAsync(Permission.ReadAudit);
-            if (!user.AllTenants) throw ApiException.Forbidden("Die Prüfung der gesamten Kette ist nur mit Zugriff auf alle Tenants möglich.");
+            if (!user.AllTenants) throw ApiException.Forbidden(L.T("Die Prüfung der gesamten Kette ist nur mit Zugriff auf alle Tenants möglich."));
             var (valid, checkedCount, brokenAt) = await audit.VerifyAsync();
             return Results.Ok(new { valid, checkedEntries = checkedCount, brokenAt });
         });

@@ -9,6 +9,7 @@ using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Inventory;
 using Ylm.Server.Pdf;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Registration;
 
@@ -68,7 +69,7 @@ public sealed class SharedKeyService(
 
     private static void ValidateUsage(KeyUsage usage)
     {
-        if (usage == KeyUsage.Personal) throw ApiException.BadRequest("invalid_usage", "Für persönliche Keys bitte den normalen Wizard verwenden.");
+        if (usage == KeyUsage.Personal) throw ApiException.BadRequest("invalid_usage", L.T("Für persönliche Keys bitte den normalen Wizard verwenden."));
     }
 
     /// <summary>
@@ -83,12 +84,12 @@ public sealed class SharedKeyService(
     {
         ValidateUsage(req.Usage);
         var ids = Normalize(req.EntraUserIds);
-        if (ids.Count == 0) throw ApiException.BadRequest("no_users", "Bitte mindestens ein Konto auswählen.");
-        if (ids.Count > MaxAccounts) throw ApiException.BadRequest("too_many", $"Höchstens {MaxAccounts} Konten pro Vorgang.");
+        if (ids.Count == 0) throw ApiException.BadRequest("no_users", L.T("Bitte mindestens ein Konto auswählen."));
+        if (ids.Count > MaxAccounts) throw ApiException.BadRequest("too_many", L.F($"Höchstens {MaxAccounts} Konten pro Vorgang."));
         var tenant = await db.Tenants.FirstAsync(t => t.Id == tenantId, ct);
         var profile = await RegistrationService.LoadProfileAsync(db, tenantId, req.ProfileId, ct);
         var agent = agents.Require(req.AgentId, actor.Id);
-        var key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
+        var key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", L.T("Am Agent ist kein YubiKey eingesteckt."));
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
         var existing = key.SerialNumber is { } serial ? await keys.FindBySerialAsync(serial, ct) : null;
         var active = existing?.Registrations.Where(r => r.RemovedAt == null).ToList() ?? [];
@@ -99,19 +100,19 @@ public sealed class SharedKeyService(
         foreach (var id in ids)
         {
             var u = await graph.GetUserAsync(id, ct);
-            if (u is null) { problems.Add($"Konto {id} wurde in Entra nicht gefunden."); continue; }
+            if (u is null) { problems.Add(L.F($"Konto {id} wurde in Entra nicht gefunden.")); continue; }
             var onKey = active.Any(r => r.EntraUserId == u.Id);
             users.Add(new SharedPreviewUser(u.Id, u.UserPrincipalName, u.DisplayName, u.Department, u.AccountEnabled, onKey));
-            if (onKey) problems.Add($"{u.UserPrincipalName} ist auf diesem Key schon registriert.");
+            if (onKey) problems.Add(L.F($"{u.UserPrincipalName} ist auf diesem Key schon registriert."));
         }
         if (existing is not null && existing.TenantId is { } other && other != tenantId)
-            problems.Add($"Dieser Key ist im Inventar des Tenants „{existing.Tenant?.DisplayName}“ erfasst.");
+            problems.Add(L.F($"Dieser Key ist im Inventar des Tenants „{existing.Tenant?.DisplayName}“ erfasst."));
         if (existing is not null && active.Count > 0 && existing.Usage == KeyUsage.Personal)
-            problems.Add($"Der Key ist als persönlicher Key für {string.Join(", ", active.Select(r => r.UserPrincipalName))} registriert. Für die Nutzung als geteilter Key bitte mit Werksreset registrieren.");
+            problems.Add(L.F($"Der Key ist als persönlicher Key für {string.Join(", ", active.Select(r => r.UserPrincipalName))} registriert. Für die Nutzung als geteilter Key bitte mit Werksreset registrieren."));
         var resetPlanned = resetRequired || profile.FactoryResetBeforeRegistration;
         var newCount = users.Count(u => !u.AlreadyOnKey);
         if (key.RemainingDiscoverableCredentials is { } free && !resetPlanned && newCount > free)
-            problems.Add($"Auf dem Key sind nur noch {free} Passkey-Plätze frei, es sollen {newCount} Konten registriert werden.");
+            problems.Add(L.F($"Auf dem Key sind nur noch {free} Passkey-Plätze frei, es sollen {newCount} Konten registriert werden."));
         var approvalRequired = req.Usage == KeyUsage.Breakglass && tenant.RequireBreakglassApproval;
         var approvals = approvalRequired
             ? (await ApprovalService.UsableAsync(db, tenantId, actor.Id, ct)).Select(ApprovalService.ToDto).ToList()
@@ -140,9 +141,9 @@ public sealed class SharedKeyService(
     {
         ValidateUsage(req.Usage);
         var ids = Normalize(req.EntraUserIds);
-        if (ids.Count == 0) throw ApiException.BadRequest("no_users", "Bitte mindestens ein Konto auswählen.");
-        if (ids.Count > MaxAccounts) throw ApiException.BadRequest("too_many", $"Höchstens {MaxAccounts} Konten pro Vorgang.");
-        if (string.IsNullOrWhiteSpace(req.Custodian)) throw ApiException.BadRequest("custodian_required", "Bei geteilten Keys ist der Verwahrer Pflicht.");
+        if (ids.Count == 0) throw ApiException.BadRequest("no_users", L.T("Bitte mindestens ein Konto auswählen."));
+        if (ids.Count > MaxAccounts) throw ApiException.BadRequest("too_many", L.F($"Höchstens {MaxAccounts} Konten pro Vorgang."));
+        if (string.IsNullOrWhiteSpace(req.Custodian)) throw ApiException.BadRequest("custodian_required", L.T("Bei geteilten Keys ist der Verwahrer Pflicht."));
         var job = jobs.Add(new OperationJob { UserId = actor.Id, TenantId = tenantId, Kind = "shared_registration", TotalSteps = 4 + ids.Count });
         var clean = req with { EntraUserIds = ids, Custodian = req.Custodian.Trim() };
         _ = Task.Run(async () =>
@@ -179,8 +180,8 @@ public sealed class SharedKeyService(
             var profile = await RegistrationService.LoadProfileAsync(db, tenantId, req.ProfileId, ct);
             // agent erst nach dem Belegen setzen: Eine Absage wegen agent_busy darf den laufenden Vorgang nicht freigeben.
             var claim = agents.Require(req.AgentId, actorId);
-            if (claim.BusyWith is not null) throw ApiException.Conflict("agent_busy", "Der Agent führt bereits einen Vorgang aus.");
-            claim.BusyWith = "Geteilter Key";
+            if (claim.BusyWith is not null) throw ApiException.Conflict("agent_busy", L.T("Der Agent führt bereits einen Vorgang aus."));
+            claim.BusyWith = L.T("Geteilter Key");
             agent = claim;
             var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
 
@@ -189,13 +190,13 @@ public sealed class SharedKeyService(
             if (req.Usage == KeyUsage.Breakglass && tenant.RequireBreakglassApproval)
                 approval = await ApprovalService.RequireUsableAsync(db, tenantId, actorId, req.ApprovalId, req.EntraUserIds, ct);
 
-            Step(job, agent, 1, "Key wird geprüft");
-            var key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
+            Step(job, agent, 1, L.T("Key wird geprüft"));
+            var key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", L.T("Am Agent ist kein YubiKey eingesteckt."));
             if (req.ExpectedSerialNumber is { } expected && key.SerialNumber != expected)
-                throw ApiException.Conflict("key_changed", "Es steckt ein anderer Key als in der Vorschau. Bitte die Prüfung wiederholen.");
+                throw ApiException.Conflict("key_changed", L.T("Es steckt ein anderer Key als in der Vorschau. Bitte die Prüfung wiederholen."));
             var users = new List<GraphUser>();
             foreach (var id in req.EntraUserIds)
-                users.Add(await graph.GetUserAsync(id, ct) ?? throw ApiException.NotFound($"Konto {id}"));
+                users.Add(await graph.GetUserAsync(id, ct) ?? throw ApiException.NotFound(L.F($"Konto {id}")));
             var existing = key.SerialNumber is { } serial ? await keys.FindBySerialAsync(serial, ct) : null;
             var eval = WithoutPinOnSharedKey(registration.Evaluate(tenant, profile, key), existing, existing?.Registrations.Where(r => r.RemovedAt is null).ToList() ?? [], tenantId);
             var overrides = req.Overrides ?? [];
@@ -205,46 +206,46 @@ public sealed class SharedKeyService(
             var overridden = eval.Violations.Where(v => v.CanOverride && overrides.Contains(v.Code)).ToList();
 
             if (existing is not null && existing.TenantId is { } otherTenant && otherTenant != tenantId)
-                throw ApiException.Conflict("other_tenant", $"Dieser Key ist im Inventar des Tenants „{existing.Tenant?.DisplayName}“ erfasst.");
+                throw ApiException.Conflict("other_tenant", L.F($"Dieser Key ist im Inventar des Tenants „{existing.Tenant?.DisplayName}“ erfasst."));
             var activeRegs = existing?.Registrations.Where(r => r.RemovedAt is null).ToList() ?? [];
             if (!reset && activeRegs.Count > 0 && existing!.Usage == KeyUsage.Personal)
-                throw ApiException.Conflict("already_registered", $"Der Key ist als persönlicher Key für {string.Join(", ", activeRegs.Select(r => r.UserPrincipalName))} registriert. Bitte mit Werksreset registrieren.");
+                throw ApiException.Conflict("already_registered", L.F($"Der Key ist als persönlicher Key für {string.Join(", ", activeRegs.Select(r => r.UserPrincipalName))} registriert. Bitte mit Werksreset registrieren."));
             if (!reset && users.FirstOrDefault(u => activeRegs.Any(r => r.EntraUserId == u.Id)) is { } dup)
-                throw ApiException.Conflict("already_on_key", $"{dup.UserPrincipalName} ist auf diesem Key schon registriert.");
+                throw ApiException.Conflict("already_on_key", L.F($"{dup.UserPrincipalName} ist auf diesem Key schon registriert."));
             if (!reset && key.RemainingDiscoverableCredentials is { } free && users.Count > free)
-                throw ApiException.Conflict("no_slots", $"Auf dem Key sind nur noch {free} Passkey-Plätze frei.");
+                throw ApiException.Conflict("no_slots", L.F($"Auf dem Key sind nur noch {free} Passkey-Plätze frei."));
 
             if (reset)
             {
                 stage = "reset";
                 if (existing is not null && activeRegs.Count > 0)
-                    await keys.RemoveEntraRegistrationsAsync(existing, "Neuvergabe mit Werksreset", actor, ct);
-                Step(job, agent, 2, "Werksreset der FIDO2-Funktion", "Bitte den Key ab- und wieder anstecken und danach berühren.");
+                    await keys.RemoveEntraRegistrationsAsync(existing, L.T("Neuvergabe mit Werksreset"), actor, ct);
+                Step(job, agent, 2, L.T("Werksreset der FIDO2-Funktion"), L.T("Bitte den Key ab- und wieder anstecken und danach berühren."));
                 var resetResult = await agents.CallAsync(agent, (c, t) => c.ResetFido(new ResetRequest { ExpectedSerialNumber = key.SerialNumber }, t), TimeSpan.FromSeconds(150), ct);
-                if (!resetResult.Success) throw ApiException.Conflict(resetResult.ErrorCode ?? "reset_failed", "Werksreset fehlgeschlagen: " + resetResult.Error);
+                if (!resetResult.Success) throw ApiException.Conflict(resetResult.ErrorCode ?? "reset_failed", L.F($"Werksreset fehlgeschlagen: {resetResult.Error}"));
                 audit.Add(actor, AuditActions.KeyReset, tenantId, existing?.Id, key.SerialNumber?.ToString(), new { context = "shared_registration" });
                 await db.SaveChangesAsync(ct);
-                key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", "Nach dem Reset wurde kein Key gefunden.");
+                key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", L.T("Nach dem Reset wurde kein Key gefunden."));
                 activeRegs = [];
             }
 
             // PIN: neu setzen (Werkszustand) oder die aktuelle PIN des geteilten Keys verwenden.
             stage = "pin";
-            Step(job, agent, 3, key.PinIsSet ? "Aktuelle PIN wird verwendet" : "PIN wird gesetzt");
+            Step(job, agent, 3, key.PinIsSet ? L.T("Aktuelle PIN wird verwendet") : L.T("PIN wird gesetzt"));
             string pin;
             var newPin = !key.PinIsSet;
             if (newPin)
             {
                 pin = profile.PinStrategy == PinStrategy.Fixed
-                    ? dataProtection.CreateProtector(RegistrationService.FixedPinPurpose).Unprotect(profile.FixedPinProtected ?? throw ApiException.Conflict("profile_invalid", "Im Profil ist keine feste PIN hinterlegt."))
+                    ? dataProtection.CreateProtector(RegistrationService.FixedPinPurpose).Unprotect(profile.FixedPinProtected ?? throw ApiException.Conflict("profile_invalid", L.T("Im Profil ist keine feste PIN hinterlegt.")))
                     : PinGenerator.Generate(Math.Max(profile.PinLength, key.MinimumPinLength ?? PinGenerator.MinLength));
                 var setPin = await agents.CallAsync(agent, (c, t) => c.SetPin(new SetPinRequest { ExpectedSerialNumber = key.SerialNumber, NewPin = pin }, t), TimeSpan.FromSeconds(30), ct);
-                if (!setPin.Success) throw ApiException.Conflict(setPin.ErrorCode ?? "set_pin_failed", "PIN konnte nicht gesetzt werden: " + setPin.Error);
+                if (!setPin.Success) throw ApiException.Conflict(setPin.ErrorCode ?? "set_pin_failed", L.F($"PIN konnte nicht gesetzt werden: {setPin.Error}"));
             }
             else
             {
                 pin = req.CurrentPin?.Trim() ?? "";
-                if (pin.Length == 0) throw ApiException.Conflict("pin_required", "Auf dem Key ist schon eine PIN gesetzt. Bitte die aktuelle PIN des Keys eingeben (Verwahrer fragen) oder mit Werksreset registrieren.");
+                if (pin.Length == 0) throw ApiException.Conflict("pin_required", L.T("Auf dem Key ist schon eine PIN gesetzt. Bitte die aktuelle PIN des Keys eingeben (Verwahrer fragen) oder mit Werksreset registrieren."));
             }
 
             // Inventar-Eintrag vorbereiten, damit jede erfolgreiche Registrierung sofort gespeichert wird.
@@ -260,7 +261,7 @@ public sealed class SharedKeyService(
                 inv.TenantId = tenantId;
                 audit.Add(actor, AuditActions.KeyAssignedToTenant, tenantId, inv.Id, inv.SerialNumber?.ToString(), new { from = "partner_stock", context = "shared_registration" });
             }
-            if (reset && inv.Status is KeyStatus.Active or KeyStatus.Locked) KeyService.SetStatus(inv, KeyStatus.InStock, "Werksreset");
+            if (reset && inv.Status is KeyStatus.Active or KeyStatus.Locked) KeyService.SetStatus(inv, KeyStatus.InStock, L.T("Werksreset"));
             inv.SerialNumber = key.SerialNumber;
             inv.FirmwareVersion = key.FirmwareVersion;
             inv.Model = key.Model;
@@ -277,7 +278,7 @@ public sealed class SharedKeyService(
             foreach (var user in users)
             {
                 stage = "credential";
-                Step(job, agent, step++, $"Passkey für {user.DisplayName ?? user.UserPrincipalName}", "Bitte den Key berühren, sobald er blinkt.");
+                Step(job, agent, step++, L.F($"Passkey für {user.DisplayName ?? user.UserPrincipalName}"), L.T("Bitte den Key berühren, sobald er blinkt."));
                 var options = await graph.GetCreationOptionsAsync(user.Id, 5, ct);
                 var cred = await agents.CallAsync(agent, (c, t) => c.MakeCredential(new MakeCredentialRequest
                 {
@@ -288,9 +289,8 @@ public sealed class SharedKeyService(
                 if (!cred.Success)
                 {
                     if (cred.ErrorCode == "pin_rejected" && !newPin)
-                        throw ApiException.Conflict("pin_rejected", "Die eingegebene PIN ist falsch. Achtung: Nach 8 Fehleingaben sperrt der Key.");
-                    throw ApiException.Conflict(cred.ErrorCode ?? "make_credential_failed", $"Passkey für {user.UserPrincipalName} konnte nicht erzeugt werden: {cred.Error}"
-                        + (newPin ? "" : " Steht auf dem Key noch der erzwungene PIN-Wechsel aus, muss der Verwahrer die PIN zuerst ändern."));
+                        throw ApiException.Conflict("pin_rejected", L.T("Die eingegebene PIN ist falsch. Achtung: Nach 8 Fehleingaben sperrt der Key."));
+                    throw ApiException.Conflict(cred.ErrorCode ?? "make_credential_failed", L.F($"Passkey für {user.UserPrincipalName} konnte nicht erzeugt werden: {cred.Error}{(newPin ? "" : L.T(" Steht auf dem Key noch der erzwungene PIN-Wechsel aus, muss der Verwahrer die PIN zuerst ändern."))}"));
                 }
                 stage = "graph";
                 var displayName = DisplayNameTemplate.Render(profile.DisplayNameTemplate, key, user.UserPrincipalName, DateOnly.FromDateTime(DateTime.Today));
@@ -324,10 +324,10 @@ public sealed class SharedKeyService(
             if (newPin && profile.ForcePinChange && key.SupportsForcePinChange)
             {
                 stage = "force_pin_change";
-                Step(job, agent, step, "PIN-Wechsel wird erzwungen");
+                Step(job, agent, step, L.T("PIN-Wechsel wird erzwungen"));
                 var force = await agents.CallAsync(agent, (c, t) => c.ForcePinChange(new ForcePinChangeRequest { ExpectedSerialNumber = key.SerialNumber, Pin = pin }, t), TimeSpan.FromSeconds(30), ct);
                 forced = force.Success;
-                if (!force.Success) job.Notes.Add("PIN-Wechsel konnte nicht erzwungen werden: " + force.Error + ".");
+                if (!force.Success) job.Notes.Add(L.F($"PIN-Wechsel konnte nicht erzwungen werden: {force.Error}."));
             }
             if (newPin) inv.PinChangeForced = forced;
             if (approval is not null) ApprovalService.MarkUsed(approval, inv.Id, actor, audit);
@@ -342,17 +342,17 @@ public sealed class SharedKeyService(
                 var brand = await new Setup.BrandingService(db).ResolveAsync(tenant.Id, ct);
                 using var brandScope = Theme.Use(brand);
                 var pdf = PinLetterPdf.Create(new PinLetterData(
-                    brand.CompanyName ?? settings.OrganizationName, tenant.DisplayName, req.Custodian!, req.Usage == KeyUsage.Breakglass ? "Breakglass-Key" : "Geteilter Key", pin,
+                    brand.CompanyName ?? settings.OrganizationName, tenant.DisplayName, req.Custodian!, req.Usage == KeyUsage.Breakglass ? L.T("Breakglass-Key") : L.T("Geteilter Key"), pin,
                     key.Model ?? "YubiKey", key.SerialNumber, forced, DateTime.Now, users.Select(u => u.UserPrincipalName).ToList(),
                 InfoUrl: PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, ylmOptions.Value, ct: ct), tenant.Id)));
-                job.PinLetterId = letters.Add(actorId, pdf, $"PIN-Brief geteilter Key {key.SerialNumber}.pdf");
+                job.PinLetterId = letters.Add(actorId, pdf, L.F($"PIN-Brief geteilter Key {key.SerialNumber}.pdf"));
             }
-            else job.Notes.Add("Die PIN des Keys bleibt unverändert; es gibt deshalb keinen neuen PIN-Brief.");
-            job.Step = $"{users.Count} Konto/Konten registriert";
-            job.Prompt = "Key abziehen und dem Verwahrer übergeben.";
+            else job.Notes.Add(L.T("Die PIN des Keys bleibt unverändert; es gibt deshalb keinen neuen PIN-Brief."));
+            job.Step = L.F($"{users.Count} Konto/Konten registriert");
+            job.Prompt = L.T("Key abziehen und dem Verwahrer übergeben.");
             if (agent is not null) agent.BusyWith = null; // vor dem Endzustand freigeben, sonst meldet ein sofortiger Folgeauftrag agent_busy
             job.State = JobState.Succeeded;
-            agents.Progress(agent, new AgentProgress("Geteilter Key fertig", $"{users.Count} Konten registriert. Key kann abgezogen werden.", job.TotalSteps, job.TotalSteps, Done: true));
+            agents.Progress(agent, new AgentProgress(L.T("Geteilter Key fertig"), L.F($"{users.Count} Konten registriert. Key kann abgezogen werden."), job.TotalSteps, job.TotalSteps, Done: true));
         }
         catch (Exception ex)
         {
@@ -361,10 +361,10 @@ public sealed class SharedKeyService(
                 ApiException a => (a.Code, a.Message),
                 DomainException d => (d.Code, d.Message),
                 GraphException g => ("graph_error", g.Message),
-                _ => ("unexpected", "Unerwarteter Fehler: " + ex.Message),
+                _ => ("unexpected", L.F($"Unerwarteter Fehler: {ex.Message}")),
             };
             if (ex is not ApiException) logger.LogError(ex, "Shared registration failed at {Stage}", stage);
-            if (registered.Count > 0) message += $" Bereits registriert: {string.Join(", ", registered)}.";
+            if (registered.Count > 0) message += L.F($" Bereits registriert: {string.Join(", ", registered)}.");
             if (agent is not null) agent.BusyWith = null; // vor dem Endzustand freigeben, sonst meldet ein sofortiger Folgeauftrag agent_busy
             job.State = JobState.Failed;
             job.Error = message;
@@ -376,7 +376,7 @@ public sealed class SharedKeyService(
                     await audit.WriteAsync(AuditService.User(actorUser), AuditActions.KeyRegistrationFailed, tenantId, null, string.Join(", ", req.EntraUserIds), new { stage, code, message, usage = req.Usage.ToString() });
             }
             catch (Exception auditEx) { logger.LogError(auditEx, "Could not audit failed shared registration"); }
-            if (agent is not null) agents.Progress(agent, new AgentProgress("Registrierung fehlgeschlagen", message, Failed: true));
+            if (agent is not null) agents.Progress(agent, new AgentProgress(L.T("Registrierung fehlgeschlagen"), message, Failed: true));
         }
         finally
         {
@@ -388,16 +388,16 @@ public sealed class SharedKeyService(
     /// <summary>Entfernt ein Konto von einem geteilten Key: der Passkey wird in Entra gelöscht, die übrigen Konten bleiben.</summary>
     public async Task RemoveAccountAsync(YubiKey key, Guid registrationId, AuditActor actor, CancellationToken ct = default)
     {
-        var reg = key.Registrations.FirstOrDefault(r => r.Id == registrationId && r.RemovedAt == null) ?? throw ApiException.NotFound("Registrierung");
+        var reg = key.Registrations.FirstOrDefault(r => r.Id == registrationId && r.RemovedAt == null) ?? throw ApiException.NotFound(L.T("Registrierung"));
         var tenant = await db.Tenants.FirstAsync(t => t.Id == key.TenantId, ct);
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
         await graph.DeleteFido2MethodAsync(reg.EntraUserId, reg.EntraMethodId, ct);
         reg.RemovedAt = DateTimeOffset.UtcNow;
-        reg.RemovedReason = "Konto vom Key entfernt";
+        reg.RemovedReason = L.T("Konto vom Key entfernt");
         key.UpdatedAt = reg.RemovedAt.Value;
         audit.Add(actor, AuditActions.RegistrationRemoved, key.TenantId, key.Id, reg.UserPrincipalName, new { reg.EntraMethodId, usage = key.Usage.ToString() });
         // Der physische Passkey bleibt auf dem Key, ist ohne Entra-Eintrag aber wertlos.
-        if (!key.Registrations.Any(r => r.RemovedAt == null)) key.StatusNote = "Alle Konten entfernt; für eine Neuvergabe bitte zurücksetzen.";
+        if (!key.Registrations.Any(r => r.RemovedAt == null)) key.StatusNote = L.T("Alle Konten entfernt; für eine Neuvergabe bitte zurücksetzen.");
         await db.SaveChangesAsync(ct);
     }
 }

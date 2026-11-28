@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Ylm.Core;
 using Ylm.Server.Data;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Reporting;
 
@@ -14,7 +15,7 @@ public sealed class ExportService(YlmDbContext db)
         var fieldKeys = (await db.CustomFields.AsNoTracking().Where(f => f.TenantId == null || tenantIds.Contains(f.TenantId.Value))
                 .OrderBy(f => f.TenantId != null).ThenBy(f => f.SortOrder).Select(f => f.Key).ToListAsync(ct))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        string[] header = ["Tenant", "Seriennummer", "Modell", "Firmware", "Status", "Sperrgrund", "Quelle", "Personen", "Registriert am", "PIN-Wechsel erzwungen", "Tags", "Notiz", "Warnungen", .. fieldKeys];
+        string[] header = [L.T("Tenant"), L.T("Seriennummer"), L.T("Modell"), L.T("Firmware"), L.T("Status"), L.T("Sperrgrund"), L.T("Quelle"), L.T("Personen"), L.T("Registriert am"), L.T("PIN-Wechsel erzwungen"), L.T("Tags"), L.T("Notiz"), L.T("Warnungen"), .. fieldKeys];
         var rows = keys.Select(k =>
         {
             var active = k.Registrations.Where(r => r.RemovedAt == null).ToList();
@@ -24,7 +25,7 @@ public sealed class ExportService(YlmDbContext db)
                 k.LockReason is { } lr ? KeyLifecycle.DisplayName(lr) : null, k.Source.ToString(),
                 string.Join(", ", active.Select(r => r.UserPrincipalName)),
                 active.Count > 0 ? active.Min(r => r.RegisteredAt).ToString("yyyy-MM-dd HH:mm") : null,
-                k.PinChangeForced is null ? null : k.PinChangeForced.Value ? "ja" : "nein",
+                k.PinChangeForced is null ? null : k.PinChangeForced.Value ? L.T("ja") : L.T("nein"),
                 string.Join(", ", k.Tags), k.Notes,
                 string.Join(", ", FirmwareAdvisories.For(k.FirmwareVersion, k.Model, k.IsFips).Select(a => a.Id)),
                 .. fieldKeys.Select(f => k.CustomFields.GetValueOrDefault(f)),
@@ -37,7 +38,7 @@ public sealed class ExportService(YlmDbContext db)
     {
         var regs = await db.Registrations.AsNoTracking().Include(r => r.Key)
             .Where(r => tenantIds.Contains(r.TenantId)).OrderBy(r => r.RegisteredAt).ToListAsync(ct);
-        string[] header = ["Person", "Name", "Seriennummer", "Anzeigename in Entra", "Registriert am", "Registriert von", "Quelle", "Entfernt am", "Grund"];
+        string[] header = [L.T("Person"), L.T("Name"), L.T("Seriennummer"), L.T("Anzeigename in Entra"), L.T("Registriert am"), L.T("Registriert von"), L.T("Quelle"), L.T("Entfernt am"), L.T("Grund")];
         return Csv.Write(header, regs.Select(r => (IReadOnlyList<string?>)
         [
             r.UserPrincipalName, r.UserDisplayName, r.Key?.SerialNumber?.ToString(), r.DisplayName, r.RegisteredAt.ToString("yyyy-MM-dd HH:mm"),
@@ -52,7 +53,7 @@ public sealed class ExportService(YlmDbContext db)
         if (from is not null) q = q.Where(a => a.Timestamp >= from);
         if (to is not null) q = q.Where(a => a.Timestamp <= to);
         var entries = await q.OrderBy(a => a.Sequence).Take(100_000).ToListAsync(ct);
-        string[] header = ["Nr", "Zeitpunkt (UTC)", "Akteur", "Aktion", "Tenant", "Key", "Ziel", "Details", "IP", "Hash"];
+        string[] header = ["Nr", L.T("Zeitpunkt (UTC)"), L.T("Akteur"), L.T("Aktion"), L.T("Tenant"), L.T("Key"), L.T("Ziel"), L.T("Details"), "IP", L.T("Hash")];
         return Csv.Write(header, entries.Select(a => (IReadOnlyList<string?>)
         [
             a.Sequence.ToString(), a.Timestamp.ToString("yyyy-MM-dd HH:mm:ss"), a.ActorName, a.Action, a.TenantId?.ToString(), a.KeyId?.ToString(),

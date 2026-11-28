@@ -7,6 +7,7 @@ using Ylm.Contracts;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Agents;
 
@@ -63,7 +64,7 @@ public sealed class AgentHub(AgentRegistry registry, YlmDbContext db, Microsoft.
     public async Task Hello(AgentHello hello)
     {
         if (hello.ProtocolVersion != AgentProtocol.ProtocolVersion)
-            throw new HubException($"Protokollversion {hello.ProtocolVersion} wird nicht unterstützt, bitte den Agent aktualisieren.");
+            throw new HubException(L.F($"Protokollversion {hello.ProtocolVersion} wird nicht unterstützt, bitte den Agent aktualisieren."));
         var agent = await db.Agents.FirstAsync(a => a.Id == AgentId);
         agent.AgentVersion = hello.AgentVersion;
         agent.MachineName = hello.MachineName;
@@ -103,7 +104,7 @@ public sealed class AgentGateway(IHubContext<AgentHub, IAgentClient> hub, AgentR
     {
         var agent = registry.Get(agentId);
         if (agent is null || agent.UserId != userId)
-            throw ApiException.Conflict("agent_offline", "Der Agent ist nicht verbunden. Bitte prüfen Sie die Tray-App auf Ihrem PC.");
+            throw ApiException.Conflict("agent_offline", L.T("Der Agent ist nicht verbunden. Bitte prüfen Sie die Tray-App auf Ihrem PC."));
         return agent;
     }
 
@@ -119,15 +120,15 @@ public sealed class AgentGateway(IHubContext<AgentHub, IAgentClient> hub, AgentR
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            throw ApiException.Conflict("agent_timeout", "Der Agent hat nicht rechtzeitig geantwortet.");
+            throw ApiException.Conflict("agent_timeout", L.T("Der Agent hat nicht rechtzeitig geantwortet."));
         }
         catch (IOException ex)
         {
-            throw ApiException.Conflict("agent_disconnected", "Die Verbindung zum Agent wurde unterbrochen: " + ex.Message);
+            throw ApiException.Conflict("agent_disconnected", L.F($"Die Verbindung zum Agent wurde unterbrochen: {ex.Message}"));
         }
         catch (HubException ex)
         {
-            throw ApiException.Conflict("agent_error", "Fehler im Agent: " + ex.Message);
+            throw ApiException.Conflict("agent_error", L.F($"Fehler im Agent: {ex.Message}"));
         }
     }
 

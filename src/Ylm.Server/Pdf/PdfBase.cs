@@ -109,7 +109,7 @@ internal static class Theme
 /// <summary>Erscheinungsbild eines Dokuments (Whitelabeling).</summary>
 public sealed record PdfBrand(string? CompanyName, XColor Accent, byte[]? Logo, string? Contact, string? Footer,
     IReadOnlyDictionary<string, string>? LetterTenant = null, IReadOnlyDictionary<string, string>? LetterPartner = null,
-    LetterLayout? Layout = null)
+    LetterLayout? Layout = null, string? Language = null)
 {
     public static readonly PdfBrand Default = new(null, Theme.DefaultAccent, null, null, null);
 

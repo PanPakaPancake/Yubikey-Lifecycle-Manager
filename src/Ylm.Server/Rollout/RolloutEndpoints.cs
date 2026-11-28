@@ -4,6 +4,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Rollout;
 
@@ -14,7 +15,7 @@ public static class RolloutEndpoints
     public sealed record BulkRemoveRequest(List<string> UserIds, List<string> Kinds, bool KeepPhishingResistantOnly = true);
 
     private static async Task<Tenant> TenantAsync(YlmDbContext db, Guid id) =>
-        await db.Tenants.FirstOrDefaultAsync(t => t.Id == id && t.Status == TenantStatus.Active) ?? throw ApiException.NotFound("Tenant");
+        await db.Tenants.FirstOrDefaultAsync(t => t.Id == id && t.Status == TenantStatus.Active) ?? throw ApiException.NotFound(L.T("Tenant"));
 
     private static RolloutFilter Filter(string? stages, bool? guests, bool? disabled, bool? target) => new(
         string.IsNullOrWhiteSpace(stages) ? null : stages.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
@@ -46,19 +47,19 @@ public static class RolloutEndpoints
             var s = await rollout.GetAsync(tenant, false, ct);
             var rows = RolloutService.Apply(s, Filter(stages, guests, disabled, target)).ToList();
             await audit.WriteAsync(AuditService.User(user), AuditActions.ExportCreated, id, details: new { kind = "rollout." + format, stages, guests, disabled, target });
-            string[] header = ["Name", "UPN", "Abteilung", "Stand", "Methoden", "Standard-MFA", "Typ", "Aktiv", "Admin", "Zielgruppe", "Keys im Inventar", "Letzte Anmeldung"];
+            string[] header = [L.T("Name"), "UPN", L.T("Abteilung"), L.T("Stand"), L.T("Methoden"), L.T("Standard-MFA"), L.T("Typ"), L.T("Aktiv"), L.T("Admin"), L.T("Zielgruppe"), L.T("Keys im Inventar"), L.T("Letzte Anmeldung")];
             var table = rows.Select(u => (IReadOnlyList<object?>)new object?[]
             {
                 u.DisplayName, u.Upn, u.Department, StageLabel(u.Stage),
                 string.Join(", ", u.Methods.Where(m => m != "password").Select(m => AuthMethodCatalog.Get(m).Label).Distinct()),
                 u.DefaultMfaMethod is null ? null : AuthMethodCatalog.Get(u.DefaultMfaMethod).Label,
-                u.UserType == "Guest" ? "Gast" : "Mitglied", u.AccountEnabled ? "ja" : "nein", u.IsAdmin ? "ja" : "nein",
-                u.InTarget ? "ja" : "nein", u.PlatformKeys, u.LastSignIn?.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
+                u.UserType == "Guest" ? L.T("Gast") : L.T("Mitglied"), u.AccountEnabled ? L.T("ja") : L.T("nein"), u.IsAdmin ? L.T("ja") : L.T("nein"),
+                u.InTarget ? L.T("ja") : L.T("nein"), u.PlatformKeys, u.LastSignIn?.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
             }).ToList();
             var name = $"rollout-uebersicht-{DateTime.Today:yyyy-MM-dd}";
             return format == "csv"
                 ? Results.File(Csv.Write(header, table.Select(r => (IReadOnlyList<string?>)r.Select(v => v?.ToString()).ToList())), "text/csv; charset=utf-8", name + ".csv")
-                : Results.File(Xlsx.Write("Rollout Übersicht", header, table), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
+                : Results.File(Xlsx.Write(L.T("Rollout Übersicht"), header, table), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
         });
 
         g.MapGet("/users/{userId}/methods", async (Guid id, string userId, CurrentUser cu, YlmDbContext db, RolloutService rollout, CancellationToken ct) =>
@@ -109,9 +110,9 @@ public static class RolloutEndpoints
 
     public static string StageLabel(string stage) => stage switch
     {
-        nameof(RolloutStage.SecurityKey) => "Sicherheitsschlüssel",
-        nameof(RolloutStage.OtherPasskey) => "Passkey (App / Windows Hello)",
-        nameof(RolloutStage.ClassicMfa) => "Nur klassische MFA",
-        _ => "Keine MFA",
+        nameof(RolloutStage.SecurityKey) => L.T("Sicherheitsschlüssel"),
+        nameof(RolloutStage.OtherPasskey) => L.T("Passkey (App / Windows Hello)"),
+        nameof(RolloutStage.ClassicMfa) => L.T("Nur klassische MFA"),
+        _ => L.T("Keine MFA"),
     };
 }

@@ -1,3 +1,5 @@
+using Ylm.Contracts.Localization;
+
 namespace Ylm.Core;
 
 /// <summary>Platform roles as agreed in the planning (section 3).</summary>
@@ -79,28 +81,28 @@ public static class RolePermissions
     public static IReadOnlyList<Permission> Split(Permission permissions) =>
         Catalog.Select(p => p.Permission).Where(p => (permissions & p) == p).ToList();
 
-    public static readonly IReadOnlyList<PermissionInfo> Catalog =
-    [
-        new(Permission.ReadInventory, "Lesen", "Inventar ansehen", "Keys, Registrierungen und Tenants der eigenen Zuständigkeit sehen.", false),
-        new(Permission.ReadReports, "Lesen", "Berichte und Dashboard", "Dashboard, Berichte und Exporte.", false),
-        new(Permission.ReadAudit, "Lesen", "Audit-Log ansehen", "Audit-Log lesen und prüfen.", false),
-        new(Permission.RegisterKeys, "Keys", "Keys registrieren", "Wizard: Key für eine Person registrieren (on Behalf).", false),
-        new(Permission.LockKeys, "Keys", "Keys sperren", "Key sperren, z. B. bei Verlust; entfernt den Passkey in Entra.", false),
-        new(Permission.ResetKeys, "Keys", "Keys zurücksetzen", "Werksreset über den Agent, Key geht zurück ins Lager.", false),
-        new(Permission.RetireKeys, "Keys", "Keys ausmustern", "Key endgültig ausmustern.", false),
-        new(Permission.ManageInventory, "Lager", "Tenant-Lager pflegen", "Wareneingang, Import, Tags, Zusatzfelder und Notizen im Tenant.", false),
-        new(Permission.ApproveRegistrations, "Keys", "Breakglass freigeben", "Vier-Augen-Freigabe: Breakglass-Registrierungen anderer Admins freigeben oder ablehnen.", false),
-        new(Permission.IssueTemporaryAccessPass, "Anmeldemethoden", "TAP erzeugen", "Passkey-Rollout: befristeten Zugriffspass (TAP) für Benutzer erzeugen. Der Code wird nur einmal angezeigt.", false),
-        new(Permission.RemoveAuthMethods, "Anmeldemethoden", "Methoden entfernen", "Passkey-Rollout: andere Anmeldemethoden wie SMS, Authenticator oder OTP von Benutzern entfernen.", false),
-        new(Permission.ManageProtectedAccounts, "Anmeldemethoden", "Geschützte Konten bearbeiten", "TAP, Methoden entfernen und Key-Registrierung auch für geschützte Konten (Entra-Admins und geschützte Gruppen des Tenants).", false),
-        new(Permission.ManagePartnerStock, "Lager", "Partnerlager verwalten", "Keys im Partnerlager sehen, ins Partnerlager geben und Tenants zuweisen.", false),
-        new(Permission.SyncTenants, "Tenants", "Synchronisieren", "Entra-Sync und Tenant-Prüfung anstoßen.", false),
-        new(Permission.ManageTenants, "Tenants", "Tenants verwalten", "Tenants anbinden, Einstellungen, „Jetzt beheben“, Offboarding.", false),
-        new(Permission.ManageProfiles, "Tenants", "Profile verwalten", "Registrierungsprofile und Zusatzfelder.", false),
-        new(Permission.ManageUsers, "Partner", "Benutzer und Rollen", "Benutzer anlegen, Rollen vergeben und eigene Rollen definieren.", true),
-        new(Permission.ManageApiKeys, "Partner", "API und Integrationen", "Globale API-Schlüssel, Webhooks und Mail-Berichte.", true),
-        new(Permission.ManageSettings, "Partner", "Plattform-Einstellungen", "Einstellungen der Installation.", true),
-    ];
+    public static IReadOnlyList<PermissionInfo> Catalog => _catalog.Value;
+    private static readonly L.PerLanguage<IReadOnlyList<PermissionInfo>> _catalog = new(() => [
+        new(Permission.ReadInventory, L.T("Lesen"), L.T("Inventar ansehen"), L.T("Keys, Registrierungen und Tenants der eigenen Zuständigkeit sehen."), false),
+        new(Permission.ReadReports, L.T("Lesen"), L.T("Berichte und Dashboard"), L.T("Dashboard, Berichte und Exporte."), false),
+        new(Permission.ReadAudit, L.T("Lesen"), L.T("Audit-Log ansehen"), L.T("Audit-Log lesen und prüfen."), false),
+        new(Permission.RegisterKeys, L.T("Keys"), L.T("Keys registrieren"), L.T("Wizard: Key für eine Person registrieren (on Behalf)."), false),
+        new(Permission.LockKeys, L.T("Keys"), L.T("Keys sperren"), L.T("Key sperren, z. B. bei Verlust; entfernt den Passkey in Entra."), false),
+        new(Permission.ResetKeys, L.T("Keys"), L.T("Keys zurücksetzen"), L.T("Werksreset über den Agent, Key geht zurück ins Lager."), false),
+        new(Permission.RetireKeys, L.T("Keys"), L.T("Keys ausmustern"), L.T("Key endgültig ausmustern."), false),
+        new(Permission.ManageInventory, L.T("Lager"), L.T("Tenant-Lager pflegen"), L.T("Wareneingang, Import, Tags, Zusatzfelder und Notizen im Tenant."), false),
+        new(Permission.ApproveRegistrations, L.T("Keys"), L.T("Breakglass freigeben"), L.T("Vier-Augen-Freigabe: Breakglass-Registrierungen anderer Admins freigeben oder ablehnen."), false),
+        new(Permission.IssueTemporaryAccessPass, L.T("Anmeldemethoden"), L.T("TAP erzeugen"), L.T("Passkey-Rollout: befristeten Zugriffspass (TAP) für Benutzer erzeugen. Der Code wird nur einmal angezeigt."), false),
+        new(Permission.RemoveAuthMethods, L.T("Anmeldemethoden"), L.T("Methoden entfernen"), L.T("Passkey-Rollout: andere Anmeldemethoden wie SMS, Authenticator oder OTP von Benutzern entfernen."), false),
+        new(Permission.ManageProtectedAccounts, L.T("Anmeldemethoden"), L.T("Geschützte Konten bearbeiten"), L.T("TAP, Methoden entfernen und Key-Registrierung auch für geschützte Konten (Entra-Admins und geschützte Gruppen des Tenants)."), false),
+        new(Permission.ManagePartnerStock, L.T("Lager"), L.T("Partnerlager verwalten"), L.T("Keys im Partnerlager sehen, ins Partnerlager geben und Tenants zuweisen."), false),
+        new(Permission.SyncTenants, L.T("Tenants"), L.T("Synchronisieren"), L.T("Entra-Sync und Tenant-Prüfung anstoßen."), false),
+        new(Permission.ManageTenants, L.T("Tenants"), L.T("Tenants verwalten"), L.T("Tenants anbinden, Einstellungen, „Jetzt beheben“, Offboarding."), false),
+        new(Permission.ManageProfiles, L.T("Tenants"), L.T("Profile verwalten"), L.T("Registrierungsprofile und Zusatzfelder."), false),
+        new(Permission.ManageUsers, L.T("Partner"), L.T("Benutzer und Rollen"), L.T("Benutzer anlegen, Rollen vergeben und eigene Rollen definieren."), true),
+        new(Permission.ManageApiKeys, L.T("Partner"), L.T("API und Integrationen"), L.T("Globale API-Schlüssel, Webhooks und Mail-Berichte."), true),
+        new(Permission.ManageSettings, L.T("Partner"), L.T("Plattform-Einstellungen"), L.T("Einstellungen der Installation."), true),
+    ]);
 
     public static string DisplayName(PlatformRole role) => role switch
     {

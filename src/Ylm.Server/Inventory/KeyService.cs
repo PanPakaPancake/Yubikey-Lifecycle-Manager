@@ -4,6 +4,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Inventory;
 
@@ -40,7 +41,7 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
     public async Task LockAsync(YubiKey key, LockReason reason, string? note, AuditActor actor, CancellationToken ct = default)
     {
         KeyLifecycle.EnsureTransition(key.Status, KeyStatus.Locked);
-        await RemoveEntraRegistrationsAsync(key, "Gesperrt: " + KeyLifecycle.DisplayName(reason), actor, ct);
+        await RemoveEntraRegistrationsAsync(key, L.F($"Gesperrt: {KeyLifecycle.DisplayName(reason)}"), actor, ct);
         SetStatus(key, KeyStatus.Locked, note);
         key.LockReason = reason;
         audit.Add(actor, AuditActions.KeyLocked, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { reason = reason.ToString(), note });
@@ -63,7 +64,7 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
     {
         if (key.TenantId is null) return;
         if (key.Status is not (KeyStatus.InStock or KeyStatus.Retired) || key.Registrations.Any(r => r.RemovedAt is null))
-            throw new DomainException("not_in_stock", "Nur Keys im Lager oder ausgemusterte Keys ohne aktive Registrierung können ins Partnerlager.");
+            throw new DomainException("not_in_stock", L.T("Nur Keys im Lager oder ausgemusterte Keys ohne aktive Registrierung können ins Partnerlager."));
         var from = key.TenantId;
         audit.Add(actor, AuditActions.KeyMovedToPartnerStock, from, key.Id, key.SerialNumber?.ToString(), new { fromTenantId = from });
         key.TenantId = null;
@@ -75,7 +76,7 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
     public async Task MoveToPartnerStockAsync(YubiKey key, AuditActor actor, CancellationToken ct = default)
     {
         if (key.SerialNumber is { } serial && await db.Keys.AnyAsync(k => k.Id != key.Id && k.TenantId == null && k.SerialNumber == serial, ct))
-            throw ApiException.Conflict("serial_exists", $"Im Partnerlager gibt es bereits einen Key mit der Seriennummer {serial}.");
+            throw ApiException.Conflict("serial_exists", L.F($"Im Partnerlager gibt es bereits einen Key mit der Seriennummer {serial}."));
         MoveToPartnerStock(key, actor, audit);
         await db.SaveChangesAsync(ct);
     }
@@ -83,11 +84,11 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
     /// <summary>Weist einen Key aus dem Partnerlager einem Kunden-Tenant zu; dort liegt er dann bereit im Lager.</summary>
     public async Task AssignToTenantAsync(YubiKey key, Guid tenantId, AuditActor actor, CancellationToken ct = default)
     {
-        if (key.TenantId is not null) throw ApiException.Conflict("not_partner_stock", "Der Key ist bereits einem Tenant zugeordnet.");
-        if (key.Status != KeyStatus.InStock) throw ApiException.Conflict("not_in_stock", "Nur Keys im Lager können einem Tenant zugewiesen werden.");
-        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId && t.Status == TenantStatus.Active, ct) ?? throw ApiException.NotFound("Tenant");
+        if (key.TenantId is not null) throw ApiException.Conflict("not_partner_stock", L.T("Der Key ist bereits einem Tenant zugeordnet."));
+        if (key.Status != KeyStatus.InStock) throw ApiException.Conflict("not_in_stock", L.T("Nur Keys im Lager können einem Tenant zugewiesen werden."));
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId && t.Status == TenantStatus.Active, ct) ?? throw ApiException.NotFound(L.T("Tenant"));
         if (key.SerialNumber is { } serial && await db.Keys.AnyAsync(k => k.TenantId == tenantId && k.SerialNumber == serial, ct))
-            throw ApiException.Conflict("serial_exists", $"Im Tenant „{tenant.DisplayName}“ ist die Seriennummer {serial} schon erfasst (evtl. ausgemustert).");
+            throw ApiException.Conflict("serial_exists", L.F($"Im Tenant „{tenant.DisplayName}“ ist die Seriennummer {serial} schon erfasst (evtl. ausgemustert)."));
         key.TenantId = tenantId;
         key.UpdatedAt = DateTimeOffset.UtcNow;
         audit.Add(actor, AuditActions.KeyAssignedToTenant, tenantId, key.Id, key.SerialNumber?.ToString(), new { from = "partner_stock" });
@@ -101,27 +102,27 @@ public sealed class KeyService(YlmDbContext db, IGraphClientFactory graphFactory
     /// </summary>
     public async Task<YubiKey> IdentifyAsync(YubiKey placeholder, Contracts.KeyInfo info, string? custodian, bool ignoreModelMismatch, AuditActor actor, string agentName, CancellationToken ct = default)
     {
-        if (placeholder.SerialNumber is not null) throw ApiException.Conflict("already_identified", "Der Key hat schon eine Seriennummer.");
-        if (placeholder.TenantId is null) throw ApiException.Conflict("partner_stock", "Nacherfassen gibt es nur für Keys eines Tenants.");
-        if (info.SerialNumber is not { } serial) throw ApiException.Conflict("no_serial", "Die Seriennummer des Keys ist nicht lesbar.");
+        if (placeholder.SerialNumber is not null) throw ApiException.Conflict("already_identified", L.T("Der Key hat schon eine Seriennummer."));
+        if (placeholder.TenantId is null) throw ApiException.Conflict("partner_stock", L.T("Nacherfassen gibt es nur für Keys eines Tenants."));
+        if (info.SerialNumber is not { } serial) throw ApiException.Conflict("no_serial", L.T("Die Seriennummer des Keys ist nicht lesbar."));
         if (!ignoreModelMismatch && placeholder.AaGuid is { } expected && info.AaGuid is { } actual && expected != actual)
             throw ApiException.Conflict("model_mismatch",
-                $"Der eingesteckte Key ({info.Model ?? "unbekanntes Modell"}) ist ein anderes Modell als der Passkey in Entra ({placeholder.Model ?? expected.ToString()}). Wahrscheinlich ist es der falsche Key.");
+                L.F($"Der eingesteckte Key ({info.Model ?? "unbekanntes Modell"}) ist ein anderes Modell als der Passkey in Entra ({placeholder.Model ?? expected.ToString()}). Wahrscheinlich ist es der falsche Key."));
         var active = placeholder.Registrations.Where(r => r.RemovedAt == null).ToList();
         var target = await FindBySerialAsync(serial, ct);
         if (target is not null && target.Id == placeholder.Id) target = null;
         if (target is not null)
         {
             if (target.TenantId is { } other && other != placeholder.TenantId)
-                throw ApiException.Conflict("other_tenant", $"Key {serial} ist im Inventar des Tenants „{target.Tenant?.DisplayName}“ erfasst.");
+                throw ApiException.Conflict("other_tenant", L.F($"Key {serial} ist im Inventar des Tenants „{target.Tenant?.DisplayName}“ erfasst."));
             if (target.Status == KeyStatus.Locked)
-                throw ApiException.Conflict("locked", $"Key {serial} ist im Inventar als gesperrt erfasst. Bitte zuerst prüfen, ob er wieder genutzt werden darf.");
+                throw ApiException.Conflict("locked", L.F($"Key {serial} ist im Inventar als gesperrt erfasst. Bitte zuerst prüfen, ob er wieder genutzt werden darf."));
             var others = target.Registrations.Where(r => r.RemovedAt == null && active.All(a => a.EntraUserId != r.EntraUserId)).ToList();
             if (others.Count > 0 && target.Usage == KeyUsage.Personal)
             {
                 if (string.IsNullOrWhiteSpace(custodian))
                     throw ApiException.Conflict("custodian_required",
-                        $"Auf Key {serial} sind schon Konten registriert ({string.Join(", ", others.Select(r => r.UserPrincipalName))}). Er wird damit zum geteilten Key; bitte einen Verwahrer angeben.");
+                        L.F($"Auf Key {serial} sind schon Konten registriert ({string.Join(", ", others.Select(r => r.UserPrincipalName))}). Er wird damit zum geteilten Key; bitte einen Verwahrer angeben."));
                 target.Usage = KeyUsage.Shared;
                 target.Custodian = custodian.Trim();
             }

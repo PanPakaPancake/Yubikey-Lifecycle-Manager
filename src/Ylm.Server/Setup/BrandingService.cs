@@ -5,6 +5,7 @@ using PdfSharp.Drawing;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Pdf;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Setup;
 
@@ -13,7 +14,7 @@ public sealed partial class BrandingService(YlmDbContext db)
 {
     public const int MaxLogoBytes = 1024 * 1024;
 
-    public sealed record BrandingValues(string? CompanyName, string? AccentColor, string? Contact, string? Footer);
+    public sealed record BrandingValues(string? CompanyName, string? AccentColor, string? Contact, string? Footer, string? Language = null);
 
     public Task<Branding?> GetAsync(Guid? tenantId, CancellationToken ct = default) =>
         db.Brandings.AsNoTracking().FirstOrDefaultAsync(b => b.TenantId == tenantId, ct);
@@ -27,6 +28,8 @@ public sealed partial class BrandingService(YlmDbContext db)
         var org = (await db.Installation.AsNoTracking().FirstOrDefaultAsync(ct))?.OrganizationName;
         string? Pick(Func<Branding, string?> f) => (tenant is null ? null : Clean(f(tenant))) ?? (partner is null ? null : Clean(f(partner)));
         var color = Pick(b => b.AccentColor);
+        var language = L.Normalize(tenant?.Language) ?? L.Normalize(partner?.Language);
+        using var letterLanguage = L.Use(language ?? L.German); // Vorgaben im Briefaufbau in der Sprache des Briefs
         return new PdfBrand(
             Pick(b => b.CompanyName) ?? Clean(org),
             color is not null && TryParseColor(color, out var c) ? c : Theme.DefaultAccent,
@@ -35,8 +38,15 @@ public sealed partial class BrandingService(YlmDbContext db)
             Pick(b => b.Footer),
             ParseLetter(tenant?.LetterTexts),
             ParseLetter(partner?.LetterTexts),
-            OwnLayout(tenant, partner) ?? OwnLayout(partner, null));
+            OwnLayout(tenant, partner) ?? OwnLayout(partner, null),
+            language);
     }
+
+    /// <summary>Sprache für Mails, Webhooks und andere Meldungen ohne Anfrage: Einstellung des Partners, sonst Deutsch.</summary>
+    public Task<string> PlatformLanguageAsync(CancellationToken ct = default) => PlatformLanguageAsync(db, ct);
+
+    public static async Task<string> PlatformLanguageAsync(YlmDbContext db, CancellationToken ct = default) =>
+        L.Normalize(await db.Brandings.AsNoTracking().Where(b => b.TenantId == null).Select(b => b.Language).FirstOrDefaultAsync(ct)) ?? L.German;
 
     /// <summary>
     /// Eigener Briefaufbau einer Ebene: gespeicherter Aufbau, sonst aus früheren Einzeltexten (bei Tenants über denen des Partners), sonst null (= übernehmen).
@@ -82,14 +92,15 @@ public sealed partial class BrandingService(YlmDbContext db)
     {
         var color = Clean(v.AccentColor);
         if (color is not null && !TryParseColor(color, out _))
-            throw ApiException.BadRequest("invalid_color", "Die Farbe bitte als #rrggbb angeben, z. B. #1f5fbf.");
+            throw ApiException.BadRequest("invalid_color", L.T("Die Farbe bitte als #rrggbb angeben, z. B. #1f5fbf."));
         if ((v.CompanyName?.Length ?? 0) > 120 || (v.Contact?.Length ?? 0) > 200 || (v.Footer?.Length ?? 0) > 200)
-            throw ApiException.BadRequest("too_long", "Firmenname höchstens 120, Kontakt und Fußzeile höchstens 200 Zeichen.");
+            throw ApiException.BadRequest("too_long", L.T("Firmenname höchstens 120, Kontakt und Fußzeile höchstens 200 Zeichen."));
         var row = await RowAsync(tenantId, ct);
         row.CompanyName = Clean(v.CompanyName);
         row.AccentColor = color?.ToLowerInvariant();
         row.Contact = Clean(v.Contact);
         row.Footer = Clean(v.Footer);
+        row.Language = L.Normalize(v.Language);
         row.UpdatedAt = DateTimeOffset.UtcNow;
         await db.SaveChangesAsync(ct);
         return row;
@@ -100,8 +111,8 @@ public sealed partial class BrandingService(YlmDbContext db)
         string? type = null;
         if (logo is not null)
         {
-            if (logo.Length > MaxLogoBytes) throw ApiException.BadRequest("too_large", "Das Logo darf höchstens 1 MB groß sein.");
-            type = ImageType(logo) ?? throw ApiException.BadRequest("invalid_image", "Bitte ein Logo als PNG oder JPEG hochladen.");
+            if (logo.Length > MaxLogoBytes) throw ApiException.BadRequest("too_large", L.T("Das Logo darf höchstens 1 MB groß sein."));
+            type = ImageType(logo) ?? throw ApiException.BadRequest("invalid_image", L.T("Bitte ein Logo als PNG oder JPEG hochladen."));
             try
             {
                 using var ms = new MemoryStream(logo);
@@ -109,7 +120,7 @@ public sealed partial class BrandingService(YlmDbContext db)
             }
             catch (Exception)
             {
-                throw ApiException.BadRequest("invalid_image", "Die Bilddatei lässt sich nicht lesen.");
+                throw ApiException.BadRequest("invalid_image", L.T("Die Bilddatei lässt sich nicht lesen."));
             }
         }
         var row = await RowAsync(tenantId, ct);

@@ -6,6 +6,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Registration;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Inventory;
 
@@ -73,12 +74,12 @@ public static class KeyEndpoints
             var includePartner = CurrentUser.Has(me, Permission.ManagePartnerStock);
             if (partner == true)
             {
-                if (!includePartner) throw ApiException.Forbidden("Für das Partnerlager fehlt das Recht „Partnerlager verwalten“.");
+                if (!includePartner) throw ApiException.Forbidden(L.T("Für das Partnerlager fehlt das Recht „Partnerlager verwalten“."));
                 ids = [];
             }
             else if (tenantId is { } tid)
             {
-                if (!ids.Contains(tid)) throw ApiException.Forbidden("Sie sind für diesen Tenant nicht zuständig.");
+                if (!ids.Contains(tid)) throw ApiException.Forbidden(L.T("Sie sind für diesen Tenant nicht zuständig."));
                 ids = [tid];
                 includePartner = false;
             }
@@ -102,7 +103,7 @@ public static class KeyEndpoints
             if (!string.IsNullOrWhiteSpace(advisory))
             {
                 var one = FirmwareAdvisories.Find(advisory);
-                if (one is null && advisory is not ("any" or "fido")) throw ApiException.BadRequest("unknown_advisory", "Unbekannter Sicherheitshinweis.");
+                if (one is null && advisory is not ("any" or "fido")) throw ApiException.BadRequest("unknown_advisory", L.T("Unbekannter Sicherheitshinweis."));
                 var candidates = await query.Where(k => k.FirmwareVersion != null).Select(k => new { k.Id, k.FirmwareVersion, k.Model, k.IsFips }).ToListAsync();
                 var hit = candidates.Where(k =>
                 {
@@ -131,7 +132,7 @@ public static class KeyEndpoints
 
         g.MapGet("/keys/{id:guid}", async (Guid id, CurrentUser cu, YlmDbContext db) =>
         {
-            var key = await db.Keys.AsNoTracking().Include(k => k.Tenant).Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.AsNoTracking().Include(k => k.Tenant).Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             await cu.RequireKeyAccessAsync(key.TenantId, Permission.ReadInventory);
             var history = await db.AuditEntries.AsNoTracking().Where(a => a.KeyId == id).OrderByDescending(a => a.Sequence).Take(200)
                 .Select(a => new { a.Sequence, a.Timestamp, a.ActorName, a.Action, a.Target, a.Details }).ToListAsync();
@@ -145,13 +146,13 @@ public static class KeyEndpoints
 
         g.MapPatch("/keys/{id:guid}", async (Guid id, UpdateKeyRequest body, CurrentUser cu, YlmDbContext db, KeyService keys, AuditService audit) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             var user = await cu.RequireKeyAccessAsync(key.TenantId, key.TenantId is null ? Permission.ManagePartnerStock : Permission.ManageInventory);
             var before = new { key.Tags, key.CustomFields, key.Notes, key.Custodian };
             if (body.Custodian is not null)
             {
                 if (key.Usage != KeyUsage.Personal && string.IsNullOrWhiteSpace(body.Custodian))
-                    throw ApiException.BadRequest("custodian_required", "Bei geteilten Keys ist der Verwahrer Pflicht.");
+                    throw ApiException.BadRequest("custodian_required", L.T("Bei geteilten Keys ist der Verwahrer Pflicht."));
                 var c = string.IsNullOrWhiteSpace(body.Custodian) ? null : body.Custodian.Trim();
                 if (c != key.Custodian) audit.Add(AuditService.User(user), AuditActions.KeyCustodianChanged, key.TenantId, key.Id, key.SerialNumber?.ToString(), new { before = key.Custodian, after = c });
                 key.Custodian = c;
@@ -167,7 +168,7 @@ public static class KeyEndpoints
 
         g.MapPost("/keys/{id:guid}/lock", async (Guid id, LockRequest body, CurrentUser cu, YlmDbContext db, KeyService keys, AuditService audit) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.LockKeys);
             var approval = await ApprovalService.RequireRemovalAsync(db, key, user.Id, RemovalAction.Lock, null, body.ApprovalId);
             await keys.LockAsync(key, body.Reason, body.Note, AuditService.User(user));
@@ -181,7 +182,7 @@ public static class KeyEndpoints
 
         g.MapPost("/keys/{id:guid}/retire", async (Guid id, RetireRequest body, CurrentUser cu, YlmDbContext db, KeyService keys) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.RetireKeys);
             var toPartner = body.ToPartnerStock && key.TenantId is not null;
             if (toPartner) await cu.RequireAsync(Permission.ManagePartnerStock);
@@ -192,8 +193,8 @@ public static class KeyEndpoints
         // Key im Lager (oder ausgemustert) vom Kunden-Tenant trennen und ins Partnerlager legen.
         g.MapPost("/keys/{id:guid}/to-partner-stock", async (Guid id, CurrentUser cu, YlmDbContext db, KeyService keys) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
-            if (key.TenantId is null) throw ApiException.Conflict("already_partner_stock", "Der Key liegt bereits im Partnerlager.");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
+            if (key.TenantId is null) throw ApiException.Conflict("already_partner_stock", L.T("Der Key liegt bereits im Partnerlager."));
             await cu.RequireTenantAsync(key.TenantId.Value, Permission.ManageInventory);
             var user = await cu.RequireAsync(Permission.ManagePartnerStock);
             await keys.MoveToPartnerStockAsync(key, AuditService.User(user));
@@ -203,7 +204,7 @@ public static class KeyEndpoints
         // Key aus dem Partnerlager einem Kunden-Tenant zuweisen; dort liegt er dann bereit.
         g.MapPost("/keys/{id:guid}/assign", async (Guid id, AssignRequest body, CurrentUser cu, YlmDbContext db, KeyService keys) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             await cu.RequireAsync(Permission.ManagePartnerStock);
             var user = await cu.RequireTenantAsync(body.TenantId, Permission.ManageInventory);
             await keys.AssignToTenantAsync(key, body.TenantId, AuditService.User(user));
@@ -213,7 +214,7 @@ public static class KeyEndpoints
 
         g.MapPost("/keys/{id:guid}/reset", async (Guid id, AgentRequest body, CurrentUser cu, YlmDbContext db, RegistrationService reg, JobStore jobs, IServiceScopeFactory scopes) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.ResetKeys);
             KeyLifecycle.EnsureTransition(key.Status, KeyStatus.InStock);
             var approval = await ApprovalService.RequireRemovalAsync(db, key, user.Id, RemovalAction.Reset, null, body.ApprovalId);
@@ -226,10 +227,10 @@ public static class KeyEndpoints
         // Nacherfassen eines selbst registrierten Keys (planning 5.1).
         g.MapPost("/keys/{id:guid}/identify", async (Guid id, IdentifyRequest body, CurrentUser cu, YlmDbContext db, AgentGateway agents, KeyService keys) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.ManageInventory);
             var agent = agents.Require(body.AgentId, user.Id);
-            var info = await agents.ReadKeyAsync(agent) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
+            var info = await agents.ReadKeyAsync(agent) ?? throw ApiException.Conflict("no_key", L.T("Am Agent ist kein YubiKey eingesteckt."));
             var result = await keys.IdentifyAsync(key, info, body.Custodian, body.IgnoreModelMismatch, AuditService.User(user), agent.MachineName);
             var fresh = await db.Keys.AsNoTracking().Include(k => k.Tenant).Include(k => k.Registrations).FirstAsync(k => k.Id == result.Id);
             return Results.Ok(new { key = ToDto(fresh), merged = result.Id != id });
@@ -238,7 +239,7 @@ public static class KeyEndpoints
         // Ein Konto von einem geteilten Key entfernen (Passkey in Entra löschen, die anderen Konten bleiben).
         g.MapDelete("/keys/{id:guid}/registrations/{registrationId:guid}", async (Guid id, Guid registrationId, Guid? approvalId, CurrentUser cu, YlmDbContext db, SharedKeyService shared, AuditService audit) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.LockKeys);
             var approval = await ApprovalService.RequireRemovalAsync(db, key, user.Id, RemovalAction.RemoveAccount, registrationId, approvalId);
             await shared.RemoveAccountAsync(key, registrationId, AuditService.User(user));
@@ -289,10 +290,10 @@ public static class KeyEndpoints
     {
         var user = await cu.RequireKeyAccessAsync(tenantId, Permission.ManageInventory);
         var agent = agents.Require(body.AgentId, user.Id);
-        var info = await agents.ReadKeyAsync(agent) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
-        if (info.SerialNumber is not { } serial) throw ApiException.Conflict("no_serial", "Die Seriennummer des Keys ist nicht lesbar.");
+        var info = await agents.ReadKeyAsync(agent) ?? throw ApiException.Conflict("no_key", L.T("Am Agent ist kein YubiKey eingesteckt."));
+        if (info.SerialNumber is not { } serial) throw ApiException.Conflict("no_serial", L.T("Die Seriennummer des Keys ist nicht lesbar."));
         if (await keys.FindBySerialAsync(serial) is { } existing)
-            throw ApiException.Conflict("exists", $"Key {serial} ist bereits erfasst ({(existing.TenantId is null ? "Partnerlager" : $"Tenant „{existing.Tenant?.DisplayName}“")}, Status {KeyLifecycle.DisplayName(existing.Status)}).");
+            throw ApiException.Conflict("exists", L.F($"Key {serial} ist bereits erfasst ({(existing.TenantId is null ? "Partnerlager" : L.F($"Tenant „{existing.Tenant?.DisplayName}“"))}, Status {KeyLifecycle.DisplayName(existing.Status)})."));
         var key = new YubiKey
         {
             TenantId = tenantId,
@@ -319,13 +320,13 @@ public static class KeyEndpoints
         var user = await cu.RequireKeyAccessAsync(tenantId, Permission.ManageInventory);
         using var reader = new StreamReader(req.Body);
         var text = await reader.ReadToEndAsync();
-        if (text.Length > 5_000_000) throw ApiException.BadRequest("too_large", "Die Datei ist zu groß.");
+        if (text.Length > 5_000_000) throw ApiException.BadRequest("too_large", L.T("Die Datei ist zu groß."));
         var rows = Csv.Read(text);
-        if (rows.Count < 2) throw ApiException.BadRequest("empty", "Die Datei enthält keine Datenzeilen.");
+        if (rows.Count < 2) throw ApiException.BadRequest("empty", L.T("Die Datei enthält keine Datenzeilen."));
         var header = rows[0].Select(h => h.Trim()).ToArray();
         int Col(params string[] names) => Array.FindIndex(header, h => names.Any(n => h.Equals(n, StringComparison.OrdinalIgnoreCase)));
         var cSerial = Col(ImportColumns.Serial);
-        if (cSerial < 0) throw ApiException.BadRequest("no_serial_column", $"Die Spalte „{ImportColumns.Serial[0]}“ fehlt.");
+        if (cSerial < 0) throw ApiException.BadRequest("no_serial_column", L.F($"Die Spalte „{ImportColumns.Serial[0]}“ fehlt."));
         var cModel = Col(ImportColumns.Model);
         var cFw = Col(ImportColumns.Firmware);
         var cTags = Col(ImportColumns.Tags);
@@ -340,13 +341,13 @@ public static class KeyEndpoints
         {
             var r = rows[i];
             string? Get(int c) => c >= 0 && c < r.Length && r[c].Trim().Length > 0 ? r[c].Trim() : null;
-            if (!int.TryParse(Get(cSerial), out var serial) || serial <= 0) { errors.Add($"Zeile {i + 1}: ungültige Seriennummer."); continue; }
+            if (!int.TryParse(Get(cSerial), out var serial) || serial <= 0) { errors.Add(L.F($"Zeile {i + 1}: ungültige Seriennummer.")); continue; }
             if (!knownSet.Add(serial)) { skipped++; continue; }
             var fw = Get(cFw);
-            if (fw is not null && !FirmwareVersion.TryParse(fw, out _)) { errors.Add($"Zeile {i + 1}: ungültige Firmware „{fw}“."); continue; }
+            if (fw is not null && !FirmwareVersion.TryParse(fw, out _)) { errors.Add(L.F($"Zeile {i + 1}: ungültige Firmware „{fw}“.")); continue; }
             var fields = fieldCols.ToDictionary(f => f.Key, f => Get(f.Index));
             var fieldErrors = CustomFieldValidator.Validate(specs, fields);
-            if (fieldErrors.Count > 0) { errors.Add($"Zeile {i + 1}: {string.Join(" ", fieldErrors)}"); continue; }
+            if (fieldErrors.Count > 0) { errors.Add(L.F($"Zeile {i + 1}: {string.Join(" ", fieldErrors)}")); continue; }
             var key = new YubiKey
             {
                 TenantId = tenantId,
@@ -392,7 +393,7 @@ public static class KeyEndpoints
         string[] header = [ImportColumns.Serial[0], ImportColumns.Model[0], ImportColumns.Firmware[0], ImportColumns.Tags[0], ImportColumns.Notes[0], .. specs.Select(s => s.Label)];
         var rows = new List<IReadOnlyList<string?>>
         {
-            Row(["12345671", "YubiKey 5C NFC", "5.7.1", "neu,Charge 11/2026", "Beispielzeile, vor dem Import ersetzen"], 0),
+            Row(["12345671", "YubiKey 5C NFC", "5.7.1", "neu,Charge 11/2026", L.T("Beispielzeile, vor dem Import ersetzen")], 0),
             Row(["12345672", "YubiKey 5 NFC", "5.4.3", "Charge 11/2026", ""], 1),
             Row(["12345673", "", "", "", ""], 2),
         };
@@ -408,6 +409,6 @@ public static class KeyEndpoints
         CustomFieldType.Date => "2026-01-1" + (index + 1),
         CustomFieldType.Boolean => index % 2 == 0 ? "true" : "false",
         CustomFieldType.Select => spec.Options.Count > 0 ? spec.Options[index % spec.Options.Count] : "",
-        _ => "Beispiel " + (index + 1),
+        _ => L.F($"Beispiel {(index + 1)}"),
     };
 }

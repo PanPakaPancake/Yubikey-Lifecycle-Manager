@@ -13,6 +13,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Secrets;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Security;
 
@@ -124,10 +125,10 @@ public sealed class PlatformSignIn(YlmDbContext db, AuditService audit, IOptions
 
         if (settings?.HomeTenantId is null || !Guid.TryParse(tid, out var tenantId) || tenantId != settings.HomeTenantId)
         {
-            return await DenyAsync("wrong_tenant", upn, "Anmeldung nur mit Konten aus dem Heim-Tenant der Installation.");
+            return await DenyAsync("wrong_tenant", upn, L.T("Anmeldung nur mit Konten aus dem Heim-Tenant der Installation."));
         }
-        if (!Guid.TryParse(oidValue, out var oid)) return await DenyAsync("invalid_token", upn, "Token ohne Objekt-ID.");
-        if (!settings.EntraSsoEnabled) return await DenyAsync("sso_disabled", upn, "Die Anmeldung mit Entra ist abgeschaltet. Bitte mit Passkey anmelden.");
+        if (!Guid.TryParse(oidValue, out var oid)) return await DenyAsync("invalid_token", upn, L.T("Token ohne Objekt-ID."));
+        if (!settings.EntraSsoEnabled) return await DenyAsync("sso_disabled", upn, L.T("Die Anmeldung mit Entra ist abgeschaltet. Bitte mit Passkey anmelden."));
 
         if (options.Value.RequirePhishingResistantSignIn)
         {
@@ -140,7 +141,7 @@ public sealed class PlatformSignIn(YlmDbContext db, AuditService audit, IOptions
             {
                 LastAmr = string.Join(",", amr.Where(a => a.Length <= 20 && a.All(char.IsAsciiLetterOrDigit)).Take(8));
                 return await DenyAsync("not_phishing_resistant", upn,
-                    $"Anmeldung muss passwortlos mit Sicherheitsschlüssel erfolgen (amr: {string.Join(",", amr)}).");
+                    L.F($"Anmeldung muss passwortlos mit Sicherheitsschlüssel erfolgen (amr: {string.Join(",", amr)})."));
             }
         }
 
@@ -156,7 +157,7 @@ public sealed class PlatformSignIn(YlmDbContext db, AuditService audit, IOptions
         }
 
         if (user is null || !user.IsActive)
-            return await DenyAsync("not_registered", upn, "Ihr Konto ist für die Plattform nicht freigeschaltet. Bitte wenden Sie sich an einen Owner.");
+            return await DenyAsync("not_registered", upn, L.T("Ihr Konto ist für die Plattform nicht freigeschaltet. Bitte wenden Sie sich an einen Owner."));
 
         user.EntraObjectId = oid;
         user.DisplayName = name;
@@ -269,7 +270,7 @@ public sealed class CsrfHeaderMiddleware(RequestDelegate next)
             && !ctx.Request.Path.StartsWithSegments("/api/agent"))
         {
             ctx.Response.StatusCode = 400;
-            return ctx.Response.WriteAsJsonAsync(new ApiError("csrf", "Fehlender Schutz-Header."));
+            return ctx.Response.WriteAsJsonAsync(new ApiError("csrf", L.T("Fehlender Schutz-Header.")));
         }
         return next(ctx);
     }

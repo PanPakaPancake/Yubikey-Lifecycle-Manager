@@ -1,3 +1,5 @@
+using Ylm.Contracts.Localization;
+
 namespace Ylm.Core;
 
 /// <summary>Wie stark eine Anmeldemethode schützt.</summary>
@@ -32,30 +34,31 @@ public sealed record AuthMethodInfo(string Name, string Label, MethodStrength St
 /// </summary>
 public static class AuthMethodCatalog
 {
-    private static readonly AuthMethodInfo[] All =
-    [
-        new("passKeyDeviceBound", "Passkey (Sicherheitsschlüssel)", MethodStrength.PhishingResistant, true, true),
-        new("fido2", "Passkey (Sicherheitsschlüssel)", MethodStrength.PhishingResistant, true, true),
-        new("passKeyDeviceBoundAuthenticator", "Passkey im Authenticator", MethodStrength.PhishingResistant, true, false),
-        new("passKeyDeviceBoundWindowsHello", "Passkey in Windows Hello", MethodStrength.PhishingResistant, true, false),
-        new("passKeySynced", "Synchronisierter Passkey", MethodStrength.PhishingResistant, true, false),
-        new("windowsHelloForBusiness", "Windows Hello for Business", MethodStrength.PhishingResistant, false, false),
-        new("macOsSecureEnclaveKey", "macOS Platform Credential", MethodStrength.PhishingResistant, false, false),
-        new("microsoftAuthenticatorPasswordless", "Authenticator (kennwortlos)", MethodStrength.Mfa, false, false),
-        new("microsoftAuthenticatorPush", "Authenticator-App", MethodStrength.Mfa, false, false),
-        new("softwareOneTimePasscode", "Software-OTP", MethodStrength.Mfa, false, false),
-        new("hardwareOneTimePasscode", "Hardware-OTP-Token", MethodStrength.Mfa, false, false),
-        new("mobilePhone", "SMS / Anruf (Mobil)", MethodStrength.Mfa, false, false),
-        new("alternateMobilePhone", "Anruf (Zweitnummer)", MethodStrength.Mfa, false, false),
-        new("officePhone", "Anruf (Büro)", MethodStrength.Mfa, false, false),
-        new("externalAuthMethod", "Externe MFA", MethodStrength.Mfa, false, false),
-        new("temporaryAccessPass", "Befristeter Zugriffspass (TAP)", MethodStrength.None, false, false),
-        new("email", "E-Mail (nur SSPR)", MethodStrength.None, false, false),
-        new("securityQuestion", "Sicherheitsfragen", MethodStrength.None, false, false),
-        new("password", "Kennwort", MethodStrength.None, false, false),
-    ];
+    private static AuthMethodInfo[] All => _all.Value;
+    private static readonly L.PerLanguage<AuthMethodInfo[]> _all = new(() => [
+        new("passKeyDeviceBound", L.T("Passkey (Sicherheitsschlüssel)"), MethodStrength.PhishingResistant, true, true),
+        new("fido2", L.T("Passkey (Sicherheitsschlüssel)"), MethodStrength.PhishingResistant, true, true),
+        new("passKeyDeviceBoundAuthenticator", L.T("Passkey im Authenticator"), MethodStrength.PhishingResistant, true, false),
+        new("passKeyDeviceBoundWindowsHello", L.T("Passkey in Windows Hello"), MethodStrength.PhishingResistant, true, false),
+        new("passKeySynced", L.T("Synchronisierter Passkey"), MethodStrength.PhishingResistant, true, false),
+        new("windowsHelloForBusiness", L.T("Windows Hello for Business"), MethodStrength.PhishingResistant, false, false),
+        new("macOsSecureEnclaveKey", L.T("macOS Platform Credential"), MethodStrength.PhishingResistant, false, false),
+        new("microsoftAuthenticatorPasswordless", L.T("Authenticator (kennwortlos)"), MethodStrength.Mfa, false, false),
+        new("microsoftAuthenticatorPush", L.T("Authenticator-App"), MethodStrength.Mfa, false, false),
+        new("softwareOneTimePasscode", L.T("Software-OTP"), MethodStrength.Mfa, false, false),
+        new("hardwareOneTimePasscode", L.T("Hardware-OTP-Token"), MethodStrength.Mfa, false, false),
+        new("mobilePhone", L.T("SMS / Anruf (Mobil)"), MethodStrength.Mfa, false, false),
+        new("alternateMobilePhone", L.T("Anruf (Zweitnummer)"), MethodStrength.Mfa, false, false),
+        new("officePhone", L.T("Anruf (Büro)"), MethodStrength.Mfa, false, false),
+        new("externalAuthMethod", L.T("Externe MFA"), MethodStrength.Mfa, false, false),
+        new("temporaryAccessPass", L.T("Befristeter Zugriffspass (TAP)"), MethodStrength.None, false, false),
+        new("email", L.T("E-Mail (nur SSPR)"), MethodStrength.None, false, false),
+        new("securityQuestion", L.T("Sicherheitsfragen"), MethodStrength.None, false, false),
+        new("password", L.T("Kennwort"), MethodStrength.None, false, false),
+    ]);
 
-    private static readonly Dictionary<string, AuthMethodInfo> ByName = All.ToDictionary(m => m.Name, StringComparer.OrdinalIgnoreCase);
+    private static Dictionary<string, AuthMethodInfo> ByName => _byName.Value;
+    private static readonly L.PerLanguage<Dictionary<string, AuthMethodInfo>> _byName = new(() => All.ToDictionary(m => m.Name, StringComparer.OrdinalIgnoreCase));
 
     public static IReadOnlyList<AuthMethodInfo> Known => All;
 

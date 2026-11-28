@@ -3,6 +3,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Protection;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Registration;
 
@@ -32,14 +33,14 @@ public static class RegistrationEndpoints
         g.MapGet("/jobs/{id:guid}", async (Guid id, CurrentUser cu, JobStore jobs) =>
         {
             var user = await cu.GetAsync();
-            var job = jobs.Get(id, user.Id) ?? throw ApiException.NotFound("Vorgang");
+            var job = jobs.Get(id, user.Id) ?? throw ApiException.NotFound(L.T("Vorgang"));
             return Results.Ok(job.ToDto());
         });
 
         g.MapGet("/pin-letters/{id:guid}", async (Guid id, CurrentUser cu, PinLetterStore letters, AuditService audit, JobStore jobs) =>
         {
             var user = await cu.GetAsync();
-            var letter = letters.Get(id, user.Id) ?? throw new ApiException(410, "expired", "Der PIN-Brief ist nicht mehr verfügbar. PINs werden nicht gespeichert.");
+            var letter = letters.Get(id, user.Id) ?? throw new ApiException(410, "expired", L.T("Der PIN-Brief ist nicht mehr verfügbar. PINs werden nicht gespeichert."));
             await audit.WriteAsync(AuditService.User(user), AuditActions.PinLetterDownloaded, target: letter.FileName);
             return Results.File(letter.Pdf, "application/pdf", letter.FileName);
         });

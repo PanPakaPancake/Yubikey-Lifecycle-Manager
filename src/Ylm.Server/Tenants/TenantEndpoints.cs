@@ -10,6 +10,7 @@ using Ylm.Server.Infrastructure;
 using Ylm.Server.Reporting;
 using Ylm.Server.Security;
 using Ylm.Server.Setup;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Tenants;
 
@@ -62,7 +63,7 @@ public static class TenantEndpoints
     {
         var list = groups.Where(g => !string.IsNullOrWhiteSpace(g.Id)).DistinctBy(g => g.Id)
             .Select(g => new GroupRef(g.Id.Trim(), string.IsNullOrWhiteSpace(g.Name) ? g.Id.Trim() : g.Name.Trim())).ToList();
-        if (list.Count > 50) throw ApiException.BadRequest("invalid", "Höchstens 50 Gruppen.");
+        if (list.Count > 50) throw ApiException.BadRequest("invalid", L.T("Höchstens 50 Gruppen."));
         return list;
     }
 
@@ -80,7 +81,7 @@ public static class TenantEndpoints
         g.MapGet("/{id:guid}", async (Guid id, CurrentUser cu, YlmDbContext db) =>
         {
             await cu.RequireTenantAsync(id, Permission.ReadInventory);
-            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
+            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound(L.T("Tenant"));
             return Results.Ok(ToDto(t));
         });
 
@@ -88,7 +89,7 @@ public static class TenantEndpoints
         {
             var user = await cu.RequireAsync(Permission.ManageTenants);
             var s = await setup.GetSettingsAsync();
-            if (s.ClientId is null) throw ApiException.Conflict("setup_incomplete", "Die App-Registrierung fehlt.");
+            if (s.ClientId is null) throw ApiException.Conflict("setup_incomplete", L.T("Die App-Registrierung fehlt."));
             var state = dp.CreateProtector("Ylm.Consent").Protect(System.Text.Json.JsonSerializer.Serialize(
                 new ConsentState(user.Id, DateTimeOffset.UtcNow.AddMinutes(15), TokenHashing.NewSecret(8))));
             var tenantSegment = string.IsNullOrWhiteSpace(body.TenantHint) ? "organizations" : Uri.EscapeDataString(body.TenantHint.Trim());
@@ -114,14 +115,14 @@ public static class TenantEndpoints
             }
             catch (Exception) { state = null; }
             if (state is null || state.UserId != user.Id || state.ExpiresAt < DateTimeOffset.UtcNow)
-                return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString("Ungültiger oder abgelaufener Consent-Vorgang."));
+                return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString(L.T("Ungültiger oder abgelaufener Consent-Vorgang.")));
             if (!Guid.TryParse(req.Query["tenant"], out var entraTenantId) || !string.Equals(req.Query["admin_consent"], "True", StringComparison.OrdinalIgnoreCase))
-                return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString("Der Admin-Consent wurde nicht erteilt."));
+                return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString(L.T("Der Admin-Consent wurde nicht erteilt.")));
 
             var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.EntraTenantId == entraTenantId);
             // Einen vorhandenen (auch offboardeten) Tenant darf nur reaktivieren, wer für ihn zuständig ist.
             if (tenant is not null && !CurrentUser.CanAccessTenant(user, tenant.Id))
-                return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString("Dieser Tenant ist bereits angebunden, Sie sind aber nicht für ihn zuständig."));
+                return Results.Redirect("/tenants?consentError=" + Uri.EscapeDataString(L.T("Dieser Tenant ist bereits angebunden, Sie sind aber nicht für ihn zuständig.")));
             var isNew = tenant is null;
             tenant ??= new Tenant { EntraTenantId = entraTenantId, SyncIntervalMinutes = opt.Value.DefaultSyncIntervalMinutes };
             tenant.Status = TenantStatus.Active;
@@ -159,15 +160,15 @@ public static class TenantEndpoints
         g.MapPatch("/{id:guid}", async (Guid id, UpdateTenantRequest body, CurrentUser cu, YlmDbContext db, AuditService audit, ReminderService reminders) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.ManageTenants);
-            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
+            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound(L.T("Tenant"));
             if (body.DisplayName is { Length: > 0 } name) t.DisplayName = name.Trim();
             if (body.TargetIncludeGroups is not null) t.TargetIncludeGroups = NormalizeGroups(body.TargetIncludeGroups);
             if (body.TargetExcludeGroups is not null) t.TargetExcludeGroups = NormalizeGroups(body.TargetExcludeGroups);
             if (t.TargetIncludeGroups.Any(i => t.TargetExcludeGroups.Any(e => e.Id == i.Id)))
-                throw ApiException.BadRequest("invalid", "Eine Gruppe kann nicht gleichzeitig ein- und ausgeschlossen sein.");
+                throw ApiException.BadRequest("invalid", L.T("Eine Gruppe kann nicht gleichzeitig ein- und ausgeschlossen sein."));
             if (body.SyncIntervalMinutes is { } interval)
             {
-                if (interval is < 5 or > 1440) throw ApiException.BadRequest("invalid", "Das Sync-Intervall muss zwischen 5 und 1440 Minuten liegen.");
+                if (interval is < 5 or > 1440) throw ApiException.BadRequest("invalid", L.T("Das Sync-Intervall muss zwischen 5 und 1440 Minuten liegen."));
                 t.SyncIntervalMinutes = interval;
             }
             var protectionBefore = new { t.RequireBreakglassApproval, t.RequireBreakglassRemovalApproval, t.ProtectAdmins, protectedGroups = t.ProtectedGroups.Select(x => x.Name).ToList() };
@@ -176,7 +177,7 @@ public static class TenantEndpoints
             {
                 // Abschalten schwächt den Schutz der Notfallzugänge, daher nur mit dem Recht für geschützte Konten (Owner).
                 if (!removal && !CurrentUser.Has(user, Permission.ManageProtectedAccounts))
-                    throw ApiException.Forbidden("Den Vier-Augen-Schutz für Breakglass-Keys abschalten darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat.");
+                    throw ApiException.Forbidden(L.T("Den Vier-Augen-Schutz für Breakglass-Keys abschalten darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat."));
                 t.RequireBreakglassRemovalApproval = removal;
             }
             var protectedGroups = body.ProtectedGroups is null ? null : NormalizeGroups(body.ProtectedGroups);
@@ -186,7 +187,7 @@ public static class TenantEndpoints
             {
                 // Sonst könnte sich jemand ohne dieses Recht den Schutz selbst abschalten.
                 if (!CurrentUser.Has(user, Permission.ManageProtectedAccounts))
-                    throw ApiException.Forbidden("Den Schutz von Konten ändern darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat.");
+                    throw ApiException.Forbidden(L.T("Den Schutz von Konten ändern darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat."));
                 if (body.ProtectAdmins is { } protectAdmins) t.ProtectAdmins = protectAdmins;
                 if (protectedGroups is not null) t.ProtectedGroups = protectedGroups;
             }
@@ -195,7 +196,7 @@ public static class TenantEndpoints
             {
                 if (r.UnusedKeyDays is { } days)
                 {
-                    if (days is < 30 or > 730) throw ApiException.BadRequest("invalid", "Die Schwelle für „lange nicht benutzt“ muss zwischen 30 und 730 Tagen liegen.");
+                    if (days is < 30 or > 730) throw ApiException.BadRequest("invalid", L.T("Die Schwelle für „lange nicht benutzt“ muss zwischen 30 und 730 Tagen liegen."));
                     remindersChanged |= days != t.UnusedKeyDays;
                     t.UnusedKeyDays = days;
                 }
@@ -229,7 +230,7 @@ public static class TenantEndpoints
         {
             var user = await cu.RequireTenantAsync(id, Permission.ReadInventory);
             if (!CurrentUser.Has(user, Permission.ManageTenants) && !CurrentUser.Has(user, Permission.SyncTenants)) throw ApiException.Forbidden();
-            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
+            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound(L.T("Tenant"));
             await checks.RunAsync(t, AuditService.User(user), freshToken: true);
             return Results.Ok(ToDto(t));
         });
@@ -237,7 +238,7 @@ public static class TenantEndpoints
         g.MapPost("/{id:guid}/fix", async (Guid id, FixRequest body, CurrentUser cu, YlmDbContext db, TenantCheckService checks) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.ManageTenants);
-            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
+            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound(L.T("Tenant"));
             await checks.FixAsync(t, body.CheckIds, AuditService.User(user));
             return Results.Ok(ToDto(t));
         });
@@ -245,14 +246,14 @@ public static class TenantEndpoints
         g.MapGet("/{id:guid}/groups", async (Guid id, string q, CurrentUser cu, YlmDbContext db, IGraphClientFactory gf) =>
         {
             await cu.RequireTenantAsync(id, Permission.ManageTenants);
-            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
+            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound(L.T("Tenant"));
             return Results.Ok(await (await gf.ForTenantAsync(t.EntraTenantId)).SearchGroupsAsync(q));
         });
 
         g.MapGet("/{id:guid}/users", async (Guid id, string q, CurrentUser cu, YlmDbContext db, IGraphClientFactory gf) =>
         {
             await cu.RequireTenantAsync(id, Permission.RegisterKeys);
-            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
+            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound(L.T("Tenant"));
             var graph = await gf.ForTenantAsync(t.EntraTenantId);
             var users = await graph.SearchUsersAsync(q);
             var upns = users.Select(u => u.UserPrincipalName.ToLower()).ToList();
@@ -283,7 +284,7 @@ public static class TenantEndpoints
         g.MapGet("/{id:guid}/export.zip", async (Guid id, CurrentUser cu, YlmDbContext db, ExportService exports, AuditService audit) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.ManageTenants);
-            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
+            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound(L.T("Tenant"));
             using var ms = new MemoryStream();
             using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, true))
             {
@@ -305,8 +306,8 @@ public static class TenantEndpoints
         g.MapPost("/{id:guid}/offboard", async (Guid id, OffboardRequest body, CurrentUser cu, YlmDbContext db, AuditService audit, SetupService setup, IOptions<YlmOptions> opt) =>
         {
             var user = await cu.RequireTenantAsync(id, Permission.ManageTenants);
-            if (!body.Confirm) throw ApiException.BadRequest("confirm", "Bitte das Offboarding bestätigen.");
-            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound("Tenant");
+            if (!body.Confirm) throw ApiException.BadRequest("confirm", L.T("Bitte das Offboarding bestätigen."));
+            var t = await db.Tenants.FindAsync(id) ?? throw ApiException.NotFound(L.T("Tenant"));
             t.Status = TenantStatus.Offboarded;
             t.OffboardedAt = DateTimeOffset.UtcNow;
             t.DataDeletionDueAt = DateTimeOffset.UtcNow.AddDays(opt.Value.OffboardingRetentionDays);
@@ -324,8 +325,7 @@ public static class TenantEndpoints
                 tenant = ToDto(t),
                 // The app has no right to delete its own service principal in the customer tenant.
                 removeServicePrincipalUrl = $"https://entra.microsoft.com/#view/Microsoft_AAD_IAM/ManagedAppMenuBlade/~/Overview/appId/{s.ClientId}",
-                instructions = "Entfernen Sie im Kunden-Tenant die Unternehmensanwendung „Yubikey Lifecycle Manager“ (Entra Admin Center → Unternehmensanwendungen → Eigenschaften → Löschen). " +
-                               $"Die Daten in der Plattform werden am {t.DataDeletionDueAt:dd.MM.yyyy} gelöscht; vorher können Sie sie exportieren.",
+                instructions = L.F($"Entfernen Sie im Kunden-Tenant die Unternehmensanwendung „Yubikey Lifecycle Manager“ (Entra Admin Center → Unternehmensanwendungen → Eigenschaften → Löschen). Die Daten in der Plattform werden am {t.DataDeletionDueAt:dd.MM.yyyy} gelöscht; vorher können Sie sie exportieren."),
             });
         });
     }

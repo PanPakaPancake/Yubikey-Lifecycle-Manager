@@ -301,7 +301,8 @@ function ResetModal({ keyItem, approvalId, onClose }: { keyItem: YubiKey; approv
 /** Animated instruction for the action expected at the key (unplug, plug in, touch). */
 function KeyPrompt({ text }: { text: string }) {
   const t = text.toLowerCase();
-  const kind = t.includes('abziehen') ? 'unplug' : t.includes('einstecken') || t.includes('anstecken') ? 'plug' : t.includes('berühren') ? 'touch' : 'wait';
+  // Die Texte kommen vom Server bzw. Agent, auf Deutsch oder Englisch.
+  const kind = /abziehen|remove the key|unplug/.test(t) ? 'unplug' : /einstecken|anstecken|insert/.test(t) ? 'plug' : /berühren|touch/.test(t) ? 'touch' : 'wait';
   return (
     <div className={'prompt key-prompt ' + kind} role="status" aria-live="polite">
       <span className="key-anim" aria-hidden><span className="key-body" /><span className="key-dot" /></span>

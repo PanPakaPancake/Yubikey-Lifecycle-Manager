@@ -7,6 +7,7 @@ using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.PublicApi;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Registration;
 
@@ -52,13 +53,13 @@ public static class TodoService
     private static async Task<(RegistrationTodo Todo, bool Created)> CreateAsync(YlmDbContext db, IGraphClientFactory graphs, AuditService audit, AuditActor actor, Guid tenantId,
         string userRef, string? ticketId, string? ticketUrl, string? note, Guid? profileId, DateOnly? dueDate, string source, Guid? apiKeyId)
     {
-        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId && t.Status == TenantStatus.Active) ?? throw ApiException.NotFound("Tenant");
+        var tenant = await db.Tenants.FirstOrDefaultAsync(t => t.Id == tenantId && t.Status == TenantStatus.Active) ?? throw ApiException.NotFound(L.T("Tenant"));
         if (ticketUrl is not null && !(Uri.TryCreate(ticketUrl, UriKind.Absolute, out var u) && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp)))
-            throw ApiException.BadRequest("invalid_ticket_url", "Die Ticket-URL muss mit http:// oder https:// beginnen.");
+            throw ApiException.BadRequest("invalid_ticket_url", L.T("Die Ticket-URL muss mit http:// oder https:// beginnen."));
         if (profileId is { } pid && !await db.Profiles.AnyAsync(p => p.Id == pid && (p.TenantId == tenantId || p.TenantId == null)))
-            throw ApiException.BadRequest("invalid_profile", "Das Profil gibt es in diesem Tenant nicht.");
+            throw ApiException.BadRequest("invalid_profile", L.T("Das Profil gibt es in diesem Tenant nicht."));
         var graph = await graphs.ForTenantAsync(tenant.EntraTenantId);
-        var user = await graph.GetUserAsync(userRef) ?? throw new ApiException(422, "user_not_found", $"Die Person „{userRef}“ gibt es im Tenant „{tenant.DisplayName}“ nicht.");
+        var user = await graph.GetUserAsync(userRef) ?? throw new ApiException(422, "user_not_found", L.F($"Die Person „{userRef}“ gibt es im Tenant „{tenant.DisplayName}“ nicht."));
         var existing = await db.Todos.FirstOrDefaultAsync(t => t.TenantId == tenantId && t.EntraUserId == user.Id && t.Status == TodoStatus.Open);
         if (existing is not null) return (existing, false);
         var todo = new RegistrationTodo
@@ -75,7 +76,7 @@ public static class TodoService
 
     private static async Task CancelAsync(YlmDbContext db, AuditService audit, AuditActor actor, RegistrationTodo t, string? reason)
     {
-        if (t.Status != TodoStatus.Open) throw ApiException.Conflict("closed", "Das ToDo ist bereits abgeschlossen.");
+        if (t.Status != TodoStatus.Open) throw ApiException.Conflict("closed", L.T("Das ToDo ist bereits abgeschlossen."));
         t.Status = TodoStatus.Cancelled;
         t.CompletedAt = DateTimeOffset.UtcNow;
         t.CompletedByName = actor.Name;
@@ -105,14 +106,14 @@ public static class TodoService
         {
             var user = await cu.RequireTenantAsync(tenantId, Permission.RegisterKeys);
             var userRef = body.EntraUserId ?? body.UserPrincipalName;
-            if (string.IsNullOrWhiteSpace(userRef)) throw ApiException.BadRequest("no_user", "Bitte eine Person angeben.");
-            var (todo, created) = await CreateAsync(db, graphs, audit, AuditService.User(user), tenantId, userRef.Trim(), body.TicketId, body.TicketUrl, body.Note, body.ProfileId, body.DueDate, "Manuell", null);
+            if (string.IsNullOrWhiteSpace(userRef)) throw ApiException.BadRequest("no_user", L.T("Bitte eine Person angeben."));
+            var (todo, created) = await CreateAsync(db, graphs, audit, AuditService.User(user), tenantId, userRef.Trim(), body.TicketId, body.TicketUrl, body.Note, body.ProfileId, body.DueDate, L.T("Manuell"), null);
             return Results.Ok(new { created, todo = ToDto(todo) });
         });
 
         g.MapPost("/todos/{id:guid}/cancel", async (Guid id, CancelTodoRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
-            var t = await db.Todos.FirstOrDefaultAsync(x => x.Id == id) ?? throw ApiException.NotFound("ToDo");
+            var t = await db.Todos.FirstOrDefaultAsync(x => x.Id == id) ?? throw ApiException.NotFound(L.T("ToDo"));
             var user = await cu.RequireTenantAsync(t.TenantId, Permission.RegisterKeys);
             await CancelAsync(db, audit, AuditService.User(user), t, body.Reason);
             return Results.Ok(ToDto(t));
@@ -121,9 +122,9 @@ public static class TodoService
         // Manuell erledigt, z. B. wenn die Person ihren Key anders bekommen hat.
         g.MapPost("/todos/{id:guid}/done", async (Guid id, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
-            var t = await db.Todos.FirstOrDefaultAsync(x => x.Id == id) ?? throw ApiException.NotFound("ToDo");
+            var t = await db.Todos.FirstOrDefaultAsync(x => x.Id == id) ?? throw ApiException.NotFound(L.T("ToDo"));
             var user = await cu.RequireTenantAsync(t.TenantId, Permission.RegisterKeys);
-            if (t.Status != TodoStatus.Open) throw ApiException.Conflict("closed", "Das ToDo ist bereits abgeschlossen.");
+            if (t.Status != TodoStatus.Open) throw ApiException.Conflict("closed", L.T("Das ToDo ist bereits abgeschlossen."));
             t.Status = TodoStatus.Done;
             t.CompletedAt = DateTimeOffset.UtcNow;
             t.CompletedByName = user.DisplayName;
@@ -138,7 +139,7 @@ public static class TodoService
             var user = await cu.RequireTenantAsync(tenantId, Permission.RegisterKeys);
             var ids = body.TodoIds ?? [];
             var todos = await db.Todos.Where(t => t.TenantId == tenantId && ids.Contains(t.Id) && t.Status == TodoStatus.Open).OrderBy(t => t.CreatedAt).ToListAsync();
-            if (todos.Count == 0) throw ApiException.BadRequest("empty", "Keine offenen ToDos ausgewählt.");
+            if (todos.Count == 0) throw ApiException.BadRequest("empty", L.T("Keine offenen ToDos ausgewählt."));
             var candidates = await batches.CandidatesAsync(tenantId, new BatchCandidatesRequest(null, null, todos.Select(t => t.EntraUserId).ToList()));
             var byId = candidates.Candidates.ToDictionary(c => c.EntraUserId);
             var items = todos.Select(t =>
@@ -191,8 +192,8 @@ public static class TodoService
         g.MapPost("/todos", async (ApiCreateTodo body, ClaimsPrincipal p, YlmDbContext db, IGraphClientFactory graphs, AuditService audit) =>
         {
             var ids = await scope(p, db, body.Tenant);
-            if (ids.Count != 1) throw ApiException.BadRequest("tenant_required", "Bitte den Tenant angeben (ID der Plattform, Entra-Tenant-ID oder Standard-Domain).");
-            if (string.IsNullOrWhiteSpace(body.UserPrincipalName)) throw ApiException.BadRequest("no_user", "userPrincipalName fehlt.");
+            if (ids.Count != 1) throw ApiException.BadRequest("tenant_required", L.T("Bitte den Tenant angeben (ID der Plattform, Entra-Tenant-ID oder Standard-Domain)."));
+            if (string.IsNullOrWhiteSpace(body.UserPrincipalName)) throw ApiException.BadRequest("no_user", L.T("userPrincipalName fehlt."));
             Guid? profileId = null;
             if (!string.IsNullOrWhiteSpace(body.Profile))
             {
@@ -200,7 +201,7 @@ public static class TodoService
                 var name = body.Profile.Trim();
                 profileId = await db.Profiles.Where(x => (x.TenantId == tid || x.TenantId == null) && (x.Name.ToLower() == name.ToLower() || x.Id.ToString() == name))
                     .OrderBy(x => x.TenantId == null).Select(x => (Guid?)x.Id).FirstOrDefaultAsync()
-                    ?? throw ApiException.BadRequest("invalid_profile", $"Das Profil „{name}“ gibt es in diesem Tenant nicht.");
+                    ?? throw ApiException.BadRequest("invalid_profile", L.F($"Das Profil „{name}“ gibt es in diesem Tenant nicht."));
             }
             var keyName = p.Identity?.Name?.Replace("api:", "") ?? "API";
             var actor = ApiScopes.Actor(p);
@@ -214,8 +215,8 @@ public static class TodoService
         g.MapDelete("/todos/{id:guid}", async (Guid id, string? reason, ClaimsPrincipal p, YlmDbContext db, AuditService audit) =>
         {
             var ids = await scope(p, db, null);
-            var t = await db.Todos.FirstOrDefaultAsync(x => x.Id == id && ids.Contains(x.TenantId)) ?? throw ApiException.NotFound("ToDo");
-            await CancelAsync(db, audit, ApiScopes.Actor(p), t, reason ?? "Im Ticketsystem zurückgezogen");
+            var t = await db.Todos.FirstOrDefaultAsync(x => x.Id == id && ids.Contains(x.TenantId)) ?? throw ApiException.NotFound(L.T("ToDo"));
+            await CancelAsync(db, audit, ApiScopes.Actor(p), t, reason ?? L.T("Im Ticketsystem zurückgezogen"));
             return Results.NoContent();
         }).WithSummary("Offenes ToDo zurückziehen").RequireScope(ApiScopes.TodosWrite);
     }

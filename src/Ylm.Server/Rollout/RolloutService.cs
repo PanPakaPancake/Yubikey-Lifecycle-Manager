@@ -5,6 +5,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Rollout;
 
@@ -108,7 +109,7 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
     private async Task<(string Upn, string? Name)> UserLabelAsync(Tenant tenant, IGraphClient graph, string userId, CancellationToken ct)
     {
         if (Cached(tenant.Id, userId) is { } c) return (c.Upn, c.DisplayName);
-        var u = await graph.GetUserAsync(userId, ct) ?? throw ApiException.NotFound("Benutzer");
+        var u = await graph.GetUserAsync(userId, ct) ?? throw ApiException.NotFound(L.T("Benutzer"));
         return (u.UserPrincipalName, u.DisplayName);
     }
 
@@ -159,14 +160,14 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
     public async Task<IReadOnlyList<GraphAuthMethod>> RemoveMethodAsync(Tenant tenant, string userId, string kind, string methodId, PlatformUser actorUser, CancellationToken ct = default)
     {
         if (!AuthMethodCatalog.IsRemovable(kind) && kind != "fido2")
-            throw ApiException.BadRequest("not_removable", "Diese Methode kann hier nicht entfernt werden.");
+            throw ApiException.BadRequest("not_removable", L.T("Diese Methode kann hier nicht entfernt werden."));
         var actor = AuditService.User(actorUser);
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
         await protection.EnsureAllowedAsync(tenant, graph, actorUser, [userId], ct);
         var before = await graph.ListAuthenticationMethodsAsync(userId, ct);
-        var method = before.FirstOrDefault(m => m.Id == methodId && m.Kind == kind) ?? throw ApiException.NotFound("Methode");
+        var method = before.FirstOrDefault(m => m.Id == methodId && m.Kind == kind) ?? throw ApiException.NotFound(L.T("Methode"));
         if (!AuthMethodCatalog.IsRemovable(kind, method.ReportName))
-            throw ApiException.BadRequest("not_removable", "Passkeys auf Sicherheitsschlüsseln bitte über das Inventar sperren, damit der Key-Status stimmt.");
+            throw ApiException.BadRequest("not_removable", L.T("Passkeys auf Sicherheitsschlüsseln bitte über das Inventar sperren, damit der Key-Status stimmt."));
         var (upn, _) = await UserLabelAsync(tenant, graph, userId, ct);
         await graph.DeleteAuthenticationMethodAsync(userId, kind, methodId, ct);
         audit.Add(actor, AuditActions.AuthMethodRemoved, tenant.Id, target: upn,
@@ -187,7 +188,7 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
         var actor = AuditService.User(actorUser);
         Validate(userIds);
         var bad = kinds.Where(k => !AuthMethodCatalog.IsRemovable(k)).ToList();
-        if (kinds.Count == 0 || bad.Count > 0) throw ApiException.BadRequest("invalid", "Bitte nur entfernbare Methodentypen wählen.");
+        if (kinds.Count == 0 || bad.Count > 0) throw ApiException.BadRequest("invalid", L.T("Bitte nur entfernbare Methodentypen wählen."));
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
         var results = new List<RemovalResult>();
         foreach (var userId in userIds.Distinct())
@@ -204,10 +205,10 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
                 var live = await graph.ListAuthenticationMethodsAsync(userId, ct);
                 var remove = live.Where(m => kinds.Contains(m.Kind)).ToList();
                 var remaining = live.Except(remove).ToList();
-                if (remove.Count == 0) { results.Add(new(userId, upn, 0, [], "Keine passende Methode registriert.", null)); continue; }
+                if (remove.Count == 0) { results.Add(new(userId, upn, 0, [], L.T("Keine passende Methode registriert."), null)); continue; }
                 if (keepPhishingResistantOnly && !remaining.Any(m => AuthMethodCatalog.Get(m.ReportName).Strength == MethodStrength.PhishingResistant))
                 {
-                    results.Add(new(userId, upn, 0, [], "Übersprungen: hätte danach keinen Passkey bzw. keine phishing-resistente Methode.", null));
+                    results.Add(new(userId, upn, 0, [], L.T("Übersprungen: hätte danach keinen Passkey bzw. keine phishing-resistente Methode."), null));
                     continue;
                 }
                 var labels = new List<string>();
@@ -237,8 +238,8 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
 
     private static void Validate(IReadOnlyCollection<string> userIds)
     {
-        if (userIds.Count == 0) throw ApiException.BadRequest("invalid", "Bitte mindestens einen Benutzer wählen.");
-        if (userIds.Count > MaxUsersPerAction) throw ApiException.BadRequest("invalid", $"Höchstens {MaxUsersPerAction} Benutzer auf einmal.");
+        if (userIds.Count == 0) throw ApiException.BadRequest("invalid", L.T("Bitte mindestens einen Benutzer wählen."));
+        if (userIds.Count > MaxUsersPerAction) throw ApiException.BadRequest("invalid", L.F($"Höchstens {MaxUsersPerAction} Benutzer auf einmal."));
     }
 
     public async Task<GraphTapPolicy> GetTapPolicyAsync(Tenant tenant, CancellationToken ct = default) =>
@@ -259,8 +260,8 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
     {
         var actor = AuditService.User(actorUser);
         Validate(userIds);
-        if (lifetime is < 10 or > 43200) throw ApiException.BadRequest("invalid", "Die Gültigkeit muss zwischen 10 Minuten und 30 Tagen liegen.");
-        if (start is { } s && s < DateTimeOffset.UtcNow.AddMinutes(-5)) throw ApiException.BadRequest("invalid", "Der Beginn darf nicht in der Vergangenheit liegen.");
+        if (lifetime is < 10 or > 43200) throw ApiException.BadRequest("invalid", L.T("Die Gültigkeit muss zwischen 10 Minuten und 30 Tagen liegen."));
+        if (start is { } s && s < DateTimeOffset.UtcNow.AddMinutes(-5)) throw ApiException.BadRequest("invalid", L.T("Der Beginn darf nicht in der Vergangenheit liegen."));
         var graph = await graphFactory.ForTenantAsync(tenant.EntraTenantId, ct);
         var results = new List<TapResult>();
         foreach (var userId in userIds.Distinct())
@@ -279,7 +280,7 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
                 var existing = live.Where(m => m.Kind == "temporaryAccessPass").ToList();
                 if (existing.Count > 0 && !replaceExisting)
                 {
-                    results.Add(new(userId, upn, name, null, null, null, null, "Hat bereits einen TAP. „Vorhandenen TAP ersetzen“ wählen, um einen neuen zu erzeugen."));
+                    results.Add(new(userId, upn, name, null, null, null, null, L.T("Hat bereits einen TAP. „Vorhandenen TAP ersetzen“ wählen, um einen neuen zu erzeugen.")));
                     continue;
                 }
                 foreach (var m in existing) await graph.DeleteAuthenticationMethodAsync(userId, m.Kind, m.Id, ct);
@@ -287,7 +288,7 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
                 audit.Add(actor, AuditActions.TapCreated, tenant.Id, target: upn,
                     details: new { userId, tap.StartDateTime, tap.LifetimeInMinutes, tap.IsUsableOnce, replaced = existing.Count > 0 });
                 await db.SaveChangesAsync(ct);
-                UpdateCached(tenant.Id, userId, [.. live.Except(existing), new GraphAuthMethod(tap.Id, "temporaryAccessPass", "temporaryAccessPass", null, "gültig", DateTimeOffset.UtcNow)]);
+                UpdateCached(tenant.Id, userId, [.. live.Except(existing), new GraphAuthMethod(tap.Id, "temporaryAccessPass", "temporaryAccessPass", null, L.T("gültig"), DateTimeOffset.UtcNow)]);
                 results.Add(new(userId, upn, name, tap.Pass, tap.StartDateTime, tap.LifetimeInMinutes, tap.IsUsableOnce, null));
             }
             catch (GraphException ex)
@@ -304,6 +305,6 @@ public sealed class RolloutService(YlmDbContext db, IGraphClientFactory graphFac
 
     private static string TapError(GraphException ex) =>
         ex.Message.Contains("policy", StringComparison.OrdinalIgnoreCase) || ex.GraphCode == "badRequest" && ex.Message.Contains("not enabled", StringComparison.OrdinalIgnoreCase)
-            ? "Die Methode „Befristeter Zugriffspass“ ist für diesen Benutzer nicht aktiviert. " + ex.Message
+            ? L.F($"Die Methode „Befristeter Zugriffspass“ ist für diesen Benutzer nicht aktiviert. {ex.Message}")
             : ex.Message;
 }

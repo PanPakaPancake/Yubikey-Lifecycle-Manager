@@ -9,6 +9,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
 using Ylm.Server.Setup;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Updates;
 
@@ -31,9 +32,9 @@ public sealed class HostingService(UpdateService updates, SetupService setup, Yl
         string? reason = status switch
         {
             HttpStatusCode.OK => null,
-            HttpStatusCode.ServiceUnavailable => "Ohne Updater-Container (UPDATER_TOKEN in .env) lassen sich Adresse und Zertifikat nur mit dem Installationsskript ändern.",
-            HttpStatusCode.NotFound => "Der Updater kennt diese Funktion noch nicht. Bitte das Installationsskript einmal erneut ausführen (lädt den neuen Updater).",
-            _ => "Der Updater-Container ist nicht erreichbar.",
+            HttpStatusCode.ServiceUnavailable => L.T("Ohne Updater-Container (UPDATER_TOKEN in .env) lassen sich Adresse und Zertifikat nur mit dem Installationsskript ändern."),
+            HttpStatusCode.NotFound => L.T("Der Updater kennt diese Funktion noch nicht. Bitte das Installationsskript einmal erneut ausführen (lädt den neuen Updater)."),
+            _ => L.T("Der Updater-Container ist nicht erreichbar."),
         };
         return new State(status == HttpStatusCode.OK, reason, current, view, view.Tls == HostingTls.Own ? Describe(certPem) : null);
     }
@@ -44,16 +45,16 @@ public sealed class HostingService(UpdateService updates, SetupService setup, Yl
     public async Task<(string PublicUrl, bool AddressChanged, IReadOnlyList<string> Settings)> ApplyAsync(HostingRequest request, bool entraConfirmed, AuditActor actor, CancellationToken ct = default)
     {
         var state = await GetAsync(ct);
-        if (!state.Available) throw ApiException.Conflict("hosting_unavailable", state.Reason ?? "Der Updater ist nicht erreichbar.");
+        if (!state.Available) throw ApiException.Conflict("hosting_unavailable", state.Reason ?? L.T("Der Updater ist nicht erreichbar."));
         var change = HostingPlan.Build(state.Current, request);
         if (change.Env.Count == 0 && change.Files.Count == 0)
-            throw ApiException.BadRequest("nothing_changed", "Es hat sich nichts geändert.");
+            throw ApiException.BadRequest("nothing_changed", L.T("Es hat sich nichts geändert."));
 
         var s = await setup.GetSettingsAsync();
         var before = state.View.PublicUrl;
         var addressChanged = !SameOrigin(before, change.PublicUrl);
         if (addressChanged && s.ClientId is not null && !entraConfirmed)
-            throw ApiException.BadRequest("entra_required", "Die neue Adresse muss zuerst in der App-Registrierung in Entra eingetragen sein, sonst klappt die Anmeldung danach nicht.");
+            throw ApiException.BadRequest("entra_required", L.T("Die neue Adresse muss zuerst in der App-Registrierung in Entra eingetragen sein, sonst klappt die Anmeldung danach nicht."));
 
         await updates.PostUpdaterAsync("/hosting", new { env = change.Env, files = change.Files }, ct);
         s.PublicBaseUrl = change.PublicUrl;
@@ -76,7 +77,7 @@ public sealed class HostingService(UpdateService updates, SetupService setup, Yl
         var state = await GetAsync(ct);
         var v = state.View;
         if (v.Mode != HostingMode.Https || string.IsNullOrEmpty(v.Domain))
-            throw ApiException.Conflict("hosting_mode", "Ein eigenes Zertifikat gibt es nur mit dem mitgelieferten HTTPS (Caddy). Beim eigenen Reverse Proxy das Zertifikat dort tauschen.");
+            throw ApiException.Conflict("hosting_mode", L.T("Ein eigenes Zertifikat gibt es nur mit dem mitgelieferten HTTPS (Caddy). Beim eigenen Reverse Proxy das Zertifikat dort tauschen."));
         await ApplyAsync(new HostingRequest(HostingMode.Https, v.Domain, v.Aliases, KeepOldAddress: false, v.HttpsPort, v.HttpPort, null,
             HostingTls.Own, v.AcmeEmail, CertificatePem: certificatePem, KeyPem: keyPem), entraConfirmed: true, actor, ct);
     }
@@ -169,7 +170,7 @@ public static class HostingEndpoints
             await cu.RequireAsync(Permission.ManageSettings);
             var (status, body) = await updates.UpdaterGetAsync("/hosting/root-ca", ct);
             if (status != HttpStatusCode.OK || body is not { } b || !b.TryGetProperty("pem", out var pem))
-                throw ApiException.NotFound("Stammzertifikat (Caddy läuft nicht oder nutzt keine interne Zertifizierungsstelle)");
+                throw ApiException.NotFound(L.T("Stammzertifikat (Caddy läuft nicht oder nutzt keine interne Zertifizierungsstelle)"));
             return Results.File(System.Text.Encoding.ASCII.GetBytes(pem.GetString()!), "application/x-x509-ca-cert", "ylm-root-ca.crt");
         });
 
@@ -179,7 +180,7 @@ public static class HostingEndpoints
         {
             await cu.RequireAsync(Permission.ManageSettings);
             var s = await setup.GetSettingsAsync();
-            if (s.ClientId is null) throw ApiException.Conflict("app_missing", "Die Plattform hat noch keine App-Registrierung.");
+            if (s.ClientId is null) throw ApiException.Conflict("app_missing", L.T("Die Plattform hat noch keine App-Registrierung."));
             var uris = RedirectUris(ValidUrl(body.PublicUrl));
             var (url, redirectUri, _) = setup.StartInteractiveSignIn(req, allowAutomatic: false);
             return Results.Ok(new { url, redirectUri, redirectUris = uris });
@@ -191,14 +192,14 @@ public static class HostingEndpoints
             var user = await cu.RequireAsync(Permission.ManageSettings);
             var uris = RedirectUris(ValidUrl(body.PublicUrl));
             var s = await setup.GetSettingsAsync();
-            if (s.ClientId is not { } clientId) throw ApiException.Conflict("app_missing", "Die Plattform hat noch keine App-Registrierung.");
+            if (s.ClientId is not { } clientId) throw ApiException.Conflict("app_missing", L.T("Die Plattform hat noch keine App-Registrierung."));
             var result = await setup.CompleteInteractiveSignInAsync(body.Url, null, null, ct);
             if (result.Status != "signed_in" || signIns.Current is not { } signIn)
-                throw ApiException.BadRequest("signin_failed", result.Message ?? "Die Anmeldung ist fehlgeschlagen.");
+                throw ApiException.BadRequest("signin_failed", result.Message ?? L.T("Die Anmeldung ist fehlgeschlagen."));
             try
             {
                 if (s.HomeTenantId is { } home && signIn.Admin.TenantId != home)
-                    throw ApiException.BadRequest("wrong_tenant", $"Angemeldet im Tenant {signIn.Admin.OrganizationName}. Die App-Registrierung liegt in einem anderen Tenant ({home}). Bitte mit einem Admin dieses Tenants anmelden.");
+                    throw ApiException.BadRequest("wrong_tenant", L.F($"Angemeldet im Tenant {signIn.Admin.OrganizationName}. Die App-Registrierung liegt in einem anderen Tenant ({home}). Bitte mit einem Admin dieses Tenants anmelden."));
                 var all = await bootstrap.AddRedirectUrisAsync(signIn.AccessToken, clientId, uris, ct);
                 await audit.WriteAsync(AuditService.User(user), AuditActions.RedirectUrisAdded, details: new { added = uris, signedInAs = signIn.Admin.Upn });
                 return Results.Ok(new { redirectUris = all });
@@ -219,5 +220,5 @@ public static class HostingEndpoints
     private static string ValidUrl(string url) =>
         Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var u) && (u.Scheme == "https" || u.IsLoopback)
             ? u.GetLeftPart(UriPartial.Authority)
-            : throw ApiException.BadRequest("invalid_url", "Ungültige Adresse.");
+            : throw ApiException.BadRequest("invalid_url", L.T("Ungültige Adresse."));
 }

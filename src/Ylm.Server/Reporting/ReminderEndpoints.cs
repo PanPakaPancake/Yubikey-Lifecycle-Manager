@@ -3,6 +3,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Reporting;
 
@@ -21,7 +22,7 @@ public static class ReminderEndpoints
             var ids = await cu.AccessibleTenantIdsAsync();
             if (tenantId is { } t)
             {
-                if (!ids.Contains(t)) throw ApiException.Forbidden("Sie sind für diesen Tenant nicht zuständig.");
+                if (!ids.Contains(t)) throw ApiException.Forbidden(L.T("Sie sind für diesen Tenant nicht zuständig."));
                 ids = [t];
             }
             return Results.Ok(await reminders.BuildAsync(ids, includeDismissed == true));
@@ -35,8 +36,8 @@ public static class ReminderEndpoints
     {
         // Ausblenden ändert nichts in Entra, betrifft aber, was das Team als offen sieht: wer das Inventar pflegt.
         var user = await cu.RequireTenantAsync(body.TenantId, Permission.ManageInventory);
-        if (string.IsNullOrWhiteSpace(body.Subject) || body.Subject.Length > 200) throw ApiException.BadRequest("invalid", "Unbekannte Erinnerung.");
-        if (!Enum.IsDefined(body.Kind)) throw ApiException.BadRequest("invalid", "Unbekannte Art der Erinnerung.");
+        if (string.IsNullOrWhiteSpace(body.Subject) || body.Subject.Length > 200) throw ApiException.BadRequest("invalid", L.T("Unbekannte Erinnerung."));
+        if (!Enum.IsDefined(body.Kind)) throw ApiException.BadRequest("invalid", L.T("Unbekannte Art der Erinnerung."));
         await reminders.SetDismissedAsync(body.TenantId, body.Kind, body.Subject.Trim(), dismissed, body.Note, AuditService.User(user));
         return Results.NoContent();
     }

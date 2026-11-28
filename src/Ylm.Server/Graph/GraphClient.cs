@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Ylm.Core;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Graph;
 
@@ -122,8 +123,7 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
                 }
                 catch (Exception) { /* not a Graph error body */ }
                 requestId ??= res.Headers.TryGetValues("request-id", out var ids) ? ids.FirstOrDefault() : null;
-                throw new GraphException($"Microsoft Graph meldet {(int)res.StatusCode}: {message ?? res.ReasonPhrase}" +
-                    (requestId is null ? "" : $" (request-id {requestId})"), (int)res.StatusCode, code);
+                throw new GraphException(L.F($"Microsoft Graph meldet {(int)res.StatusCode}: {message ?? res.ReasonPhrase}{(requestId is null ? "" : $" (request-id {requestId})")}"), (int)res.StatusCode, code);
             }
             return string.IsNullOrWhiteSpace(text) ? null : JsonDocument.Parse(text);
         }
@@ -607,9 +607,9 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
             "phone" => Str(m, "phoneNumber"),
             "email" => Str(m, "emailAddress"),
             "fido2" => Str(m, "model"),
-            "microsoftAuthenticator" => Str(m, "deviceTag") is { } tag && tag != "SoftwareTokenActivated" ? tag : Str(m, "phoneAppVersion") is { } v ? "App " + v : null,
-            "windowsHelloForBusiness" => Str(m, "keyStrength") == "weak" ? "schwacher Schlüssel" : null,
-            "temporaryAccessPass" => Bool(m, "isUsable") ? "gültig" : Str(m, "methodUsabilityReason") ?? "nicht nutzbar",
+            "microsoftAuthenticator" => Str(m, "deviceTag") is { } tag && tag != "SoftwareTokenActivated" ? tag : Str(m, "phoneAppVersion") is { } v ? L.F($"App {v}") : null,
+            "windowsHelloForBusiness" => Str(m, "keyStrength") == "weak" ? L.T("schwacher Schlüssel") : null,
+            "temporaryAccessPass" => Bool(m, "isUsable") ? L.T("gültig") : Str(m, "methodUsabilityReason") ?? L.T("nicht nutzbar"),
             "platformCredential" => Str(m, "platform"),
             _ => null,
         };
@@ -666,7 +666,7 @@ public sealed class GraphClient(HttpClient http, GraphTokenProvider tokens, stri
     public async Task DeleteAuthenticationMethodAsync(string userId, string kind, string methodId, CancellationToken ct = default)
     {
         if (AuthMethodCatalog.DeleteSegment(kind) is not { } segment)
-            throw new ArgumentException($"Methodentyp {kind} kann hier nicht entfernt werden.", nameof(kind));
+            throw new ArgumentException(L.F($"Methodentyp {kind} kann hier nicht entfernt werden."), nameof(kind));
         using var _ = await SendAsync(HttpMethod.Delete,
             $"{V1}/users/{Uri.EscapeDataString(userId)}/authentication/{segment}/{Uri.EscapeDataString(methodId)}", ct, allowNotFound: true);
     }
