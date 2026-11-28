@@ -3,6 +3,7 @@ import { fmtDate } from '../api';
 import { changelog, kindLabels, parseChangelog, type Release, type UpdateSummary } from '../changelog';
 import { Icon } from '../icons';
 import { Card, PageHeader, useApi } from '../ui';
+import { tr } from '../i18n';
 
 /** Versionsverlauf: was sich je Version geändert hat, und ob eine neuere Version bereitsteht. */
 export default function VersionsPage() {
@@ -15,7 +16,7 @@ export default function VersionsPage() {
 
   return (
     <div className="versions">
-      <PageHeader title="Versionsverlauf" subtitle={current ? <>Installiert ist Version <strong>{current}</strong>.</> : 'Was sich mit jeder Version geändert hat.'} />
+      <PageHeader title={tr("Versionsverlauf")} subtitle={current ? <>{tr("Installiert ist Version")} <strong>{current}</strong>.</> : tr("Was sich mit jeder Version geändert hat.")} />
 
       {s && <UpdateState s={s} pending={pending} />}
 
@@ -32,14 +33,14 @@ function UpdateState({ s, pending }: { s: UpdateSummary; pending: Release | null
       <div className="ver-update-head">
         <span className="ver-update-ico" aria-hidden><Icon name="sparkle" size={22} /></span>
         <div>
-          <h2>Version {s.latestVersion} ist verfügbar</h2>
-          <p className="muted">Installiert ist {s.currentVersion}{s.publishedAt && <>, die neue Version erschien am {fmtDate(s.publishedAt, false)}</>}.</p>
+          <h2>{tr("Version {latestVersion} ist verfügbar", { latestVersion: s.latestVersion })}</h2>
+          <p className="muted">{tr("Installiert ist {currentVersion}", { currentVersion: s.currentVersion })}{s.publishedAt && <>{tr(", die neue Version erschien am {n}", { n: fmtDate(s.publishedAt, false) })}</>}.</p>
         </div>
         <div className="ver-update-actions">
           {s.canApply
-            ? <Link className="btn primary" to="/platform#updates"><Icon name="download" size={16} />Zum Update</Link>
-            : <span className="muted small">Das Update startet ein Administrator unter „Globale Einstellungen“.</span>}
-          {s.releaseUrl && <a className="btn ghost" href={s.releaseUrl} target="_blank" rel="noreferrer">Auf GitHub</a>}
+            ? <Link className="btn primary" to="/platform#updates"><Icon name="download" size={16} />{tr("Zum Update")}</Link>
+            : <span className="muted small">{tr("Das Update startet ein Administrator unter „Globale Einstellungen“.")}</span>}
+          {s.releaseUrl && <a className="btn ghost" href={s.releaseUrl} target="_blank" rel="noreferrer">{tr("Auf GitHub")}</a>}
         </div>
       </div>
       {pending && <Changes r={pending} />}
@@ -48,8 +49,8 @@ function UpdateState({ s, pending }: { s: UpdateSummary; pending: Release | null
   return (
     <div className={'ver-state' + (s.error ? ' ver-state-warn' : '')}>
       <Icon name={s.error ? 'alert' : 'check'} size={16} />
-      {s.error ? <span>Ob es eine neuere Version gibt, ließ sich nicht prüfen: {s.error}</span>
-        : <span>Sie verwenden die neueste Version. Zuletzt geprüft {fmtDate(s.checkedAt)}.</span>}
+      {s.error ? <span>{tr("Ob es eine neuere Version gibt, ließ sich nicht prüfen: {error}", { error: s.error })}</span>
+        : <span>{tr("Sie verwenden die neueste Version. Zuletzt geprüft {checkedAt}.", { checkedAt: fmtDate(s.checkedAt) })}</span>}
     </div>
   );
 }
@@ -60,9 +61,9 @@ function ReleaseItem({ r, installed }: { r: Release; installed: boolean }) {
       <span className="ver-dot" aria-hidden />
       <div className="ver-card">
         <div className="ver-title">
-          <h3>Version {r.version}</h3>
+          <h3>{tr("Version {version}", { version: r.version })}</h3>
           {r.date && <span className="muted small">{fmtDate(r.date, false)}</span>}
-          {installed && <span className="badge tone-ok">Installiert</span>}
+          {installed && <span className="badge tone-ok">{tr("Installiert")}</span>}
         </div>
         <Changes r={r} />
       </div>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { Icon, type IconName } from './icons';
 import { api, ApiError, statusLabels, type GroupRef, type KeyStatus, type Tenant } from './api';
+import { tr } from './i18n';
 
 export function useApi<T>(url: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | undefined>();
@@ -163,7 +164,7 @@ export function Modal({ title, onClose, children, footer, wide }: { title: strin
       <div className={'modal' + (wide ? ' wide' : '')} role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => e.stopPropagation()}>
         <div className="modal-head">
           <h2>{title}</h2>
-          <button className="icon-btn" onClick={onClose} aria-label="Schließen">×</button>
+          <button className="icon-btn" onClick={onClose} aria-label={tr("Schließen")}>×</button>
         </div>
         <div className="modal-body">{children}</div>
         {footer && <div className="modal-foot">{footer}</div>}
@@ -186,9 +187,9 @@ export function TenantSelect({ value, onChange, allowAll = true, tenants }: { va
   const { data } = useApi<Tenant[]>(tenants ? null : '/api/tenants');
   const list = (tenants ?? data ?? []).filter((t) => t.status === 'Active');
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value)} aria-label="Tenant">
-      {allowAll && <option value="">Alle Tenants</option>}
-      {!allowAll && !value && <option value="">Tenant wählen …</option>}
+    <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={tr("Tenant")}>
+      {allowAll && <option value="">{tr("Alle Tenants")}</option>}
+      {!allowAll && !value && <option value="">{tr("Tenant wählen …")}</option>}
       {list.map((t) => <option key={t.id} value={t.id}>{t.displayName}</option>)}
     </select>
   );
@@ -208,7 +209,7 @@ export function download(url: string) {
 }
 
 /** Searches Entra groups of a tenant; calls onPick with the chosen group. */
-export function GroupSearch({ tenantId, onPick, exclude = [], placeholder = 'Gruppe suchen …' }: { tenantId: string; onPick: (g: GroupRef) => void; exclude?: string[]; placeholder?: string }) {
+export function GroupSearch({ tenantId, onPick, exclude = [], placeholder = tr("Gruppe suchen …") }: { tenantId: string; onPick: (g: GroupRef) => void; exclude?: string[]; placeholder?: string }) {
   const [q, setQ] = useState('');
   // Searches while typing (from 2 characters, debounced).
   const search = useLiveSearch<{ id: string; displayName: string }>((term) => `/api/tenants/${tenantId}/groups?q=${encodeURIComponent(term)}`, q);
@@ -216,16 +217,16 @@ export function GroupSearch({ tenantId, onPick, exclude = [], placeholder = 'Gru
   return (
     <div>
       <div className="toolbar" style={{ margin: 0 }}>
-        <input type="search" placeholder={placeholder + ' (ab 2 Zeichen)'} value={q} onChange={(e) => setQ(e.target.value)}
+        <input type="search" placeholder={tr("{placeholder} (ab 2 Zeichen)", { placeholder })} value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} />
-        {search.busy && <Spinner label="Suche …" />}
-        {search.results && <button type="button" className="link" onClick={() => setQ('')}>Ergebnisse schließen</button>}
+        {search.busy && <Spinner label={tr("Suche …")} />}
+        {search.results && <button type="button" className="link" onClick={() => setQ('')}>{tr("Ergebnisse schließen")}</button>}
       </div>
       <ErrorBox error={search.error} />
       {visible && (
         <div className="pick" style={{ marginTop: 8 }}>
           {visible.map((g) => <button type="button" key={g.id} onClick={() => { onPick({ id: g.id, name: g.displayName }); setQ(''); }}>{g.displayName}</button>)}
-          {visible.length === 0 && <span className="muted small">Keine (weitere) Gruppe gefunden.</span>}
+          {visible.length === 0 && <span className="muted small">{tr("Keine (weitere) Gruppe gefunden.")}</span>}
         </div>
       )}
     </div>
@@ -249,10 +250,10 @@ export function GroupChips({ groups, onRemove, empty }: { groups: GroupRef[]; on
 
 /** Small badge showing where a setting comes from in the hierarchy Plattform → Tenant. */
 export function OriginBadge({ origin, state }: { origin: 'Global' | 'Tenant'; state?: 'Inherited' | 'Modified' | 'Disabled' | 'Local' }) {
-  if (origin === 'Tenant') return <Badge tone="info">Lokal im Tenant</Badge>;
-  if (state === 'Modified') return <Badge tone="warn">Global · hier verändert</Badge>;
-  if (state === 'Disabled') return <Badge tone="error">Global · hier deaktiviert</Badge>;
-  return <Badge>Global · geerbt</Badge>;
+  if (origin === 'Tenant') return <Badge tone="info">{tr("Lokal im Tenant")}</Badge>;
+  if (state === 'Modified') return <Badge tone="warn">{tr("Global · hier verändert")}</Badge>;
+  if (state === 'Disabled') return <Badge tone="error">{tr("Global · hier deaktiviert")}</Badge>;
+  return <Badge>{tr("Global · geerbt")}</Badge>;
 }
 
 /** Returns `value` once it has not changed for `ms` milliseconds (for search-as-you-type into URL filters). */

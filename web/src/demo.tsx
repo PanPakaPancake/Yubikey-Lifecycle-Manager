@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from './api';
 import { ErrorBox, useAction } from './ui';
 import { Icon } from './icons';
+import { tr } from './i18n';
 
 /** Demo-Modus (docker-compose.demo.yml): Server mit erfundenen Beispieldaten, ohne Entra-Anbindung. */
 let demoStatus: Promise<boolean> | undefined;
@@ -21,7 +22,7 @@ export function DemoBanner() {
   return (
     <div className="demo-banner" role="note">
       <Icon name="info" size={16} />
-      <span><strong>Demo</strong> mit erfundenen Beispieldaten. Keine Verbindung zu Microsoft Entra, es werden keine Mails verschickt.</span>
+      <span><strong>{tr("Demo")}</strong> {tr("mit erfundenen Beispieldaten. Keine Verbindung zu Microsoft Entra, es werden keine Mails verschickt.")}</span>
     </div>
   );
 }
@@ -39,7 +40,7 @@ export function DemoLogin({ returnUrl }: { returnUrl: string }) {
   });
   return (
     <div className="demo-login">
-      <div className="alert info">Diese Installation läuft im <strong>Demo-Modus</strong> mit erfundenen Beispieldaten. Wählen Sie eine Rolle, um sich ohne Passwort anzumelden.</div>
+      <div className="alert info"><strong>{tr("Demo-Modus:")}</strong> {tr("Diese Installation läuft mit erfundenen Beispieldaten. Wählen Sie eine Rolle, um sich ohne Passwort anzumelden.")}</div>
       <div className="demo-accounts">
         {accounts.map((a) => (
           <button key={a.role} type="button" className={a.role === 'Owner' ? 'primary' : ''} disabled={login.busy} onClick={() => signIn(a.role)}>

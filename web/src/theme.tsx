@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Icon } from './icons';
+import { tr } from './i18n';
 
 // Dunkel/Hell/System. Gespeichert pro Browser; ohne Wahl startet die Oberfläche dunkel (Entscheidung Timo, 2026-11-19).
 type Theme = 'system' | 'light' | 'dark';
@@ -26,7 +27,7 @@ export function applyStoredTheme() {
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => applyStoredTheme());
 
 const next: Record<Theme, Theme> = { dark: 'light', light: 'system', system: 'dark' };
-const label: Record<Theme, string> = { system: 'Wie System', light: 'Hell', dark: 'Dunkel' };
+const label: Record<Theme, string> = { system: tr("Wie System"), light: tr("Hell"), dark: tr("Dunkel") };
 const icon = { system: 'auto', light: 'sun', dark: 'moon' } as const;
 
 export function ThemeToggle() {
@@ -36,7 +37,7 @@ export function ThemeToggle() {
     applyStoredTheme();
   }, [theme]);
   return (
-    <button type="button" className="ghost small theme-toggle" onClick={() => setTheme(next[theme])} title={`Darstellung: ${label[theme]} (klicken zum Wechseln)`}>
+    <button type="button" className="ghost small theme-toggle" onClick={() => setTheme(next[theme])} title={tr("Darstellung: {n} (klicken zum Wechseln)", { n: label[theme] })}>
       <Icon name={icon[theme]} size={16} /> {label[theme]}
     </button>
   );

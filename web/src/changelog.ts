@@ -1,4 +1,5 @@
 import raw from './changelog.md?raw';
+import { tr } from './i18n';
 
 /** Art eines Eintrags, aus dem optionalen Präfix „Neu:“, „Verbessert:“, „Behoben:“ oder „Sicherheit:“. */
 export type ChangeKind = 'new' | 'improved' | 'fixed' | 'security' | 'other';
@@ -6,7 +7,7 @@ export type Change = { kind: ChangeKind; text: string };
 export type Release = { version: string; date?: string; changes: Change[] };
 
 const kinds: Record<string, ChangeKind> = { neu: 'new', verbessert: 'improved', behoben: 'fixed', sicherheit: 'security' };
-export const kindLabels: Record<ChangeKind, string> = { new: 'Neu', improved: 'Verbessert', fixed: 'Behoben', security: 'Sicherheit', other: 'Änderung' };
+export const kindLabels: Record<ChangeKind, string> = { new: tr("Neu"), improved: tr("Verbessert"), fixed: tr("Behoben"), security: tr("Sicherheit"), other: tr("Änderung") };
 
 /**
  * Liest Abschnitte „## 1.2.3 · Datum“ mit Stichpunkten „- …“. Dasselbe Format kommt als Release-Beschreibung von GitHub zurück,

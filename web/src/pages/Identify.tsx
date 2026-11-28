@@ -4,6 +4,7 @@ import { api, ApiError, fmtDate, type AgentInfo, type YubiKey } from '../api';
 import { Badge, Card, Empty, ErrorBox, Field, Info, PageHeader, Spinner, useAction, useApi, usePolling } from '../ui';
 import { useToast } from '../feedback';
 import { ChooseTenant, useTenant } from '../tenant';
+import { tr } from '../i18n';
 
 /**
  * Nacherfassen (V1.1): Keys, die Nutzer selbst registriert haben, kennt die Plattform nur aus Entra, ohne Seriennummer und Firmware.
@@ -40,7 +41,7 @@ export default function IdentifyPage() {
     setMismatch(undefined);
     try {
       const r = await api.post<{ key: YubiKey; merged: boolean }>(`/api/keys/${keyId}/identify`, { agentId: agent!.id, custodian: custodian || null, ignoreModelMismatch });
-      toast.ok(<>Key {r.key.serialNumber} nacherfasst{r.merged ? ' und mit dem vorhandenen Lager-Eintrag zusammengeführt' : ''}. <Link to={'/keys/' + r.key.id}>Ansehen</Link></>);
+      toast.ok(<>{tr("Key {serialNumber} nacherfasst", { serialNumber: r.key.serialNumber })}{r.merged ? tr(" und mit dem vorhandenen Lager-Eintrag zusammengeführt") : ''}. <Link to={'/keys/' + r.key.id}>{tr("Ansehen")}</Link></>);
       setKeyId('');
       setCustodian('');
       reload();
@@ -53,63 +54,63 @@ export default function IdentifyPage() {
 
   return (
     <>
-      <PageHeader title="Nacherfassen" subtitle="Selbst registrierte Keys: Seriennummer und Firmware per Einstecken ergänzen." actions={<Link className="btn" to="/keys?needsDetails=1">Im Inventar zeigen</Link>} />
-      {!tenantId && <ChooseTenant purpose="Zum Nacherfassen" />}
+      <PageHeader title={tr("Nacherfassen")} subtitle={tr("Selbst registrierte Keys: Seriennummer und Firmware per Einstecken ergänzen.")} actions={<Link className="btn" to="/keys?needsDetails=1">{tr("Im Inventar zeigen")}</Link>} />
+      {!tenantId && <ChooseTenant purpose={tr("Zum Nacherfassen")} />}
       <ErrorBox error={error} />
       {tenantId && (
         <div className="grid cols-2">
-          <Card title={`1. Eintrag wählen${data ? ` (${data.total} offen)` : ''}`}>
-            <Field label="Person suchen"><input type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Name oder UPN" /></Field>
+          <Card title={tr("1. Eintrag wählen{n}", { n: data ? tr(" ({total} offen)", { total: data.total }) : '' })}>
+            <Field label={tr("Person suchen")}><input type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder={tr("Name oder UPN")} /></Field>
             {loading && !data && <Spinner />}
-            {data && data.total === 0 && <Empty>In {tenant?.displayName} gibt es keine Keys ohne Seriennummer.</Empty>}
+            {data && data.total === 0 && <Empty>{tr("In {displayName} gibt es keine Keys ohne Seriennummer.", { displayName: tenant?.displayName })}</Empty>}
             <div className="pick" style={{ maxHeight: 460, overflow: 'auto' }}>
               {items.map((k) => {
                 const r = k.registrations.find((x) => !x.removedAt) ?? k.registrations[0];
                 return (
                   <button key={k.id} className={k.id === keyId ? 'selected' : ''} onClick={() => { setKeyId(k.id); setError(undefined); setCustodianNeeded(undefined); setMismatch(undefined); }}>
-                    <span><strong>{r?.userDisplayName ?? r?.userPrincipalName ?? 'Unbekannt'}</strong><br /><span className="small muted">{r?.userPrincipalName} · „{r?.displayName ?? '–'}“ · {k.model ?? 'Modell unbekannt'}</span></span>
+                    <span><strong>{r?.userDisplayName ?? r?.userPrincipalName ?? tr("Unbekannt")}</strong><br /><span className="small muted">{r?.userPrincipalName} · „{r?.displayName ?? '–'}“ · {k.model ?? tr("Modell unbekannt")}</span></span>
                     <span className="small muted">{fmtDate(r?.registeredAt, false)}</span>
                   </button>
                 );
               })}
             </div>
           </Card>
-          <Card title="2. Key einstecken und zuordnen">
-            {agents && online.length === 0 && <Info tone="warn">Auf Ihrem PC ist kein Agent verbunden. <Link to="/agents">Agent koppeln</Link></Info>}
+          <Card title={tr("2. Key einstecken und zuordnen")}>
+            {agents && online.length === 0 && <Info tone="warn">{tr("Auf Ihrem PC ist kein Agent verbunden.")} <Link to="/agents">{tr("Agent koppeln")}</Link></Info>}
             {online.length > 1 && (
-              <Field label="Agent"><select value={agent?.id} onChange={(e) => setAgentId(e.target.value)}>{online.map((a) => <option key={a.id} value={a.id}>{a.machineName}</option>)}</select></Field>
+              <Field label={tr("Agent")}><select value={agent?.id} onChange={(e) => setAgentId(e.target.value)}>{online.map((a) => <option key={a.id} value={a.id}>{a.machineName}</option>)}</select></Field>
             )}
             {agent && (agent.key ? (
               <div className="keycard">
                 <div className="keyglyph"><span /></div>
                 <div>
                   <strong>{agent.key.model ?? 'YubiKey'}</strong>
-                  <div>Seriennummer <span className="mono">{agent.key.serialNumber ?? '–'}</span> · Firmware <span className="mono">{agent.key.firmwareVersion}</span></div>
+                  <div>{tr("Seriennummer")} <span className="mono">{agent.key.serialNumber ?? '–'}</span> {tr("· Firmware")} <span className="mono">{agent.key.firmwareVersion}</span></div>
                 </div>
               </div>
             ) : (
-              <div className="waiting-key"><Spinner /><div><strong>Bitte den Key der Person an {agent.machineName} einstecken.</strong><div className="small muted">Die PIN wird nicht gebraucht, der Key wird nur ausgelesen.</div></div></div>
+              <div className="waiting-key"><Spinner /><div><strong>{tr("Bitte den Key der Person an {machineName} einstecken.", { machineName: agent.machineName })}</strong><div className="small muted">{tr("Die PIN wird nicht gebraucht, der Key wird nur ausgelesen.")}</div></div></div>
             ))}
             {selected && (
               <p style={{ marginTop: 12 }}>
-                Zuordnen zu <strong>{selected.registrations.map((r) => r.userPrincipalName).join(', ')}</strong>
-                {selected.model && <> · Entra meldet <Badge>{selected.model}</Badge></>}
+                {tr("Zuordnen zu")} <strong>{selected.registrations.map((r) => r.userPrincipalName).join(', ')}</strong>
+                {selected.model && <> {tr("· Entra meldet")} <Badge>{selected.model}</Badge></>}
               </p>
             )}
-            <Info>Bitte nur den Key einstecken, der zu diesem Eintrag gehört. Die Plattform kann ohne PIN nicht prüfen, welcher Passkey auf dem Key liegt; sie vergleicht nur das Modell.</Info>
+            <Info>{tr("Bitte nur den Key einstecken, der zu diesem Eintrag gehört. Die Plattform kann ohne PIN nicht prüfen, welcher Passkey auf dem Key liegt; sie vergleicht nur das Modell.")}</Info>
             {mismatch && (
               <div className="alert warn">{mismatch}
-                <div className="actions" style={{ marginTop: 8 }}><button className="small" disabled={busy} onClick={() => identify(true)}>Trotzdem zuordnen</button></div>
+                <div className="actions" style={{ marginTop: 8 }}><button className="small" disabled={busy} onClick={() => identify(true)}>{tr("Trotzdem zuordnen")}</button></div>
               </div>
             )}
             {custodianNeeded && (
               <div className="alert warn">{custodianNeeded}
-                <Field label="Verwahrer *"><input value={custodian} onChange={(e) => setCustodian(e.target.value)} /></Field>
+                <Field label={tr("Verwahrer *")}><input value={custodian} onChange={(e) => setCustodian(e.target.value)} /></Field>
               </div>
             )}
             <ErrorBox error={actionError} />
             <div className="actions" style={{ marginTop: 12 }}>
-              <button className="primary" disabled={!selected || !agent?.key || busy || (!!custodianNeeded && !custodian.trim())} onClick={() => identify(false)}>Nacherfassen</button>
+              <button className="primary" disabled={!selected || !agent?.key || busy || (!!custodianNeeded && !custodian.trim())} onClick={() => identify(false)}>{tr("Nacherfassen")}</button>
             </div>
           </Card>
         </div>

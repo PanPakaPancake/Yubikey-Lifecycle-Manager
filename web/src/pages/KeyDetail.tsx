@@ -8,9 +8,10 @@ import { CustomFieldInput } from './Keys';
 import { useTenant } from '../tenant';
 import { useConfirm, useToast } from '../feedback';
 import { Icon } from '../icons';
+import { locale, tr } from '../i18n';
 
 const sourceLabels: Record<string, string> = {
-  Platform: 'Über die Plattform registriert', EntraSync: 'Aus Entra übernommen (selbst registriert)', StockIntake: 'Wareneingang', Import: 'CSV-Import',
+  Platform: tr("Über die Plattform registriert"), EntraSync: tr("Aus Entra übernommen (selbst registriert)"), StockIntake: tr("Wareneingang"), Import: tr("CSV-Import"),
 };
 
 export default function KeyDetailPage() {
@@ -40,90 +41,90 @@ export default function KeyDetailPage() {
     setAsk({ action, registration });
   };
   const removeAccount = async (r: Registration, approval?: string) => {
-    if (!await confirm({ title: 'Konto entfernen?', message: `Der Passkey von ${r.userPrincipalName} wird in Entra gelöscht. Die anderen Konten auf dem Key bleiben.`, confirmLabel: 'Entfernen', danger: true })) return;
-    try { await api.del(`/api/keys/${key!.id}/registrations/${r.id}${approval ? '?approvalId=' + approval : ''}`); toast.ok('Konto entfernt.'); reload(); } catch (e) { toast.error((e as Error).message); }
+    if (!await confirm({ title: tr("Konto entfernen?"), message: tr("Der Passkey von {userPrincipalName} wird in Entra gelöscht. Die anderen Konten auf dem Key bleiben.", { userPrincipalName: r.userPrincipalName }), confirmLabel: tr("Entfernen"), danger: true })) return;
+    try { await api.del(`/api/keys/${key!.id}/registrations/${r.id}${approval ? '?approvalId=' + approval : ''}`); toast.ok(tr("Konto entfernt.")); reload(); } catch (e) { toast.error((e as Error).message); }
   };
 
   if (error) return <ErrorBox error={error} />;
-  if (!key) return <Spinner label="Wird geladen …" />;
+  if (!key) return <Spinner label={tr("Wird geladen …")} />;
   const active = key.registrations.filter((r) => !r.removedAt);
 
   return (
     <>
       <PageHeader
-        title={key.serialNumber ? `YubiKey ${key.serialNumber}` : 'YubiKey ohne Seriennummer'}
+        title={key.serialNumber ? tr("YubiKey {serialNumber}", { serialNumber: key.serialNumber }) : tr("YubiKey ohne Seriennummer")}
         subtitle={key.inPartnerStock
-          ? <><Link to="/partner/stock">Partnerlager</Link> · keinem Kunden zugeordnet</>
-          : <><Link to="/keys">Inventar</Link> · {key.tenantName}</>}
+          ? <><Link to="/partner/stock">{tr("Partnerlager")}</Link> {tr("· keinem Kunden zugeordnet")}</>
+          : <><Link to="/keys">{tr("Inventar")}</Link> · {key.tenantName}</>}
         actions={<>
-          {(key.inPartnerStock ? can('ManagePartnerStock') : can('ManageInventory')) && <button onClick={() => setModal('edit')}>Bearbeiten</button>}
-          {key.inPartnerStock && key.status === 'InStock' && can('ManagePartnerStock') && can('ManageInventory') && <button className="primary" onClick={() => setModal('assign')}>Einem Tenant zuweisen</button>}
+          {(key.inPartnerStock ? can('ManagePartnerStock') : can('ManageInventory')) && <button onClick={() => setModal('edit')}>{tr("Bearbeiten")}</button>}
+          {key.inPartnerStock && key.status === 'InStock' && can('ManagePartnerStock') && can('ManageInventory') && <button className="primary" onClick={() => setModal('assign')}>{tr("Einem Tenant zuweisen")}</button>}
           {!key.inPartnerStock && (key.status === 'InStock' || key.status === 'Retired') && can('ManagePartnerStock') && can('ManageInventory')
-            && key.registrations.every((r) => r.removedAt) && <button onClick={() => setModal('toPartner')}>Ins Partnerlager</button>}
-          {key.usage === 'Breakglass' && <button onClick={() => setModal('sheet')}>Notfallblatt drucken</button>}
-          {can('LockKeys') && key.nextStates.includes('Locked') && <button className="danger" onClick={() => gate('Lock', (a) => { setApprovalId(a); setModal('lock'); })}>Sperren</button>}
-          {can('ResetKeys') && key.nextStates.includes('InStock') && key.serialNumber && <button onClick={() => gate('Reset', (a) => { setApprovalId(a); setModal('reset'); })}>Zurücksetzen …</button>}
-          {can('RetireKeys') && key.nextStates.includes('Retired') && <button className="danger" onClick={() => setModal('retire')}>Ausmustern …</button>}
-          {can('ManageInventory') && (key.status === 'InStock' || key.status === 'Retired') && key.registrations.every((r) => r.removedAt) && <button className="danger" onClick={() => setModal('delete')}>Löschen …</button>}
+            && key.registrations.every((r) => r.removedAt) && <button onClick={() => setModal('toPartner')}>{tr("Ins Partnerlager")}</button>}
+          {key.usage === 'Breakglass' && <button onClick={() => setModal('sheet')}>{tr("Notfallblatt drucken")}</button>}
+          {can('LockKeys') && key.nextStates.includes('Locked') && <button className="danger" onClick={() => gate('Lock', (a) => { setApprovalId(a); setModal('lock'); })}>{tr("Sperren")}</button>}
+          {can('ResetKeys') && key.nextStates.includes('InStock') && key.serialNumber && <button onClick={() => gate('Reset', (a) => { setApprovalId(a); setModal('reset'); })}>{tr("Zurücksetzen …")}</button>}
+          {can('RetireKeys') && key.nextStates.includes('Retired') && <button className="danger" onClick={() => setModal('retire')}>{tr("Ausmustern …")}</button>}
+          {can('ManageInventory') && (key.status === 'InStock' || key.status === 'Retired') && key.registrations.every((r) => r.removedAt) && <button className="danger" onClick={() => setModal('delete')}>{tr("Löschen …")}</button>}
         </>}
       />
       {key.needsDetails && key.status !== 'Retired' && (
         <Info>
-          Dieser Key wurde vom Nutzer selbst registriert. Seriennummer und Firmware fehlen, weil Entra sie nicht kennt.
-          {can('ManageInventory') && key.tenantId && <> <Link className="btn small" to={`/keys/identify?keyId=${key.id}`}>Jetzt nacherfassen</Link></>}
+          {tr("Dieser Key wurde vom Nutzer selbst registriert. Seriennummer und Firmware fehlen, weil Entra sie nicht kennt.")}
+          {can('ManageInventory') && key.tenantId && <> <Link className="btn small" to={`/keys/identify?keyId=${key.id}`}>{tr("Jetzt nacherfassen")}</Link></>}
         </Info>
       )}
       {key.advisories.length > 0 && (
         <Info tone={key.advisories.some((a) => a.affectsFido) ? 'warn' : 'info'}>
-          <strong>Yubico-Sicherheitshinweise für diesen Key</strong>
-          {key.advisories.map((a) => <div key={a.id} style={{ marginTop: 6 }}><strong>{a.id}</strong>: {a.title} <a href={a.url} target="_blank" rel="noreferrer">Details</a>
+          <strong>{tr("Yubico-Sicherheitshinweise für diesen Key")}</strong>
+          {key.advisories.map((a) => <div key={a.id} style={{ marginTop: 6 }}><strong>{a.id}</strong>: {a.title} <a href={a.url} target="_blank" rel="noreferrer">{tr("Details")}</a>
             <div className="small">{a.recommendation}</div></div>)}
-          <div className="small" style={{ marginTop: 6 }}><Link to="/sicherheitshinweise">Alle betroffenen Keys ansehen</Link></div>
+          <div className="small" style={{ marginTop: 6 }}><Link to="/sicherheitshinweise">{tr("Alle betroffenen Keys ansehen")}</Link></div>
         </Info>
       )}
       {removal?.required && (
         <Info tone="warn">
-          <strong>Vier-Augen-Schutz:</strong> Dieser Breakglass-Key lässt sich nur mit Freigabe eines zweiten Admins sperren, zurücksetzen oder um ein Konto erleichtern.
+          <strong>{tr("Vier-Augen-Schutz:")}</strong> {tr("Dieser Breakglass-Key lässt sich nur mit Freigabe eines zweiten Admins sperren, zurücksetzen oder um ein Konto erleichtern.")}
           {removal.approvals.map((a) => (
             <div key={a.id} className="small">
-              {removalLabels[a.removalAction ?? 'Lock']}{a.removalAction === 'RemoveAccount' ? ` (${a.userPrincipalNames.join(', ')})` : ''}: {approvalLabels[a.status]}, beantragt von {a.requestedByName}
-              {a.status === 'Approved' && <> · freigegeben von {a.decidedByName}, gültig bis {fmtDate(a.validUntil)}</>}
+              {tr("{n}{n2}: {n3}, beantragt von {requestedByName}", { n: removalLabels[a.removalAction ?? 'Lock'], n2: a.removalAction === 'RemoveAccount' ? ` (${a.userPrincipalNames.join(', ')})` : '', n3: approvalLabels[a.status], requestedByName: a.requestedByName })}
+              {a.status === 'Approved' && <> {tr("· freigegeben von {decidedByName}, gültig bis {validUntil}", { decidedByName: a.decidedByName, validUntil: fmtDate(a.validUntil) })}</>}
             </div>
           ))}
         </Info>
       )}
       <AccountsCard keyItem={key} active={active} onRemove={can('LockKeys') && key.usage !== 'Personal' ? (r) => gate('RemoveAccount', (a) => removeAccount(r, a), r) : undefined}>
-        {active.length === 0 && key.status === 'InStock' && key.tenantId && can('RegisterKeys') && <p className="actions"><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>Key registrieren</Link><Link className="btn" to={`/register/shared?tenantId=${key.tenantId}`}>Als geteilten Key registrieren</Link></p>}
-        {key.inPartnerStock && key.status === 'InStock' && <p className="muted small">Keys aus dem Partnerlager werden bei der Registrierung automatisch dem Tenant zugewiesen.</p>}
+        {active.length === 0 && key.status === 'InStock' && key.tenantId && can('RegisterKeys') && <p className="actions"><Link className="btn primary" to={`/register?tenantId=${key.tenantId}`}>{tr("Key registrieren")}</Link><Link className="btn" to={`/register/shared?tenantId=${key.tenantId}`}>{tr("Als geteilten Key registrieren")}</Link></p>}
+        {key.inPartnerStock && key.status === 'InStock' && <p className="muted small">{tr("Keys aus dem Partnerlager werden bei der Registrierung automatisch dem Tenant zugewiesen.")}</p>}
       </AccountsCard>
       <div className="grid cols-2">
-        <Card title="Key">
+        <Card title={tr("Key")}>
           <table>
             <tbody>
-              <tr><th>Status</th><td><StatusBadge status={key.status} /> {key.lockReason && <Badge>{lockReasons[key.lockReason] ?? key.lockReason}</Badge>} <span className="small muted">seit {fmtDate(key.statusChangedAt)}</span>{key.statusNote && <div className="small">{key.statusNote}</div>}</td></tr>
-              <tr><th>Seriennummer</th><td className="mono">{key.serialNumber ?? '–'}</td></tr>
-              <tr><th>Modell</th><td>{key.model ?? '–'} {key.isFips && <Badge tone="info">FIPS</Badge>}</td></tr>
-              <tr><th>Firmware</th><td className="mono">{key.firmwareVersion ?? '–'}</td></tr>
-              <tr><th>AAGUID</th><td className="mono small">{key.aaGuid ?? '–'}</td></tr>
-              <tr><th>Nutzung</th><td>{usageLabels[key.usage] ?? key.usage}{key.usage !== 'Personal' && <div className="small">Verwahrer: <strong>{key.custodian ?? '–'}</strong></div>}</td></tr>
-              <tr><th>PIN-Wechsel erzwungen</th><td>{key.pinChangeForced == null ? '–' : key.pinChangeForced ? 'Ja' : 'Nein'}</td></tr>
-              <tr><th>Herkunft</th><td>{sourceLabels[key.source] ?? key.source}</td></tr>
-              <tr><th>Erfasst</th><td>{fmtDate(key.createdAt)}{key.identifiedAt && <div className="small muted">nacherfasst {fmtDate(key.identifiedAt)}</div>}</td></tr>
+              <tr><th>{tr("Status")}</th><td><StatusBadge status={key.status} /> {key.lockReason && <Badge>{lockReasons[key.lockReason] ?? key.lockReason}</Badge>} <span className="small muted">{tr("seit {statusChangedAt}", { statusChangedAt: fmtDate(key.statusChangedAt) })}</span>{key.statusNote && <div className="small">{key.statusNote}</div>}</td></tr>
+              <tr><th>{tr("Seriennummer")}</th><td className="mono">{key.serialNumber ?? '–'}</td></tr>
+              <tr><th>{tr("Modell")}</th><td>{key.model ?? '–'} {key.isFips && <Badge tone="info">{tr("FIPS")}</Badge>}</td></tr>
+              <tr><th>{tr("Firmware")}</th><td className="mono">{key.firmwareVersion ?? '–'}</td></tr>
+              <tr><th>{tr("AAGUID")}</th><td className="mono small">{key.aaGuid ?? '–'}</td></tr>
+              <tr><th>{tr("Nutzung")}</th><td>{usageLabels[key.usage] ?? key.usage}{key.usage !== 'Personal' && <div className="small">{tr("Verwahrer:")} <strong>{key.custodian ?? '–'}</strong></div>}</td></tr>
+              <tr><th>{tr("PIN-Wechsel erzwungen")}</th><td>{key.pinChangeForced == null ? '–' : key.pinChangeForced ? tr("Ja") : tr("Nein")}</td></tr>
+              <tr><th>{tr("Herkunft")}</th><td>{sourceLabels[key.source] ?? key.source}</td></tr>
+              <tr><th>{tr("Erfasst")}</th><td>{fmtDate(key.createdAt)}{key.identifiedAt && <div className="small muted">{tr("nacherfasst {identifiedAt}", { identifiedAt: fmtDate(key.identifiedAt) })}</div>}</td></tr>
             </tbody>
           </table>
         </Card>
-        <Card title="Zusatzangaben">
+        <Card title={tr("Zusatzangaben")}>
           <table>
             <tbody>
-              <tr><th>Tags</th><td>{key.tags.length ? key.tags.map((t) => <span className="tag" key={t}>{t}</span>) : '–'}</td></tr>
+              <tr><th>{tr("Tags")}</th><td>{key.tags.length ? key.tags.map((t) => <span className="tag" key={t}>{t}</span>) : '–'}</td></tr>
               {fields?.map((f) => <tr key={f.key}><th>{f.label}</th><td>{formatField(f, key.customFields[f.key])}</td></tr>)}
-              <tr><th>Notiz</th><td style={{ whiteSpace: 'pre-wrap' }}>{key.notes || '–'}</td></tr>
+              <tr><th>{tr("Notiz")}</th><td style={{ whiteSpace: 'pre-wrap' }}>{key.notes || '–'}</td></tr>
             </tbody>
           </table>
         </Card>
       </div>
       {history && history.length > 0 && (
-        <Card title="Verlauf" className="mt">
+        <Card title={tr("Verlauf")} className="mt">
           <table>
             <tbody>
               {history.map((h) => <tr key={h.sequence}><td className="small muted">{fmtDate(h.timestamp)}</td><td><code>{h.action}</code></td><td>{h.actorName}</td><td className="small">{h.details}</td></tr>)}
@@ -147,8 +148,8 @@ export default function KeyDetailPage() {
 
 function formatField(f: CustomField, v?: string | null) {
   if (v == null || v === '') return '–';
-  if (f.type === 'Boolean') return v === 'true' ? 'Ja' : 'Nein';
-  if (f.type === 'Date') return new Date(v).toLocaleDateString('de-DE');
+  if (f.type === 'Boolean') return v === 'true' ? tr("Ja") : tr("Nein");
+  if (f.type === 'Date') return new Date(v).toLocaleDateString(locale());
   return v;
 }
 
@@ -159,28 +160,28 @@ function RemovalApprovalModal({ keyItem, action, registration, pending, onClose,
   const [reason, setReason] = useState('');
   const { busy, error, run } = useAction();
   const toast = useToast();
-  const what = action === 'RemoveAccount' ? `Konto ${registration?.userPrincipalName} entfernen` : removalLabels[action];
+  const what = action === 'RemoveAccount' ? tr("Konto {userPrincipalName} entfernen", { userPrincipalName: registration?.userPrincipalName }) : removalLabels[action];
   const submit = () => run(async () => {
     await api.post(`/api/keys/${keyItem.id}/approvals`, { action, registrationId: registration?.id, reason });
-    toast.ok('Antrag gestellt. Ein zweiter Admin muss ihn unter „Freigaben“ freigeben.');
+    toast.ok(tr("Antrag gestellt. Ein zweiter Admin muss ihn unter „Freigaben“ freigeben."));
     onDone();
   });
   const withdraw = () => run(async () => {
     await api.post(`/api/approvals/${pending!.id}/cancel`);
-    toast.ok('Antrag zurückgezogen.');
+    toast.ok(tr("Antrag zurückgezogen."));
     onDone();
   });
   if (pending) return (
-    <Modal title="Wartet auf Freigabe" onClose={onClose} footer={<><button className="ghost" disabled={busy} onClick={withdraw}>Antrag zurückziehen</button><button className="primary" onClick={onClose}>OK</button></>}>
-      <p>Ihr Antrag „{what}“ wartet darauf, dass ein zweiter Admin mit dem Recht „Breakglass freigeben“ ihn unter <Link to="/approvals">Freigaben</Link> freigibt. Danach können Sie die Aktion 24 Stunden lang einmal ausführen.</p>
-      <p className="small muted">Beantragt {fmtDate(pending.requestedAt)} · Grund: {pending.reason}</p>
+    <Modal title={tr("Wartet auf Freigabe")} onClose={onClose} footer={<><button className="ghost" disabled={busy} onClick={withdraw}>{tr("Antrag zurückziehen")}</button><button className="primary" onClick={onClose}>{tr("OK")}</button></>}>
+      <p>{tr("Ihr Antrag „{what}“ wartet darauf, dass ein zweiter Admin mit dem Recht „Breakglass freigeben“ ihn unter", { what })} <Link to="/approvals">{tr("Freigaben")}</Link> {tr("freigibt. Danach können Sie die Aktion 24 Stunden lang einmal ausführen.")}</p>
+      <p className="small muted">{tr("Beantragt {requestedAt} · Grund: {reason}", { requestedAt: fmtDate(pending.requestedAt), reason: pending.reason })}</p>
       <ErrorBox error={error} />
     </Modal>
   );
   return (
-    <Modal title="Vier-Augen-Freigabe nötig" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy || !reason.trim()} onClick={submit}>Freigabe beantragen</button></>}>
-      <p>Dies ist ein <strong>Breakglass-Key</strong> (Verwahrer: {keyItem.custodian ?? '–'}). „{what}“ löscht Notfallzugänge in Entra und braucht deshalb die Freigabe eines zweiten Admins.</p>
-      <Field label="Grund *" hint="z. B. Key verloren, Ticket 4711"><input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></Field>
+    <Modal title={tr("Vier-Augen-Freigabe nötig")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="primary" disabled={busy || !reason.trim()} onClick={submit}>{tr("Freigabe beantragen")}</button></>}>
+      <p>{tr("Dies ist ein")} <strong>{tr("Breakglass-Key")}</strong> {tr("(Verwahrer: {n}). „{what}“ löscht Notfallzugänge in Entra und braucht deshalb die Freigabe eines zweiten Admins.", { n: keyItem.custodian ?? '–', what })}</p>
+      <Field label={tr("Grund *")} hint={tr("z. B. Key verloren, Ticket 4711")}><input value={reason} onChange={(e) => setReason(e.target.value)} autoFocus /></Field>
       <ErrorBox error={error} />
     </Modal>
   );
@@ -192,14 +193,14 @@ function LockModal({ keyItem, approvalId, onClose, onDone }: { keyItem: YubiKey;
   const { busy, error, run } = useAction();
   const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/lock`, { reason, note: note || null, approvalId })));
   return (
-    <Modal title="Key sperren" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="danger" disabled={busy} onClick={go}>Sperren</button></>}>
-      <Info tone="warn">Die Passkey-Registrierung wird sofort in Entra ID entfernt. Die Person kann sich mit diesem Key nicht mehr anmelden.</Info>
-      <Field label="Grund">
+    <Modal title={tr("Key sperren")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="danger" disabled={busy} onClick={go}>{tr("Sperren")}</button></>}>
+      <Info tone="warn">{tr("Die Passkey-Registrierung wird sofort in Entra ID entfernt. Die Person kann sich mit diesem Key nicht mehr anmelden.")}</Info>
+      <Field label={tr("Grund")}>
         <select value={reason} onChange={(e) => setReason(e.target.value)}>
           {Object.entries(lockReasons).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </Field>
-      <Field label="Notiz (optional)"><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} /></Field>
+      <Field label={tr("Notiz (optional)")}><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} /></Field>
       <ErrorBox error={error} />
     </Modal>
   );
@@ -210,16 +211,16 @@ function StockChoice({ keyItem, toPartner, setToPartner, retire }: { keyItem: Yu
   const can = useCan();
   if (keyItem.inPartnerStock || !can('ManagePartnerStock')) return null;
   return (
-    <Field label="Wohin mit dem Key?">
+    <Field label={tr("Wohin mit dem Key?")}>
       <label className={'choice' + (!toPartner ? ' selected' : '')}>
         <input type="radio" name="stock-target" checked={!toPartner} onChange={() => setToPartner(false)} />
-        <span><strong>Beim Kunden belassen ({keyItem.tenantName})</strong><br />
-          <span className="small muted">{retire ? 'Der Key bleibt ausgemustert im Inventar des Kunden sichtbar.' : 'Der Key bleibt dem Kunden zugeordnet und liegt dort im Lager bereit für die nächste Vergabe.'}</span></span>
+        <span><strong>{tr("Beim Kunden belassen ({tenantName})", { tenantName: keyItem.tenantName })}</strong><br />
+          <span className="small muted">{retire ? tr("Der Key bleibt ausgemustert im Inventar des Kunden sichtbar.") : tr("Der Key bleibt dem Kunden zugeordnet und liegt dort im Lager bereit für die nächste Vergabe.")}</span></span>
       </label>
       <label className={'choice' + (toPartner ? ' selected' : '')}>
         <input type="radio" name="stock-target" checked={toPartner} onChange={() => setToPartner(true)} />
-        <span><strong>Vom Kunden trennen, ins Partnerlager</strong><br />
-          <span className="small muted">{retire ? 'Z. B. Rückläufer, die der Partner entsorgt oder prüft. Der Key verschwindet aus dem Inventar des Kunden.' : 'Der Key gehört danach keinem Kunden mehr und kann später jedem Tenant zugewiesen werden.'}</span></span>
+        <span><strong>{tr("Vom Kunden trennen, ins Partnerlager")}</strong><br />
+          <span className="small muted">{retire ? tr("Z. B. Rückläufer, die der Partner entsorgt oder prüft. Der Key verschwindet aus dem Inventar des Kunden.") : tr("Der Key gehört danach keinem Kunden mehr und kann später jedem Tenant zugewiesen werden.")}</span></span>
       </label>
     </Field>
   );
@@ -229,9 +230,9 @@ function ToPartnerModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClos
   const { busy, error, run } = useAction();
   const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/to-partner-stock`, {})));
   return (
-    <Modal title="Ins Partnerlager legen" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy} onClick={go}>Ins Partnerlager</button></>}>
-      <p>Der Key wird von <strong>{keyItem.tenantName}</strong> getrennt und liegt danach im allgemeinen Partnerlager. Von dort kann er jedem Tenant zugewiesen werden.</p>
-      <p className="muted small">Tenant-eigene Zusatzfelder bleiben am Key gespeichert, sind im Partnerlager aber nicht sichtbar. Das zugeordnete Profil wird entfernt.</p>
+    <Modal title={tr("Ins Partnerlager legen")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="primary" disabled={busy} onClick={go}>{tr("Ins Partnerlager")}</button></>}>
+      <p>{tr("Der Key wird von")} <strong>{keyItem.tenantName}</strong> {tr("getrennt und liegt danach im allgemeinen Partnerlager. Von dort kann er jedem Tenant zugewiesen werden.")}</p>
+      <p className="muted small">{tr("Tenant-eigene Zusatzfelder bleiben am Key gespeichert, sind im Partnerlager aber nicht sichtbar. Das zugeordnete Profil wird entfernt.")}</p>
       <ErrorBox error={error} />
     </Modal>
   );
@@ -243,11 +244,11 @@ function AssignModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClose: 
   const { busy, error, run } = useAction();
   const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/assign`, { tenantId })));
   return (
-    <Modal title="Einem Tenant zuweisen" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={!tenantId || busy} onClick={go}>Zuweisen</button></>}>
-      <p>Der Key {keyItem.serialNumber} liegt danach im Lager des Tenants bereit.</p>
-      <Field label="Tenant">
+    <Modal title={tr("Einem Tenant zuweisen")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="primary" disabled={!tenantId || busy} onClick={go}>{tr("Zuweisen")}</button></>}>
+      <p>{tr("Der Key {serialNumber} liegt danach im Lager des Tenants bereit.", { serialNumber: keyItem.serialNumber })}</p>
+      <Field label={tr("Tenant")}>
         <select value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
-          {!tenantId && <option value="">Tenant wählen …</option>}
+          {!tenantId && <option value="">{tr("Tenant wählen …")}</option>}
           {tenants.filter((t) => t.status === 'Active').map((t) => <option key={t.id} value={t.id}>{t.displayName}</option>)}
         </select>
       </Field>
@@ -262,10 +263,10 @@ function RetireModal({ keyItem, onClose, onDone }: { keyItem: YubiKey; onClose: 
   const { busy, error, run } = useAction();
   const go = () => run(async () => onDone(await api.post<YubiKey>(`/api/keys/${keyItem.id}/retire`, { note: note || null, toPartnerStock: toPartner })));
   return (
-    <Modal title="Key ausmustern" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="danger" disabled={busy} onClick={go}>Ausmustern</button></>}>
-      <p>Ausgemusterte Keys bleiben im Inventar sichtbar, können aber nicht mehr registriert werden.</p>
+    <Modal title={tr("Key ausmustern")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="danger" disabled={busy} onClick={go}>{tr("Ausmustern")}</button></>}>
+      <p>{tr("Ausgemusterte Keys bleiben im Inventar sichtbar, können aber nicht mehr registriert werden.")}</p>
       <StockChoice keyItem={keyItem} toPartner={toPartner} setToPartner={setToPartner} retire />
-      <Field label="Notiz (optional)"><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} /></Field>
+      <Field label={tr("Notiz (optional)")}><textarea value={note} onChange={(e) => setNote(e.target.value)} rows={3} /></Field>
       <ErrorBox error={error} />
     </Modal>
   );
@@ -281,15 +282,15 @@ function ResetModal({ keyItem, approvalId, onClose }: { keyItem: YubiKey; approv
   const [toPartner, setToPartner] = useState(false);
   const go = () => run(async () => setJob(await api.post<Job>(`/api/keys/${keyItem.id}/reset`, { agentId: agent!.id, toPartnerStock: toPartner, approvalId })));
   return (
-    <Modal title="Key zurücksetzen" onClose={onClose} footer={<>
-      <button onClick={onClose}>{job?.state === 'Succeeded' ? 'Schließen' : 'Abbrechen'}</button>
-      {!job && <button className="primary" disabled={!agent || busy} onClick={go}>Zurücksetzen starten</button>}
+    <Modal title={tr("Key zurücksetzen")} onClose={onClose} footer={<>
+      <button onClick={onClose}>{job?.state === 'Succeeded' ? tr("Schließen") : tr("Abbrechen")}</button>
+      {!job && <button className="primary" disabled={!agent || busy} onClick={go}>{tr("Zurücksetzen starten")}</button>}
     </>}>
       {!job && <>
-        <p>Der FIDO-Teil des Keys {keyItem.serialNumber} wird auf Werkseinstellungen zurückgesetzt, alle Registrierungen in Entra werden entfernt und der Key kommt ins Lager.</p>
+        <p>{tr("Der FIDO-Teil des Keys {serialNumber} wird auf Werkseinstellungen zurückgesetzt, alle Registrierungen in Entra werden entfernt und der Key kommt ins Lager.", { serialNumber: keyItem.serialNumber })}</p>
         <StockChoice keyItem={keyItem} toPartner={toPartner} setToPartner={setToPartner} />
-        {agent ? <Info>Agent: <strong>{agent.machineName}</strong>. Stecken Sie den Key ein und folgen Sie den Hinweisen.</Info>
-          : <Info tone="warn">Kein Agent online. <button className="link" onClick={reload}>Erneut prüfen</button></Info>}
+        {agent ? <Info>{tr("Agent:")} <strong>{agent.machineName}</strong>{tr(". Stecken Sie den Key ein und folgen Sie den Hinweisen.")}</Info>
+          : <Info tone="warn">{tr("Kein Agent online.")} <button className="link" onClick={reload}>{tr("Erneut prüfen")}</button></Info>}
       </>}
       {job && <JobProgress job={job} />}
       <ErrorBox error={error} />
@@ -315,8 +316,8 @@ export function JobProgress({ job }: { job: Job }) {
       <div className="progress"><span style={{ width: (job.state === 'Succeeded' ? 100 : (job.stepNumber / job.totalSteps) * 100) + '%' }} /></div>
       <p><strong>{job.step}</strong> {job.state === 'Running' && <Spinner />}</p>
       {job.prompt && job.state === 'Running' && <KeyPrompt text={job.prompt} />}
-      {job.state === 'Failed' && <ErrorBox error={job.error ?? 'Vorgang fehlgeschlagen.'} />}
-      {job.state === 'Succeeded' && <Info tone="ok">Abgeschlossen.</Info>}
+      {job.state === 'Failed' && <ErrorBox error={job.error ?? tr("Vorgang fehlgeschlagen.")} />}
+      {job.state === 'Succeeded' && <Info tone="ok">{tr("Abgeschlossen.")}</Info>}
       {job.notes.length > 0 && <ul className="small muted">{job.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
     </div>
   );
@@ -333,15 +334,15 @@ function EditModal({ keyItem, fields, onClose, onDone }: { keyItem: YubiKey; fie
     customFields: Object.fromEntries(fields.map((f) => [f.key, values[f.key] || null])),
   })));
   return (
-    <Modal title="Key bearbeiten" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy} onClick={go}>Speichern</button></>}>
-      {keyItem.usage !== 'Personal' && <Field label="Verwahrer *" hint="Wer den geteilten Key aufbewahrt, z. B. Abteilungsleiter"><input value={custodian} onChange={(e) => setCustodian(e.target.value)} /></Field>}
-      <Field label="Tags" hint="Mit Komma getrennt"><input value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
+    <Modal title={tr("Key bearbeiten")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="primary" disabled={busy} onClick={go}>{tr("Speichern")}</button></>}>
+      {keyItem.usage !== 'Personal' && <Field label={tr("Verwahrer *")} hint={tr("Wer den geteilten Key aufbewahrt, z. B. Abteilungsleiter")}><input value={custodian} onChange={(e) => setCustodian(e.target.value)} /></Field>}
+      <Field label={tr("Tags")} hint={tr("Mit Komma getrennt")}><input value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
       {fields.map((f) => (
         <Field key={f.key} label={f.label + (f.required ? ' *' : '')}>
           <CustomFieldInput field={f} value={values[f.key] ?? ''} onChange={(v) => setValues((s) => ({ ...s, [f.key]: v }))} />
         </Field>
       ))}
-      <Field label="Notiz"><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} /></Field>
+      <Field label={tr("Notiz")}><textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} /></Field>
       <ErrorBox error={error} />
     </Modal>
   );
@@ -355,8 +356,8 @@ function DeleteModal({ keyItem, onClose }: { keyItem: YubiKey; onClose: () => vo
     navigate(keyItem.inPartnerStock ? '/partner/stock' : '/keys');
   });
   return (
-    <Modal title="Key löschen" onClose={onClose} footer={<><button onClick={onClose}>Abbrechen</button><button className="danger" disabled={busy} onClick={go}>Endgültig löschen</button></>}>
-      <p>Key <span className="mono">{keyItem.serialNumber ?? 'ohne Seriennummer'}</span> aus dem Inventar löschen? Der Verlauf bleibt im Audit-Log erhalten.</p>
+    <Modal title={tr("Key löschen")} onClose={onClose} footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="danger" disabled={busy} onClick={go}>{tr("Endgültig löschen")}</button></>}>
+      <p>{tr("Key")} <span className="mono">{keyItem.serialNumber ?? tr("ohne Seriennummer")}</span> {tr("aus dem Inventar löschen? Der Verlauf bleibt im Audit-Log erhalten.")}</p>
       <ErrorBox error={error} />
     </Modal>
   );
@@ -368,16 +369,16 @@ function AccountsCard({ keyItem: key, active, onRemove, children }: { keyItem: Y
   const removed = key.registrations.filter((r) => r.removedAt);
   const shared = key.usage !== 'Personal';
   return (
-    <Card className="accounts-card" title={<>Konten auf diesem Key <span className="count-pill">{active.length}</span></>}
-      actions={shared && key.status === 'Active' && key.tenantId && can('RegisterKeys') && <Link className="btn" to={`/register/shared?tenantId=${key.tenantId}&usage=${key.usage}&custodian=${encodeURIComponent(key.custodian ?? '')}`}>Weitere Konten hinzufügen</Link>}>
+    <Card className="accounts-card" title={<>{tr("Konten auf diesem Key")} <span className="count-pill">{active.length}</span></>}
+      actions={shared && key.status === 'Active' && key.tenantId && can('RegisterKeys') && <Link className="btn" to={`/register/shared?tenantId=${key.tenantId}&usage=${key.usage}&custodian=${encodeURIComponent(key.custodian ?? '')}`}>{tr("Weitere Konten hinzufügen")}</Link>}>
       {shared && (
         <div className={'custodian-bar ' + (key.usage === 'Breakglass' ? 'tone-error' : 'tone-info')}>
           <Icon name={key.usage === 'Breakglass' ? 'shield' : 'share'} />
-          <span><strong>{usageLabels[key.usage]}</strong> · physisch bei <strong>{key.custodian ?? 'unbekannt (Verwahrer fehlt)'}</strong></span>
-          <span className="muted small push-right">{active.length === 1 ? '1 Konto' : `${active.length} Konten`} melden sich mit diesem Key an</span>
+          <span><strong>{usageLabels[key.usage]}</strong> {tr("· physisch bei")} <strong>{key.custodian ?? tr("unbekannt (Verwahrer fehlt)")}</strong></span>
+          <span className="muted small push-right">{active.length === 1 ? tr("1 Konto") : tr("{length} Konten", { length: active.length })} {tr("melden sich mit diesem Key an")}</span>
         </div>
       )}
-      {active.length === 0 ? <p className="muted">Auf diesem Key ist kein Konto registriert.</p> : (
+      {active.length === 0 ? <p className="muted">{tr("Auf diesem Key ist kein Konto registriert.")}</p> : (
         <div className="account-grid">
           {active.map((r, i) => (
             <div key={r.id} className="account-tile" style={{ animationDelay: i * 50 + 'ms' }}>
@@ -386,25 +387,25 @@ function AccountsCard({ keyItem: key, active, onRemove, children }: { keyItem: Y
                 <strong>{r.userDisplayName ?? r.userPrincipalName}</strong>
                 <div className="small muted">{r.userPrincipalName}</div>
                 <div className="account-meta small">
-                  <span title="Anzeigename des Passkeys in Entra"><Icon name="key" size={13} />{r.displayName ?? '–'}</span>
+                  <span title={tr("Anzeigename des Passkeys in Entra")}><Icon name="key" size={13} />{r.displayName ?? '–'}</span>
                   <span><Icon name="check" size={13} />{fmtDate(r.registeredAt, false)} · {r.registeredByName ?? (r.source === 'EntraSync' ? 'selbst registriert' : '–')}</span>
                 </div>
               </div>
-              {onRemove && <button className="small danger" onClick={() => onRemove(r)}>Entfernen</button>}
+              {onRemove && <button className="small danger" onClick={() => onRemove(r)}>{tr("Entfernen")}</button>}
             </div>
           ))}
         </div>
       )}
       {removed.length > 0 && (
         <details className="removed-accounts">
-          <summary>Frühere Registrierungen ({removed.length})</summary>
+          <summary>{tr("Frühere Registrierungen ({length})", { length: removed.length })}</summary>
           <table>
             <tbody>
               {removed.map((r) => (
                 <tr key={r.id}>
                   <td>{r.userDisplayName ?? r.userPrincipalName}<div className="small muted">{r.userPrincipalName}</div></td>
-                  <td className="small">registriert {fmtDate(r.registeredAt, false)}</td>
-                  <td className="small muted">entfernt {fmtDate(r.removedAt, false)}{r.removedReason ? ` (${r.removedReason})` : ''}</td>
+                  <td className="small">{tr("registriert {n}", { n: fmtDate(r.registeredAt, false) })}</td>
+                  <td className="small muted">{tr("entfernt {n}{n2}", { n: fmtDate(r.removedAt, false), n2: r.removedReason ? ` (${r.removedReason})` : '' })}</td>
                 </tr>
               ))}
             </tbody>

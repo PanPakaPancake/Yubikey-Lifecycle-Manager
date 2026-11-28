@@ -8,6 +8,7 @@ import { useConfirm } from '../feedback';
 import { BrandingCard } from './Branding';
 import { LetterEditorCard } from './LetterEditor';
 import { HostingCard } from './Hosting';
+import { tr } from '../i18n';
 
 type Tab = 'general' | 'hosting' | 'security' | 'updates' | 'api';
 /** Sprungziele (#updates, #certificate, …) aus anderen Seiten öffnen den passenden Bereich. */
@@ -27,10 +28,10 @@ export default function PlatformPage() {
   const navigate = useNavigate();
   const admin = !!can('ManageSettings');
   const tabs: { id: Tab; label: string; show: boolean }[] = [
-    { id: 'general', label: 'Allgemein', show: true },
-    { id: 'hosting', label: 'Adresse und Zertifikat', show: admin },
-    { id: 'security', label: 'Anmeldung und Sicherheit', show: admin },
-    { id: 'updates', label: 'Updates', show: admin },
+    { id: 'general', label: tr("Allgemein"), show: true },
+    { id: 'hosting', label: tr("Adresse und Zertifikat"), show: admin },
+    { id: 'security', label: tr("Anmeldung und Sicherheit"), show: admin },
+    { id: 'updates', label: tr("Updates"), show: admin },
     { id: 'api', label: 'API', show: !!can('ManageApiKeys') },
   ];
   const anchor = location.hash.slice(1);
@@ -42,22 +43,22 @@ export default function PlatformPage() {
 
   return (
     <>
-      <PageHeader title="Globale Einstellungen" subtitle="Partnerebene: Einstellungen für die ganze Installation. Tenants erben sie und können sie teilweise anpassen." />
-      <div className="tabs" role="tablist" aria-label="Bereiche">
+      <PageHeader title={tr("Globale Einstellungen")} subtitle={tr("Partnerebene: Einstellungen für die ganze Installation. Tenants erben sie und können sie teilweise anpassen.")} />
+      <div className="tabs" role="tablist" aria-label={tr("Bereiche")}>
         {tabs.filter((t) => t.show).map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'selected' : ''}
             onClick={() => navigate({ hash: t.id === 'general' ? '' : t.id }, { replace: true })}>{t.label}</button>
         ))}
       </div>
       {tab === 'general' && <>
-        <Card title="Aufbau">
+        <Card title={tr("Aufbau")}>
           <div className="hierarchy">
-            <span className="level current">Plattform</span><span aria-hidden>→</span><span className="level">Tenant</span><span aria-hidden>→</span><span className="level">Gruppe</span>
+            <span className="level current">{tr("Plattform")}</span><span aria-hidden>→</span><span className="level">{tr("Tenant")}</span><span aria-hidden>→</span><span className="level">{tr("Gruppe")}</span>
           </div>
           <dl className="explain">
-            <dt>Plattform</dt><dd>API-Schlüssel, globale Zusatzfelder, <Link to="/profiles">Profile für alle Tenants</Link>, <Link to="/users">Benutzer und Rollen</Link>.</dd>
-            <dt>Tenant</dt><dd>Zielgruppe, FIDO2-Prüfung, Synchronisation, eigene Profile und Zusatzfelder. Geerbte Zusatzfelder kann ein Tenant verändern oder deaktivieren.</dd>
-            <dt>Gruppe</dt><dd>Profil pro Entra-Gruppe: Der Registrierungs-Assistent schlägt es für Mitglieder vor. Einstellbar im jeweiligen Tenant.</dd>
+            <dt>{tr("Plattform")}</dt><dd>{tr("API-Schlüssel, globale Zusatzfelder,")} <Link to="/profiles">{tr("Profile für alle Tenants")}</Link>, <Link to="/users">{tr("Benutzer und Rollen")}</Link>.</dd>
+            <dt>{tr("Tenant")}</dt><dd>{tr("Zielgruppe, FIDO2-Prüfung, Synchronisation, eigene Profile und Zusatzfelder. Geerbte Zusatzfelder kann ein Tenant verändern oder deaktivieren.")}</dd>
+            <dt>{tr("Gruppe")}</dt><dd>{tr("Profil pro Entra-Gruppe: Der Registrierungs-Assistent schlägt es für Mitglieder vor. Einstellbar im jeweiligen Tenant.")}</dd>
           </dl>
         </Card>
         <BrandingCard editable={admin} />
@@ -72,7 +73,7 @@ export default function PlatformPage() {
       {tab === 'updates' && <UpdatesCard />}
       {tab === 'api' && <>
         <ApiKeysCard />
-        <Info>Webhooks, Mail-Alarme und Mail-Berichte stehen unter <Link to="/partner/notifications">Benachrichtigungen</Link>.</Info>
+        <Info>{tr("Webhooks, Mail-Alarme und Mail-Berichte stehen unter")} <Link to="/partner/notifications">{tr("Benachrichtigungen")}</Link>.</Info>
       </>}
     </>
   );
@@ -91,46 +92,45 @@ function GlobalFieldsCard({ editable }: { editable: boolean }) {
   });
 
   return (
-    <Card title={<span id="fields">Globale Zusatzfelder für Keys</span>} className="mt"
-      actions={editable && <button onClick={() => setDraft([...list, { key: '', label: '', type: 'Text', required: false, options: [] }])}>Feld hinzufügen</button>}>
+    <Card title={<span id="fields">{tr("Globale Zusatzfelder für Keys")}</span>} className="mt"
+      actions={editable && <button onClick={() => setDraft([...list, { key: '', label: '', type: 'Text', required: false, options: [] }])}>{tr("Feld hinzufügen")}</button>}>
       <p className="muted small" style={{ marginTop: 0 }}>
-        Diese Felder gelten in allen Tenants. Ein Tenant kann ein Feld für sich verändern (Bezeichnung, Pflicht, Optionen) oder deaktivieren und eigene, lokale Felder ergänzen.
-        Wird ein Feld hier entfernt, verschwinden auch die Anpassungen in den Tenants; bereits gespeicherte Werte an den Keys bleiben erhalten.
+        {tr("Diese Felder gelten in allen Tenants. Ein Tenant kann ein Feld für sich verändern (Bezeichnung, Pflicht, Optionen) oder deaktivieren und eigene, lokale Felder ergänzen. Wird ein Feld hier entfernt, verschwinden auch die Anpassungen in den Tenants; bereits gespeicherte Werte an den Keys bleiben erhalten.")}
       </p>
       <FieldExplanation />
-      {!editable && <Info>Globale Felder können Owner mit Zugriff auf alle Tenants bearbeiten.</Info>}
-      {list.length === 0 && <p className="muted">Keine globalen Zusatzfelder. Beispiele: Kostenstelle, Standort, Inventarnummer.</p>}
+      {!editable && <Info>{tr("Globale Felder können Owner mit Zugriff auf alle Tenants bearbeiten.")}</Info>}
+      {list.length === 0 && <p className="muted">{tr("Keine globalen Zusatzfelder. Beispiele: Kostenstelle, Standort, Inventarnummer.")}</p>}
       {list.length > 0 && (
         <table>
-          <thead><tr><th>Bezeichnung</th><th>Schlüssel</th><th>Typ</th><th>Optionen</th><th>Pflicht</th><th>In Tenants</th><th /></tr></thead>
+          <thead><tr><th>{tr("Bezeichnung")}</th><th>{tr("Schlüssel")}</th><th>{tr("Typ")}</th><th>{tr("Optionen")}</th><th>{tr("Pflicht")}</th><th>{tr("In Tenants")}</th><th /></tr></thead>
           <tbody>
             {list.map((f, i) => (
               <tr key={f.id ?? 'n' + i}>
-                <td><input value={f.label} disabled={!editable} placeholder="z. B. Kostenstelle" onChange={(e) => update(i, { label: e.target.value, key: f.id ? f.key : keyFromLabel(e.target.value) })} /></td>
-                <td><input value={f.key} disabled={!editable || !!f.id} className="mono" onChange={(e) => update(i, { key: e.target.value })} title={f.id ? 'Der Schlüssel kann nach dem Speichern nicht mehr geändert werden.' : 'Wird aus der Bezeichnung vorgeschlagen.'} /></td>
+                <td><input value={f.label} disabled={!editable} placeholder={tr("z. B. Kostenstelle")} onChange={(e) => update(i, { label: e.target.value, key: f.id ? f.key : keyFromLabel(e.target.value) })} /></td>
+                <td><input value={f.key} disabled={!editable || !!f.id} className="mono" onChange={(e) => update(i, { key: e.target.value })} title={f.id ? tr("Der Schlüssel kann nach dem Speichern nicht mehr geändert werden.") : tr("Wird aus der Bezeichnung vorgeschlagen.")} /></td>
                 <td>
                   <select value={f.type} disabled={!editable} onChange={(e) => update(i, { type: e.target.value as CustomField['type'] })}>
                     {Object.entries(fieldTypes).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                   </select>
                 </td>
-                <td>{f.type === 'Select' && <input value={f.options.join(', ')} disabled={!editable} placeholder="A, B, C" onChange={(e) => update(i, { options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean) })} />}</td>
+                <td>{f.type === 'Select' && <input value={f.options.join(', ')} disabled={!editable} placeholder={tr("A, B, C")} onChange={(e) => update(i, { options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean) })} />}</td>
                 <td><input type="checkbox" checked={f.required} disabled={!editable} onChange={(e) => update(i, { required: e.target.checked })} /></td>
                 <td className="small">
-                  {!f.id ? <span className="muted">neu</span> : (f.tenantsModified || f.tenantsDisabled) ? (
+                  {!f.id ? <span className="muted">{tr("neu")}</span> : (f.tenantsModified || f.tenantsDisabled) ? (
                     <>
-                      {!!f.tenantsModified && <Badge tone="warn">{f.tenantsModified} verändert</Badge>}{' '}
-                      {!!f.tenantsDisabled && <Badge tone="error">{f.tenantsDisabled} deaktiviert</Badge>}
+                      {!!f.tenantsModified && <Badge tone="warn">{tr("{tenantsModified} verändert", { tenantsModified: f.tenantsModified })}</Badge>}{' '}
+                      {!!f.tenantsDisabled && <Badge tone="error">{tr("{tenantsDisabled} deaktiviert", { tenantsDisabled: f.tenantsDisabled })}</Badge>}
                     </>
-                  ) : <span className="muted">überall geerbt</span>}
+                  ) : <span className="muted">{tr("überall geerbt")}</span>}
                 </td>
-                <td>{editable && <button className="link" onClick={() => setDraft(list.filter((_, j) => j !== i))}>Entfernen</button>}</td>
+                <td>{editable && <button className="link" onClick={() => setDraft(list.filter((_, j) => j !== i))}>{tr("Entfernen")}</button>}</td>
               </tr>
             ))}
           </tbody>
         </table>
       )}
       <ErrorBox error={error} />
-      {draft && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => setDraft(null)}>Verwerfen</button><button className="primary" disabled={busy} onClick={save}>Felder speichern</button></div>}
+      {draft && <div className="actions" style={{ marginTop: 12 }}><button onClick={() => setDraft(null)}>{tr("Verwerfen")}</button><button className="primary" disabled={busy} onClick={save}>{tr("Felder speichern")}</button></div>}
     </Card>
   );
 }
@@ -149,9 +149,9 @@ const SEPARATE = ['keys.lock', 'certificate.write'];
 function presets(catalog: ApiScopeInfo[]) {
   const read = catalog.filter((s) => !s.write).map((s) => s.id);
   return [
-    { id: 'read', label: 'Nur lesen', scopes: read },
-    { id: 'todo', label: 'Lesen + ToDo', scopes: [...read, 'todos.write'] },
-    { id: 'all', label: 'Lesen + Schreiben', scopes: catalog.map((s) => s.id).filter((id) => !SEPARATE.includes(id)) },
+    { id: 'read', label: tr("Nur lesen"), scopes: read },
+    { id: 'todo', label: tr("Lesen + ToDo"), scopes: [...read, 'todos.write'] },
+    { id: 'all', label: tr("Lesen + Schreiben"), scopes: catalog.map((s) => s.id).filter((id) => !SEPARATE.includes(id)) },
   ];
 }
 
@@ -184,19 +184,19 @@ export function ApiRightsEditor({ scopes, setScopes, catalog }: { scopes: string
   );
   return (
     <div className="field-group">
-      <span className="field-label">Rechte</span>
-      <div className="segmented" role="group" aria-label="Vorlage" style={{ marginBottom: 8 }}>
+      <span className="field-label">{tr("Rechte")}</span>
+      <div className="segmented" role="group" aria-label={tr("Vorlage")} style={{ marginBottom: 8 }}>
         {presets(catalog).map((p) => <button type="button" key={p.id} className={active === p.id ? 'on' : ''} onClick={() => applyPreset(p.scopes)}>{p.label}</button>)}
-        <button type="button" className={active === 'custom' ? 'on' : ''} disabled>Eigene Auswahl</button>
+        <button type="button" className={active === 'custom' ? 'on' : ''} disabled>{tr("Eigene Auswahl")}</button>
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
-        {column('Lesen', catalog.filter((s) => !s.write))}
-        {column('Schreiben', catalog.filter((s) => s.write && !SEPARATE.includes(s.id)))}
+        {column(tr("Lesen"), catalog.filter((s) => !s.write))}
+        {column(tr("Schreiben"), catalog.filter((s) => s.write && !SEPARATE.includes(s.id)))}
       </div>
       <div style={{ marginTop: 12 }}>
-        {column('Einzeln vergeben (nicht in den Vorlagen)', catalog.filter((s) => SEPARATE.includes(s.id)))}
+        {column(tr("Einzeln vergeben (nicht in den Vorlagen)"), catalog.filter((s) => SEPARATE.includes(s.id)))}
       </div>
-      {scopes.includes('keys.lock') && <Info tone="warn">„Keys sperren“ entfernt den Passkey in Entra: Die Person kann sich mit dem Key nicht mehr anmelden. Nur für Tools vergeben, denen Sie das zutrauen, z. B. dem Ticketsystem für Verlustmeldungen.</Info>}
+      {scopes.includes('keys.lock') && <Info tone="warn">{tr("„Keys sperren“ entfernt den Passkey in Entra: Die Person kann sich mit dem Key nicht mehr anmelden. Nur für Tools vergeben, denen Sie das zutrauen, z. B. dem Ticketsystem für Verlustmeldungen.")}</Info>}
     </div>
   );
 }
@@ -206,9 +206,9 @@ export function ScopeEditor({ allTenants, setAllTenants, tenantIds, setTenantIds
 }) {
   return (
     <div className="field-group">
-      <span className="field-label">Gilt für</span>
-      <label className="check"><input type="radio" checked={allTenants} disabled={!canAll} onChange={() => setAllTenants(true)} /> Alle Tenants, auch künftig angebundene</label>
-      <label className="check"><input type="radio" checked={!allTenants} onChange={() => setAllTenants(false)} /> Nur ausgewählte Tenants</label>
+      <span className="field-label">{tr("Gilt für")}</span>
+      <label className="check"><input type="radio" checked={allTenants} disabled={!canAll} onChange={() => setAllTenants(true)} /> {tr("Alle Tenants, auch künftig angebundene")}</label>
+      <label className="check"><input type="radio" checked={!allTenants} onChange={() => setAllTenants(false)} /> {tr("Nur ausgewählte Tenants")}</label>
       {!allTenants && (
         <div style={{ paddingLeft: 26 }}>
           {tenants.map((t) => (
@@ -217,7 +217,7 @@ export function ScopeEditor({ allTenants, setAllTenants, tenantIds, setTenantIds
               {t.displayName} {t.defaultDomain && <span className="muted small">({t.defaultDomain})</span>}
             </label>
           ))}
-          {tenants.length === 0 && <span className="muted small">Noch kein Tenant angebunden.</span>}
+          {tenants.length === 0 && <span className="muted small">{tr("Noch kein Tenant angebunden.")}</span>}
         </div>
       )}
     </div>
@@ -253,35 +253,33 @@ function ApiKeysCard() {
   const revoke = (id: string) => run(async () => { await api.del(`/api/api-keys/${id}`); reload(); });
 
   return (
-    <Card title={<span id="api">API-Schlüssel</span>} className="mt" actions={<a className="small" href="/api/docs" target="_blank" rel="noreferrer">API-Dokumentation</a>}>
+    <Card title={<span id="api">{tr("API-Schlüssel")}</span>} className="mt" actions={<a className="small" href="/api/docs" target="_blank" rel="noreferrer">{tr("API-Dokumentation")}</a>}>
       <p className="muted small" style={{ marginTop: 0 }}>
-        Externe Tools (z. B. Ticketsystem, RMM, SIEM) nutzen <code>/api/v1</code> mit dem Header <code>X-Api-Key</code>. Jeder Schlüssel bekommt eigene Rechte, ähnlich wie eine Rolle: z. B. nur lesen für alle Tenants, nur lesen für einen Tenant, oder lesen und schreiben.
-        Schreiben heißt: Personen auf die <Link to="/todos">ToDo-Liste</Link> setzen, Tags und Zusatzfelder pflegen und Keys sperren. Zurücksetzen, Ausmustern und Löschen gibt es über die API nicht. Jede Änderung über die API steht im Audit-Log mit dem Schlüssel als Akteur.
-        Mit dem Parameter <code>tenant</code> (ID oder Domain) fragt ein Tool gezielt einen Tenant ab; <code>GET /api/v1/me</code> zeigt Tenants und Rechte des Schlüssels.
+        {tr("Externe Tools (z. B. Ticketsystem, RMM, SIEM) nutzen")} <code>{tr("/api/v1")}</code> {tr("mit dem Header")} <code>{tr("X-Api-Key")}</code>{tr(". Jeder Schlüssel bekommt eigene Rechte, ähnlich wie eine Rolle: z. B. nur lesen für alle Tenants, nur lesen für einen Tenant, oder lesen und schreiben. Schreiben heißt: Personen auf die")} <Link to="/todos">{tr("ToDo-Liste")}</Link> {tr("setzen, Tags und Zusatzfelder pflegen und Keys sperren. Zurücksetzen, Ausmustern und Löschen gibt es über die API nicht. Jede Änderung über die API steht im Audit-Log mit dem Schlüssel als Akteur. Mit dem Parameter")} <code>{tr("tenant")}</code> {tr("(ID oder Domain) fragt ein Tool gezielt einen Tenant ab;")} <code>{tr("GET /api/v1/me")}</code> {tr("zeigt Tenants und Rechte des Schlüssels.")}
       </p>
-      {created && <Info tone="ok">Neuer Schlüssel, nur jetzt sichtbar: <code style={{ wordBreak: 'break-all' }}>{created}</code> <button className="link" onClick={() => void navigator.clipboard?.writeText(created)}>Kopieren</button></Info>}
+      {created && <Info tone="ok">{tr("Neuer Schlüssel, nur jetzt sichtbar:")} <code style={{ wordBreak: 'break-all' }}>{created}</code> <button className="link" onClick={() => void navigator.clipboard?.writeText(created)}>{tr("Kopieren")}</button></Info>}
       <form onSubmit={(e) => { e.preventDefault(); create(); }}>
         <div className="toolbar" style={{ marginBottom: 6 }}>
-          <input placeholder="Name, z. B. Ticketsystem" value={name} onChange={(e) => setName(e.target.value)} aria-label="Name" />
-          <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Gültigkeit">
-            <option value={90}>90 Tage</option><option value={365}>1 Jahr</option><option value={730}>2 Jahre</option><option value={0}>unbegrenzt</option>
+          <input placeholder={tr("Name, z. B. Ticketsystem")} value={name} onChange={(e) => setName(e.target.value)} aria-label={tr("Name")} />
+          <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label={tr("Gültigkeit")}>
+            <option value={90}>{tr("90 Tage")}</option><option value={365}>{tr("1 Jahr")}</option><option value={730}>{tr("2 Jahre")}</option><option value={0}>{tr("unbegrenzt")}</option>
           </select>
         </div>
         <ScopeEditor allTenants={all} setAllTenants={setAll} tenantIds={ids} setTenantIds={setIds} tenants={tenants} canAll={canAll} />
         {catalog && <ApiRightsEditor scopes={chosen} setScopes={setScopes} catalog={catalog} />}
-        <button type="submit" className="primary" disabled={!name.trim() || busy || (!all && ids.length === 0) || chosen.length === 0}>Schlüssel erstellen</button>
+        <button type="submit" className="primary" disabled={!name.trim() || busy || (!all && ids.length === 0) || chosen.length === 0}>{tr("Schlüssel erstellen")}</button>
       </form>
       <ErrorBox error={error} />
       {!data && <Spinner />}
       {data && data.length > 0 && (
         <table className="mt">
-          <thead><tr><th>Name</th><th>Präfix</th><th>Gilt für</th><th>Rechte</th><th>Erstellt</th><th>Zuletzt genutzt</th><th>Gültig bis</th><th /></tr></thead>
+          <thead><tr><th>{tr("Name")}</th><th>{tr("Präfix")}</th><th>{tr("Gilt für")}</th><th>{tr("Rechte")}</th><th>{tr("Erstellt")}</th><th>{tr("Zuletzt genutzt")}</th><th>{tr("Gültig bis")}</th><th /></tr></thead>
           <tbody>
             {data.map((k) => (
               <tr key={k.id} style={{ opacity: k.revokedAt ? 0.55 : 1 }}>
                 <td>{k.name}</td>
-                <td className="mono">ylm_{k.prefix}_…</td>
-                <td className="small">{k.allTenants ? <Badge tone="info">Alle Tenants</Badge> : k.tenants.map((t) => t.displayName).join(', ') || <span className="muted">kein Tenant</span>}</td>
+                <td className="mono">{tr("ylm_{prefix}_…", { prefix: k.prefix })}</td>
+                <td className="small">{k.allTenants ? <Badge tone="info">{tr("Alle Tenants")}</Badge> : k.tenants.map((t) => t.displayName).join(', ') || <span className="muted">{tr("kein Tenant")}</span>}</td>
                 <td className="small">
                   <span style={{ display: 'inline-flex', flexWrap: 'wrap', gap: 4 }}>
                     {rightsSummary(k.scopes, catalog ?? []).map((l) => <Badge key={l} tone={catalog?.some((s) => s.write && k.scopes.includes(s.id)) ? 'warn' : 'info'}>{l}</Badge>)}
@@ -291,10 +289,10 @@ function ApiKeysCard() {
                 <td className="small">{fmtDate(k.lastUsedAt)}</td>
                 <td className="small">{k.expiresAt ? fmtDate(k.expiresAt, false) : 'unbegrenzt'}</td>
                 <td>
-                  {k.revokedAt ? <Badge>widerrufen</Badge> : (
+                  {k.revokedAt ? <Badge>{tr("widerrufen")}</Badge> : (
                     <span style={{ display: 'inline-flex', gap: 10 }}>
-                      <button className="link" onClick={() => setEditing(k)}>Rechte ändern</button>
-                      <button className="link" onClick={() => revoke(k.id)}>Widerrufen</button>
+                      <button className="link" onClick={() => setEditing(k)}>{tr("Rechte ändern")}</button>
+                      <button className="link" onClick={() => revoke(k.id)}>{tr("Widerrufen")}</button>
                     </span>
                   )}
                 </td>
@@ -315,8 +313,8 @@ function ScopeModal({ keyRow, tenants, canAll, catalog, onClose, onSaved }: { ke
   const { busy, error, run } = useAction();
   const save = () => run(async () => { await api.put(`/api/api-keys/${keyRow.id}/scope`, { allTenants: all, tenantIds: all ? [] : ids, scopes }); onSaved(); });
   return (
-    <Modal title={`Rechte von „${keyRow.name}“`} onClose={onClose}
-      footer={<><button onClick={onClose}>Abbrechen</button><button className="primary" disabled={busy || (!all && ids.length === 0) || scopes.length === 0} onClick={save}>Speichern</button></>}>
+    <Modal title={tr("Rechte von „{name}“", { name: keyRow.name })} onClose={onClose}
+      footer={<><button onClick={onClose}>{tr("Abbrechen")}</button><button className="primary" disabled={busy || (!all && ids.length === 0) || scopes.length === 0} onClick={save}>{tr("Speichern")}</button></>}>
       <ScopeEditor allTenants={all} setAllTenants={setAll} tenantIds={ids} setTenantIds={setIds} tenants={tenants} canAll={canAll} />
       <ApiRightsEditor scopes={scopes} setScopes={setScopes} catalog={catalog} />
       <ErrorBox error={error} />
@@ -332,7 +330,7 @@ export type CertificateStatus = {
 };
 
 const certTone = { ok: 'ok', warning: 'warn', critical: 'error', expired: 'error', missing: 'neutral' } as const;
-const certLabel = { ok: 'Gültig', warning: 'Läuft bald ab', critical: 'Läuft in Kürze ab', expired: 'Abgelaufen', missing: 'Nicht vorhanden' } as const;
+const certLabel = { ok: tr("Gültig"), warning: tr("Läuft bald ab"), critical: tr("Läuft in Kürze ab"), expired: tr("Abgelaufen"), missing: tr("Nicht vorhanden") } as const;
 
 /** App-Zertifikat: Anmeldung der Plattform in allen Tenants. Warnung, automatische Erneuerung, Fallback von Hand. */
 function AppCertificateCard() {
@@ -342,31 +340,30 @@ function AppCertificateCard() {
   const discard = () => run(async () => { await api.del('/api/platform/certificate/next'); reload(); });
   if (!data || data.state === 'missing') return null;
   return (
-    <Card title={<span id="certificate">App-Zertifikat</span>}
-      actions={data.autoRenewPossible && !data.nextThumbprint && <button disabled={busy} onClick={() => act('renew')}>Jetzt erneuern</button>}>
-      <p className="small muted">Mit diesem Zertifikat meldet sich die Plattform in jedem angebundenen Tenant bei Microsoft Graph an. Läuft es ab, funktionieren Sync, Registrierung und Rollout nicht mehr.</p>
+    <Card title={<span id="certificate">{tr("App-Zertifikat")}</span>}
+      actions={data.autoRenewPossible && !data.nextThumbprint && <button disabled={busy} onClick={() => act('renew')}>{tr("Jetzt erneuern")}</button>}>
+      <p className="small muted">{tr("Mit diesem Zertifikat meldet sich die Plattform in jedem angebundenen Tenant bei Microsoft Graph an. Läuft es ab, funktionieren Sync, Registrierung und Rollout nicht mehr.")}</p>
       <dl className="props">
-        <dt>Status</dt><dd><Badge tone={certTone[data.state]}>{certLabel[data.state]}</Badge>{data.daysLeft != null && data.daysLeft >= 0 && <span className="muted small"> noch {data.daysLeft} Tage</span>}</dd>
-        <dt>Gültig bis</dt><dd>{data.notAfter ? fmtDate(data.notAfter) : '–'}</dd>
-        <dt>Fingerabdruck</dt><dd className="mono small">{data.thumbprint}</dd>
-        <dt>Erneuerung</dt><dd>{data.autoRenew
-          ? <>automatisch {data.renewalDays} Tage vor dem Ablauf</>
-          : <>nur Warnung (automatische Erneuerung abgeschaltet: <span className="mono">YLM_CERT_AUTO_RENEW=false</span>)</>}</dd>
+        <dt>{tr("Status")}</dt><dd><Badge tone={certTone[data.state]}>{certLabel[data.state]}</Badge>{data.daysLeft != null && data.daysLeft >= 0 && <span className="muted small"> {tr("noch {daysLeft} Tage", { daysLeft: data.daysLeft })}</span>}</dd>
+        <dt>{tr("Gültig bis")}</dt><dd>{data.notAfter ? fmtDate(data.notAfter) : '–'}</dd>
+        <dt>{tr("Fingerabdruck")}</dt><dd className="mono small">{data.thumbprint}</dd>
+        <dt>{tr("Erneuerung")}</dt><dd>{data.autoRenew
+          ? <>{tr("automatisch {renewalDays} Tage vor dem Ablauf", { renewalDays: data.renewalDays })}</>
+          : <>{tr("nur Warnung (automatische Erneuerung abgeschaltet:")} <span className="mono">{tr("YLM_CERT_AUTO_RENEW=false")}</span>)</>}</dd>
       </dl>
-      {data.lastError && <Info tone="error">Letzter Versuch {data.lastAttemptAt ? fmtDate(data.lastAttemptAt) : ''} fehlgeschlagen: {data.lastError}</Info>}
+      {data.lastError && <Info tone="error">{tr("Letzter Versuch {n} fehlgeschlagen: {lastError}", { n: data.lastAttemptAt ? fmtDate(data.lastAttemptAt) : '', lastError: data.lastError })}</Info>}
       {data.nextThumbprint ? (
         <Info tone="warn">
-          <strong>Neues Zertifikat wartet auf Entra</strong> (<span className="mono">{data.nextThumbprint}</span>). Die Plattform prüft jede Minute und schaltet um, sobald Entra es annimmt.
-          Bei der Erneuerung von Hand: Zertifikat herunterladen und im Entra Admin Center unter App-Registrierungen, YLM-App, „Zertifikate und Geheimnisse“ hochladen, dann aktivieren.
+          <strong>{tr("Neues Zertifikat wartet auf Entra")}</strong> (<span className="mono">{data.nextThumbprint}</span>{tr("). Die Plattform prüft jede Minute und schaltet um, sobald Entra es annimmt. Bei der Erneuerung von Hand: Zertifikat herunterladen und im Entra Admin Center unter App-Registrierungen, YLM-App, „Zertifikate und Geheimnisse“ hochladen, dann aktivieren.")}
           <div className="toolbar mt">
-            <button onClick={() => download('/api/platform/certificate/next.cer')}>Zertifikat herunterladen (.cer)</button>
-            <button disabled={busy} onClick={() => act('activate')}>Jetzt aktivieren</button>
-            <button className="ghost" disabled={busy} onClick={discard}>Verwerfen</button>
+            <button onClick={() => download('/api/platform/certificate/next.cer')}>{tr("Zertifikat herunterladen (.cer)")}</button>
+            <button disabled={busy} onClick={() => act('activate')}>{tr("Jetzt aktivieren")}</button>
+            <button className="ghost" disabled={busy} onClick={discard}>{tr("Verwerfen")}</button>
           </div>
         </Info>
       ) : (data.state !== 'ok' || !data.autoRenewPossible || data.lastError) && (
-        <p className="small">Klappt die automatische Erneuerung nicht (zum Beispiel weil das Zertifikat schon abgelaufen ist):{' '}
-          <button className="link" disabled={busy} onClick={() => act('prepare')}>Neues Zertifikat von Hand vorbereiten</button></p>
+        <p className="small">{tr("Klappt die automatische Erneuerung nicht (zum Beispiel weil das Zertifikat schon abgelaufen ist): ")}
+          <button className="link" disabled={busy} onClick={() => act('prepare')}>{tr("Neues Zertifikat von Hand vorbereiten")}</button></p>
       )}
       <ErrorBox error={error} />
     </Card>
@@ -378,19 +375,19 @@ function LoginSettingsCard() {
   const { busy, error, run } = useAction();
   const toggle = (on: boolean) => run(async () => { await api.put('/api/platform/login', { entraSsoEnabled: on }); reload(); });
   return (
-    <Card title="Anmeldung an der Plattform">
+    <Card title={tr("Anmeldung an der Plattform")}>
       <dl className="explain">
-        <dt>Entra-SSO</dt><dd>Konten aus dem Heim-Tenant melden sich über Microsoft an (passwortlos mit YubiKey).</dd>
-        <dt>Lokale Konten (Passkey)</dt><dd>Anmeldung mit Passkey direkt an der Plattform, unabhängig von Entra. Empfohlen für Kundenzugriffe und Breakglass.</dd>
-        <dt>Lokale Konten (Passwort + TOTP)</dt><dd>Passwort plus Authenticator-Code, wenn kein Passkey möglich ist.</dd>
+        <dt>{tr("Entra-SSO")}</dt><dd>{tr("Konten aus dem Heim-Tenant melden sich über Microsoft an (passwortlos mit YubiKey).")}</dd>
+        <dt>{tr("Lokale Konten (Passkey)")}</dt><dd>{tr("Anmeldung mit Passkey direkt an der Plattform, unabhängig von Entra. Empfohlen für Kundenzugriffe und Breakglass.")}</dd>
+        <dt>{tr("Lokale Konten (Passwort + TOTP)")}</dt><dd>{tr("Passwort plus Authenticator-Code, wenn kein Passkey möglich ist.")}</dd>
       </dl>
       {data && (
         <label className="check">
           <input type="checkbox" checked={data.entraSsoEnabled} disabled={busy || !data.entraConfigured} onChange={(e) => toggle(e.target.checked)} />
-          Anmeldung mit Entra-SSO erlauben {!data.entraConfigured && <span className="muted small">(keine App-Registrierung eingerichtet)</span>}
+          {tr("Anmeldung mit Entra-SSO erlauben")} {!data.entraConfigured && <span className="muted small">{tr("(keine App-Registrierung eingerichtet)")}</span>}
         </label>
       )}
-      <p className="small muted">Lokale Konten legen Sie unter <Link to="/users">Benutzer &amp; Rollen</Link> an. Entra-SSO lässt sich nur abschalten, wenn ein Owner ein eingerichtetes lokales Konto hat.</p>
+      <p className="small muted">{tr("Lokale Konten legen Sie unter")} <Link to="/users">{tr("Benutzer & Rollen")}</Link> {tr("an. Entra-SSO lässt sich nur abschalten, wenn ein Owner ein eingerichtetes lokales Konto hat.")}</p>
       <ErrorBox error={error} />
     </Card>
   );
@@ -416,41 +413,41 @@ type AgentRow = {
 };
 
 const policyLabels: Record<AgentUpdatePolicy, string> = {
-  AgentDecides: 'Automatisch, am PC abschaltbar (Standard)',
-  Always: 'Immer automatisch',
-  Never: 'Keine automatischen Updates',
+  AgentDecides: tr("Automatisch, am PC abschaltbar (Standard)"),
+  Always: tr("Immer automatisch"),
+  Never: tr("Keine automatischen Updates"),
 };
 
 function AgentUpdates({ agent, onChanged }: { agent: UpdateInfo['agent']; onChanged: () => void }) {
   const { busy, error, run } = useAction();
   const setPolicy = (policy: AgentUpdatePolicy) => run(async () => { await api.put('/api/platform/updates/agent-policy', { policy }); onChanged(); });
   const parts = [
-    agent.outdated > 0 ? `${agent.outdated} von ${agent.agents} veraltet` : `alle ${agent.agents} aktuell`,
-    agent.autoUpdateOff > 0 && `${agent.autoUpdateOff} mit Auto-Update aus`,
-    agent.failed > 0 && `${agent.failed} mit Updatefehler`,
+    agent.outdated > 0 ? tr("{outdated} von {agents} veraltet", { outdated: agent.outdated, agents: agent.agents }) : tr("alle {agents} aktuell", { agents: agent.agents }),
+    agent.autoUpdateOff > 0 && tr("{autoUpdateOff} mit Auto-Update aus", { autoUpdateOff: agent.autoUpdateOff }),
+    agent.failed > 0 && tr("{failed} mit Updatefehler", { failed: agent.failed }),
   ].filter(Boolean).join(' · ');
   return (
     <>
-      <tr><th>Agent im Paket</th><td>{agent.bundledVersion
+      <tr><th>{tr("Agent im Paket")}</th><td>{agent.bundledVersion
         ? <><span className="mono">{agent.bundledVersion}</span> · {parts}</>
-        : <span className="muted">nicht enthalten (lokaler Build)</span>}</td></tr>
-      <tr><th>Agent-Updates</th><td>
+        : <span className="muted">{tr("nicht enthalten (lokaler Build)")}</span>}</td></tr>
+      <tr><th>{tr("Agent-Updates")}</th><td>
         <select value={agent.policy} disabled={busy} onChange={(e) => setPolicy(e.target.value as AgentUpdatePolicy)}>
           {(Object.keys(policyLabels) as AgentUpdatePolicy[]).map((p) => <option key={p} value={p}>{policyLabels[p]}</option>)}
         </select>
-        <div className="small muted">Agents fragen alle 4 Stunden nach einer neuen Version. „Jetzt aktualisieren“ im Tray oder unter „Mein Agent“ geht immer.</div>
+        <div className="small muted">{tr("Agents fragen alle 4 Stunden nach einer neuen Version. „Jetzt aktualisieren“ im Tray oder unter „Mein Agent“ geht immer.")}</div>
         <ErrorBox error={error} />
         {agent.list.length > 0 && (
-          <details><summary className="small muted">Alle Agents ({agent.list.length})</summary>
+          <details><summary className="small muted">{tr("Alle Agents ({length})", { length: agent.list.length })}</summary>
             <table>
-              <thead><tr><th>PC</th><th>Benutzer</th><th>Version</th><th>Auto-Update</th><th>Zuletzt gesehen</th></tr></thead>
+              <thead><tr><th>{tr("PC")}</th><th>{tr("Benutzer")}</th><th>{tr("Version")}</th><th>{tr("Auto-Update")}</th><th>{tr("Zuletzt gesehen")}</th></tr></thead>
               <tbody>{agent.list.map((a) => (
                 <tr key={a.id}>
-                  <td>{a.machineName} {a.online ? <Badge tone="ok">online</Badge> : <Badge>offline</Badge>}</td>
+                  <td>{a.machineName} {a.online ? <Badge tone="ok">{tr("online")}</Badge> : <Badge>{tr("offline")}</Badge>}</td>
                   <td>{a.owner ?? '–'}</td>
-                  <td><span className="mono">{a.agentVersion ?? '?'}</span> {a.outdated && <Badge tone="warn">veraltet</Badge>}</td>
-                  <td>{a.autoUpdate == null ? <span className="muted small">unbekannt (vor 0.5)</span> : a.autoUpdate ? 'an' : <Badge>aus</Badge>}
-                    {a.updateError && <div className="small" title={a.updateError}><Badge tone="error">Fehler</Badge> {a.updateError.length > 80 ? a.updateError.slice(0, 80) + ' …' : a.updateError}</div>}</td>
+                  <td><span className="mono">{a.agentVersion ?? '?'}</span> {a.outdated && <Badge tone="warn">{tr("veraltet")}</Badge>}</td>
+                  <td>{a.autoUpdate == null ? <span className="muted small">{tr("unbekannt (vor 0.5)")}</span> : a.autoUpdate ? 'an' : <Badge>{tr("aus")}</Badge>}
+                    {a.updateError && <div className="small" title={a.updateError}><Badge tone="error">{tr("Fehler")}</Badge> {a.updateError.length > 80 ? a.updateError.slice(0, 80) + ' …' : a.updateError}</div>}</td>
                   <td className="small muted">{fmtDate(a.lastSeenAt ?? undefined)}</td>
                 </tr>))}
               </tbody>
@@ -492,7 +489,7 @@ function UpdatesCard() {
   }, [phase, from, kind, reload]);
 
   const apply = async () => {
-    if (!(await confirm({ title: `Auf Version ${data!.latestVersion} aktualisieren?`, message: 'Die Plattform ist dabei etwa eine Minute nicht erreichbar. Laufende Registrierungen vorher abschließen.', confirmLabel: 'Jetzt aktualisieren' }))) return;
+    if (!(await confirm({ title: tr("Auf Version {latestVersion} aktualisieren?", { latestVersion: data!.latestVersion }), message: tr("Die Plattform ist dabei etwa eine Minute nicht erreichbar. Laufende Registrierungen vorher abschließen."), confirmLabel: tr("Jetzt aktualisieren") }))) return;
     await run(async () => {
       setFrom(data!.currentVersion);
       await api.post('/api/platform/updates/apply', { version: data!.latestVersion });
@@ -504,7 +501,7 @@ function UpdatesCard() {
   };
 
   const securityRefresh = async () => {
-    if (!(await confirm({ title: 'Sicherheitsupdates jetzt einspielen?', message: 'Lädt alle Images der installierten Version neu und startet geänderte Container neu. Die Plattform ist dabei kurz nicht erreichbar.', confirmLabel: 'Jetzt einspielen' }))) return;
+    if (!(await confirm({ title: tr("Sicherheitsupdates jetzt einspielen?"), message: tr("Lädt alle Images der installierten Version neu und startet geänderte Container neu. Die Plattform ist dabei kurz nicht erreichbar."), confirmLabel: tr("Jetzt einspielen") }))) return;
     await run(async () => {
       setFrom(data!.currentVersion);
       await api.post('/api/platform/updates/refresh');
@@ -525,45 +522,45 @@ function UpdatesCard() {
   const sec = status?.refresh;
   return (
     <div id="updates" className="anchor-target">
-    <Card title="Version und Updates" actions={<button disabled={busy || phase !== 'idle'} onClick={() => setRefresh((r) => r + 1)}>Jetzt prüfen</button>}>
+    <Card title={tr("Version und Updates")} actions={<button disabled={busy || phase !== 'idle'} onClick={() => setRefresh((r) => r + 1)}>{tr("Jetzt prüfen")}</button>}>
       <ErrorBox error={error ?? actionError} />
       {!data && !error && <Spinner />}
       {data && <>
         <table>
           <tbody>
-            <tr><th>Installiert</th><td className="mono">{data.currentVersion}</td></tr>
-            <tr><th>Neueste Version</th><td>{data.latestVersion
-              ? <><span className="mono">{data.latestVersion}</span> {data.updateAvailable ? <Badge tone="warn">Update verfügbar</Badge> : <Badge tone="ok">aktuell</Badge>}
-                {data.publishedAt && <span className="small muted"> vom {fmtDate(data.publishedAt, false)}</span>}
-                {data.updateAvailable && <> · <Link to="/versionen">Was ist neu?</Link></>}{data.releaseUrl && <> · <a href={data.releaseUrl} target="_blank" rel="noreferrer">auf GitHub</a></>}</>
+            <tr><th>{tr("Installiert")}</th><td className="mono">{data.currentVersion}</td></tr>
+            <tr><th>{tr("Neueste Version")}</th><td>{data.latestVersion
+              ? <><span className="mono">{data.latestVersion}</span> {data.updateAvailable ? <Badge tone="warn">{tr("Update verfügbar")}</Badge> : <Badge tone="ok">{tr("aktuell")}</Badge>}
+                {data.publishedAt && <span className="small muted"> {tr("vom {n}", { n: fmtDate(data.publishedAt, false) })}</span>}
+                {data.updateAvailable && <> · <Link to="/versionen">{tr("Was ist neu?")}</Link></>}{data.releaseUrl && <> · <a href={data.releaseUrl} target="_blank" rel="noreferrer">{tr("auf GitHub")}</a></>}</>
               : <span className="muted">{data.error ?? 'unbekannt'}</span>}</td></tr>
             <AgentUpdates agent={data.agent} onChanged={reload} />
-            <tr><th>Update per Klick</th><td>{!data.updater.configured
-              ? <span className="muted">nicht eingerichtet (<code>UPDATER_TOKEN</code> in <code>.env</code> fehlt)</span>
+            <tr><th>{tr("Update per Klick")}</th><td>{!data.updater.configured
+              ? <span className="muted">{tr("nicht eingerichtet (")}<code>{tr("UPDATER_TOKEN")}</code> {tr("in")} <code>{tr(".env")}</code> {tr("fehlt)")}</span>
               : status && (status.state === 'unreachable' || status.state === 'error')
-                ? <Badge tone="warn">Updater nicht erreichbar</Badge>
-                : <><Badge tone="ok">bereit</Badge>{!data.updateAvailable && <span className="small muted"> · der Knopf erscheint, sobald eine neue Version verfügbar ist</span>}</>}</td></tr>
+                ? <Badge tone="warn">{tr("Updater nicht erreichbar")}</Badge>
+                : <><Badge tone="ok">{tr("bereit")}</Badge>{!data.updateAvailable && <span className="small muted"> {tr("· der Knopf erscheint, sobald eine neue Version verfügbar ist")}</span>}</>}</td></tr>
             {data.updater.configured && status && status.state !== 'unreachable' && status.state !== 'error' && (
-              <tr><th>Sicherheitsupdates der Container</th><td>
+              <tr><th>{tr("Sicherheitsupdates der Container")}</th><td>
                 {sec === undefined
-                  ? <span className="small muted">Älterer Updater: Installationsskript einmal erneut ausführen, dann spielt er täglich die Sicherheitsupdates der Basis-Images ein.</span>
-                  : <>{sec.schedule ? <>täglich um {sec.schedule} Uhr</> : <span className="muted">automatisch aus (<code>YLM_AUTO_REFRESH</code>)</span>}
-                    {sec.lastAt && <span className="small muted"> · zuletzt {fmtDate(sec.lastAt)} {sec.result === 'failed' ? <Badge tone="error">fehlgeschlagen</Badge> : sec.result === 'running' ? <Badge>läuft</Badge> : <Badge tone="ok">ok</Badge>}</span>}
-                    {' '}<button className="small" disabled={busy || phase !== 'idle' || status.state === 'running'} onClick={securityRefresh}>Jetzt einspielen</button>
-                    <div className="small muted">Lädt die Images der installierten Version mit den neuesten Patches (Basis-Images werden wöchentlich und bei Schwachstellen neu gebaut). Den Host selbst (Kernel, Docker) bitte separat aktuell halten.</div></>}
+                  ? <span className="small muted">{tr("Älterer Updater: Installationsskript einmal erneut ausführen, dann spielt er täglich die Sicherheitsupdates der Basis-Images ein.")}</span>
+                  : <>{sec.schedule ? <>{tr("täglich um {schedule} Uhr", { schedule: sec.schedule })}</> : <span className="muted">{tr("automatisch aus (")}<code>{tr("YLM_AUTO_REFRESH")}</code>)</span>}
+                    {sec.lastAt && <span className="small muted"> {tr("· zuletzt {lastAt}", { lastAt: fmtDate(sec.lastAt) })} {sec.result === 'failed' ? <Badge tone="error">{tr("fehlgeschlagen")}</Badge> : sec.result === 'running' ? <Badge>{tr("läuft")}</Badge> : <Badge tone="ok">{tr("ok")}</Badge>}</span>}
+                    {' '}<button className="small" disabled={busy || phase !== 'idle' || status.state === 'running'} onClick={securityRefresh}>{tr("Jetzt einspielen")}</button>
+                    <div className="small muted">{tr("Lädt die Images der installierten Version mit den neuesten Patches (Basis-Images werden wöchentlich und bei Schwachstellen neu gebaut). Den Host selbst (Kernel, Docker) bitte separat aktuell halten.")}</div></>}
               </td></tr>
             )}
-            <tr><th>Geprüft</th><td className="small muted">{fmtDate(data.checkedAt)}</td></tr>
+            <tr><th>{tr("Geprüft")}</th><td className="small muted">{fmtDate(data.checkedAt)}</td></tr>
           </tbody>
         </table>
-        {phase !== 'idle' && <Info>{phase === 'restarting' ? 'Der Server startet neu … Die Seite lädt automatisch, sobald er wieder läuft.' : kind === 'refresh' ? 'Sicherheitsupdates laufen: Images werden geladen …' : 'Update läuft: neues Image wird geladen …'}</Info>}
+        {phase !== 'idle' && <Info>{phase === 'restarting' ? tr("Der Server startet neu … Die Seite lädt automatisch, sobald er wieder läuft.") : kind === 'refresh' ? tr("Sicherheitsupdates laufen: Images werden geladen …") : tr("Update läuft: neues Image wird geladen …")}</Info>}
         {data.updateAvailable && phase === 'idle' && (data.updater.configured
-          ? <button className="primary" disabled={busy || status?.state === 'running'} onClick={apply}>Jetzt auf {data.latestVersion} aktualisieren</button>
-          : <Info>Für das Update per Klick fehlt der Updater-Container: in <code>.env</code> <code>UPDATER_TOKEN</code> setzen (z. B. <code>openssl rand -hex 32</code>) und <code>docker compose up -d</code> ausführen. Alternativ von Hand: <code>docker compose pull &amp;&amp; docker compose up -d</code>.</Info>)}
+          ? <button className="primary" disabled={busy || status?.state === 'running'} onClick={apply}>{tr("Jetzt auf {latestVersion} aktualisieren", { latestVersion: data.latestVersion })}</button>
+          : <Info>{tr("Für das Update per Klick fehlt der Updater-Container: in")} <code>{tr(".env")}</code> <code>{tr("UPDATER_TOKEN")}</code> {tr("setzen (z. B.")} <code>{tr("openssl rand -hex 32")}</code>{tr(") und")} <code>{tr("docker compose up -d")}</code> {tr("ausführen. Alternativ von Hand:")} <code>{tr("docker compose pull && docker compose up -d")}</code>.</Info>)}
         {data.updater.configured && status && (status.state === 'unreachable' || status.state === 'error') && <Info tone="warn">{status.message}</Info>}
-        {status?.state === 'failed' && phase === 'idle' && <Info tone="error">Das letzte Update ist fehlgeschlagen. Details im Protokoll unten.</Info>}
+        {status?.state === 'failed' && phase === 'idle' && <Info tone="error">{tr("Das letzte Update ist fehlgeschlagen. Details im Protokoll unten.")}</Info>}
         {(log.length > 0 || (status?.state === 'failed' && status.log?.length)) && (
-          <details open={phase !== 'idle' || status?.state === 'failed'}><summary className="small muted">Protokoll</summary>
+          <details open={phase !== 'idle' || status?.state === 'failed'}><summary className="small muted">{tr("Protokoll")}</summary>
             <pre className="script" style={{ maxHeight: 220, overflow: 'auto' }}>{(log.length ? log : status?.log ?? []).join('\n')}</pre>
           </details>
         )}

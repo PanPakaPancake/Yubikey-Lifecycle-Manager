@@ -1,3 +1,4 @@
+import { tr } from './i18n';
 /**
  * Ermittelt bis zu drei markante Farben aus einem Logo (für die Akzentfarbe im Whitelabeling).
  * Läuft im Browser: Bild auf eine kleine Leinwand zeichnen, Pixel in Farbfächer einsortieren und nach Häufigkeit
@@ -7,7 +8,7 @@ export async function logoColors(url: string, max = 3): Promise<string[]> {
   const img = await new Promise<HTMLImageElement>((resolve, reject) => {
     const i = new Image();
     i.onload = () => resolve(i);
-    i.onerror = () => reject(new Error('Das Logo ließ sich nicht laden.'));
+    i.onerror = () => reject(new Error(tr("Das Logo ließ sich nicht laden.")));
     i.src = url;
   });
   const size = 96;

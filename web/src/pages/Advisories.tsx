@@ -5,6 +5,7 @@ import { useCan } from '../auth';
 import { Badge, Card, CountUp, download, Empty, ErrorBox, Info, MenuButton, PageHeader, Spinner, useApi } from '../ui';
 import { useTenant } from '../tenant';
 import { Icon } from '../icons';
+import { locale, tr } from '../i18n';
 
 export interface AdvisoryKey {
   keyId: string; tenantId?: string | null; tenantName: string; serialNumber?: number | null; model?: string | null; series: string; firmwareVersion?: string | null;
@@ -20,7 +21,7 @@ export interface AdvisoryOverview { generatedAt: string; keysChecked: number; ke
 const severityTone = (s: string) => (s === 'hoch' ? 'error' : s === 'mittel' ? 'warn' : 'neutral') as 'error' | 'warn' | 'neutral';
 
 /** Filterwerte für das Inventar (/keys?advisory=…), auch für die Auswahl in der Werkzeugleiste. */
-export const advisoryFilterLabel = (v: string) => (v === 'fido' ? 'Hinweis betrifft Passkeys' : v === 'any' ? 'Irgendein Sicherheitshinweis' : v);
+export const advisoryFilterLabel = (v: string) => (v === 'fido' ? tr("Hinweis betrifft Passkeys") : v === 'any' ? tr("Irgendein Sicherheitshinweis") : v);
 
 /**
  * Welche Keys sind von welchem Yubico-Sicherheitshinweis betroffen? Je Hinweis: Einstufung, Empfehlung,
@@ -45,41 +46,41 @@ export default function AdvisoriesPage() {
   return (
     <>
       <PageHeader
-        title={tenant ? 'Sicherheitshinweise ' + tenant.displayName : 'Sicherheitshinweise aller Tenants'}
-        subtitle={<>Welche Keys von einem <a href="https://www.yubico.com/support/security-advisories/" target="_blank" rel="noreferrer">Yubico-Sicherheitshinweis</a> betroffen sind, mit Personen und Empfehlung. Ausgemusterte Keys zählen nicht mit.</>}
+        title={tenant ? tr("Sicherheitshinweise {displayName}", { displayName: tenant.displayName }) : tr("Sicherheitshinweise aller Tenants")}
+        subtitle={<>{tr("Welche Keys von einem")} <a href="https://www.yubico.com/support/security-advisories/" target="_blank" rel="noreferrer">{tr("Yubico-Sicherheitshinweis")}</a> {tr("betroffen sind, mit Personen und Empfehlung. Ausgemusterte Keys zählen nicht mit.")}</>}
         actions={can('ReadReports') && data && affected.length > 0 && (
-          <MenuButton label="Exportieren" items={[
-            { label: 'Alle betroffenen Keys (Excel)', hint: 'Eine Zeile pro Hinweis und Key, mit Personen', icon: 'shield', onClick: () => exp('xlsx') },
-            { label: 'Alle betroffenen Keys (CSV)', hint: 'Für andere Programme (Semikolon, UTF-8)', icon: 'download', onClick: () => exp('csv') },
+          <MenuButton label={tr("Exportieren")} items={[
+            { label: tr("Alle betroffenen Keys (Excel)"), hint: tr("Eine Zeile pro Hinweis und Key, mit Personen"), icon: 'shield', onClick: () => exp('xlsx') },
+            { label: tr("Alle betroffenen Keys (CSV)"), hint: tr("Für andere Programme (Semikolon, UTF-8)"), icon: 'download', onClick: () => exp('csv') },
           ]} />
         )}
       />
       <ErrorBox error={error} />
-      {!data && !error && <Spinner label="Wird geladen …" />}
+      {!data && !error && <Spinner label={tr("Wird geladen …")} />}
       {data && <>
         <div className="grid cols-3 adv-kpis">
           <div className="card kpi adv-kpi-keys">
             <span className="kpi-ico" aria-hidden><Icon name="shield" size={20} /></span>
-            <div className="label">Keys mit Hinweis zu Passkeys</div>
+            <div className="label">{tr("Keys mit Hinweis zu Passkeys")}</div>
             <div className={'value' + (data.affectedKeys ? ' tone-text-warn' : '')}><CountUp value={data.affectedKeys} /></div>
-            <div className="sub">von {data.keysChecked} geprüften Keys{data.affectedKeys > 0 && <> · <Link to="/keys?advisory=fido">im Inventar zeigen</Link></>}</div>
+            <div className="sub">{tr("von {keysChecked} geprüften Keys", { keysChecked: data.keysChecked })}{data.affectedKeys > 0 && <> · <Link to="/keys?advisory=fido">{tr("im Inventar zeigen")}</Link></>}</div>
           </div>
           <div className="card kpi adv-kpi-people">
             <span className="kpi-ico" aria-hidden><Icon name="users" size={20} /></span>
-            <div className="label">Betroffene Personen</div>
+            <div className="label">{tr("Betroffene Personen")}</div>
             <div className="value"><CountUp value={data.affectedPeople} /></div>
-            <div className="sub">mit Konto auf einem dieser Keys</div>
+            <div className="sub">{tr("mit Konto auf einem dieser Keys")}</div>
           </div>
           <div className="card kpi adv-kpi-nofw">
             <span className="kpi-ico" aria-hidden><Icon name="scan" size={20} /></span>
-            <div className="label">Ohne Firmware-Angabe</div>
+            <div className="label">{tr("Ohne Firmware-Angabe")}</div>
             <div className="value"><CountUp value={data.keysWithoutFirmware} /></div>
-            <div className="sub">{data.keysWithoutFirmware > 0 ? <>nicht prüfbar · <Link to="/keys/identify">nacherfassen</Link></> : 'alle Keys prüfbar'}</div>
+            <div className="sub">{data.keysWithoutFirmware > 0 ? <>{tr("nicht prüfbar ·")} <Link to="/keys/identify">{tr("nacherfassen")}</Link></> : tr("alle Keys prüfbar")}</div>
           </div>
         </div>
 
         {passkeyHits.length === 0 && affected.length === 0 && (
-          <Info tone="ok">Kein Key in diesem Bereich ist von einem bekannten Yubico-Sicherheitshinweis betroffen.</Info>
+          <Info tone="ok">{tr("Kein Key in diesem Bereich ist von einem bekannten Yubico-Sicherheitshinweis betroffen.")}</Info>
         )}
 
         <div className="adv-list">
@@ -87,7 +88,7 @@ export default function AdvisoriesPage() {
         </div>
 
         {clean.length > 0 && (
-          <Card title="Ohne betroffene Keys" className="adv-clean" actions={<button className="link" onClick={() => setShowAll((v) => !v)}>{showAll ? 'Weniger' : 'Details'}</button>}>
+          <Card title={tr("Ohne betroffene Keys")} className="adv-clean" actions={<button className="link" onClick={() => setShowAll((v) => !v)}>{showAll ? tr("Weniger") : tr("Details")}</button>}>
             <ul className="adv-clean-list">
               {clean.map((a) => (
                 <li key={a.id}>
@@ -100,8 +101,7 @@ export default function AdvisoriesPage() {
           </Card>
         )}
         <p className="small muted" style={{ marginTop: 16 }}>
-          Stand {fmtDate(data.generatedAt)}. Berücksichtigt sind Hinweise zur Firmware der Keys; Hinweise zu Software wie YubiKey Manager betreffen den einzelnen Key nicht.
-          Die Firmware eines YubiKeys lässt sich nicht aktualisieren, behoben wird ein Hinweis also durch Tausch gegen einen neueren Key.
+          {tr("Stand {generatedAt}. Berücksichtigt sind Hinweise zur Firmware der Keys; Hinweise zu Software wie YubiKey Manager betreffen den einzelnen Key nicht. Die Firmware eines YubiKeys lässt sich nicht aktualisieren, behoben wird ein Hinweis also durch Tausch gegen einen neueren Key.", { generatedAt: fmtDate(data.generatedAt) })}
         </p>
       </>}
     </>
@@ -118,33 +118,33 @@ function AdvisoryCard({ a, allTenants, onExport }: { a: AdvisoryEntry; allTenant
         <div className="adv-title">
           <div className="adv-badges">
             <a className="mono adv-id" href={a.url} target="_blank" rel="noreferrer">{a.id}</a>
-            <Badge tone={severityTone(a.severity)}>Einstufung {a.severity}</Badge>
-            {a.affectsFido ? <Badge tone="warn">betrifft Passkeys</Badge> : <Badge>nicht Passkeys: {a.applications}</Badge>}
-            <span className="small muted">veröffentlicht {new Date(a.published).toLocaleDateString('de-DE')}</span>
+            <Badge tone={severityTone(a.severity)}>{tr("Einstufung {severity}", { severity: a.severity })}</Badge>
+            {a.affectsFido ? <Badge tone="warn">{tr("betrifft Passkeys")}</Badge> : <Badge>{tr("nicht Passkeys: {applications}", { applications: a.applications })}</Badge>}
+            <span className="small muted">{tr("veröffentlicht {n}", { n: new Date(a.published).toLocaleDateString(locale()) })}</span>
           </div>
           <h2>{a.title}</h2>
         </div>
         <div className="adv-count">
-          <strong><CountUp value={a.keys} /></strong><span>{a.keys === 1 ? 'Key' : 'Keys'}</span>
-          <span className="small muted">{a.people} {a.people === 1 ? 'Person' : 'Personen'}</span>
+          <strong><CountUp value={a.keys} /></strong><span>{a.keys === 1 ? tr("Key") : tr("Keys")}</span>
+          <span className="small muted">{a.people} {a.people === 1 ? tr("Person") : tr("Personen")}</span>
         </div>
       </div>
       <p>{a.summary}</p>
-      <div className="adv-reco"><Icon name="info" size={16} /><div><strong>Empfehlung:</strong> {a.recommendation} <span className="muted">Behoben ab Firmware {a.fixedIn}.</span></div></div>
-      <div className="adv-meta small muted">Betroffen: {a.affected.join(' · ')}</div>
+      <div className="adv-reco"><Icon name="info" size={16} /><div><strong>{tr("Empfehlung:")}</strong> {a.recommendation} <span className="muted">{tr("Behoben ab Firmware {fixedIn}.", { fixedIn: a.fixedIn })}</span></div></div>
+      <div className="adv-meta small muted">{tr("Betroffen: {n}", { n: a.affected.join(' · ') })}</div>
       <div className="adv-actions">
-        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}>{open ? 'Liste ausblenden' : `${a.keys} Keys anzeigen`}</button>
-        <Link className="btn" to={'/keys?advisory=' + a.id}><Icon name="key" size={15} />Im Inventar filtern</Link>
-        {onExport && <MenuButton label="Exportieren" items={[
-          { label: 'Excel', hint: 'Betroffene Keys mit Personen', icon: 'shield', onClick: () => onExport('xlsx') },
-          { label: 'CSV', hint: 'Semikolon, UTF-8', icon: 'download', onClick: () => onExport('csv') },
+        <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}>{open ? tr("Liste ausblenden") : tr("{keys} Keys anzeigen", { keys: a.keys })}</button>
+        <Link className="btn" to={'/keys?advisory=' + a.id}><Icon name="key" size={15} />{tr("Im Inventar filtern")}</Link>
+        {onExport && <MenuButton label={tr("Exportieren")} items={[
+          { label: tr("Excel"), hint: tr("Betroffene Keys mit Personen"), icon: 'shield', onClick: () => onExport('xlsx') },
+          { label: 'CSV', hint: tr("Semikolon, UTF-8"), icon: 'download', onClick: () => onExport('csv') },
         ]} />}
         <span className="small muted">{statuses.map((s) => `${a.byStatus[s]} ${statusLabels[s].toLowerCase()}`).join(', ')}</span>
       </div>
-      {open && (a.items.length === 0 ? <Empty>Keine Keys.</Empty> : (
+      {open && (a.items.length === 0 ? <Empty>{tr("Keine Keys.")}</Empty> : (
         <div className="table-wrap adv-table">
           <table>
-            <thead><tr><th>Seriennummer</th><th>Modell</th><th>Firmware</th><th>Status</th><th>Person / Verwahrer</th>{allTenants && <th>Tenant</th>}</tr></thead>
+            <thead><tr><th>{tr("Seriennummer")}</th><th>{tr("Modell")}</th><th>{tr("Firmware")}</th><th>{tr("Status")}</th><th>{tr("Person / Verwahrer")}</th>{allTenants && <th>{tr("Tenant")}</th>}</tr></thead>
             <tbody>
               {a.items.map((k) => (
                 <tr key={k.keyId}>
@@ -153,10 +153,10 @@ function AdvisoryCard({ a, allTenants, onExport }: { a: AdvisoryEntry; allTenant
                   <td className="mono">{k.firmwareVersion}</td>
                   <td>{statusLabels[k.status]}</td>
                   <td>
-                    {k.usage !== 'Personal' && <div><Badge tone={k.usage === 'Breakglass' ? 'error' : 'info'}>{usageLabels[k.usage]}</Badge> <span className="small muted">{k.custodian ? 'bei ' + k.custodian : 'Verwahrer fehlt'}</span></div>}
+                    {k.usage !== 'Personal' && <div><Badge tone={k.usage === 'Breakglass' ? 'error' : 'info'}>{usageLabels[k.usage]}</Badge> <span className="small muted">{k.custodian ? tr("bei {custodian}", { custodian: k.custodian }) : tr("Verwahrer fehlt")}</span></div>}
                     {k.people.length === 0 ? (k.usage === 'Personal' ? <span className="muted">–</span> : null) : k.people.map((p) => <div key={p.userPrincipalName}>{p.displayName ?? p.userPrincipalName}<div className="small muted">{p.userPrincipalName}</div></div>)}
                   </td>
-                  {allTenants && <td>{k.tenantId ? k.tenantName : <Badge tone="warn">Partnerlager</Badge>}</td>}
+                  {allTenants && <td>{k.tenantId ? k.tenantName : <Badge tone="warn">{tr("Partnerlager")}</Badge>}</td>}
                 </tr>
               ))}
             </tbody>

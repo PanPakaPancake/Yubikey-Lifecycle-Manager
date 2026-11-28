@@ -4,6 +4,7 @@ import { useConfirm, useToast } from '../feedback';
 import { Icon } from '../icons';
 import { Badge, Card, download, ErrorBox, Modal, Spinner, useAction, useApi } from '../ui';
 import '../letter.css';
+import { tr } from '../i18n';
 
 interface PropOption { value: string; label: string }
 interface PropDef { key: string; label: string; default: string; kind: 'text' | 'multiline' | 'select' | 'toggle'; options?: PropOption[] | null; hint?: string | null }
@@ -24,9 +25,9 @@ const normalize = (blocks: LetterBlock[]): LetterBlock[] =>
   blocks.map((b) => ({ id: b.id, type: b.type, width: b.width === 'half' ? 'half' : 'full', show: b.show ?? 'always', props: { ...(b.props ?? {}) } }));
 
 const showLabels: Record<LetterBlock['show'], string> = {
-  always: 'Immer',
-  forced: 'Nur mit Initial-PIN (PIN-Wechsel erzwungen)',
-  own: 'Nur mit dauerhafter PIN (kein PIN-Wechsel)',
+  always: tr("Immer"),
+  forced: tr("Nur mit Initial-PIN (PIN-Wechsel erzwungen)"),
+  own: tr("Nur mit dauerhafter PIN (kein PIN-Wechsel)"),
 };
 
 /** Symbole der Bausteine in der Palette (24×24, Strich). */
@@ -108,7 +109,7 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
     return () => window.removeEventListener('keydown', onKey);
   }, [editable, undo]);
 
-  if (!data) return <Card title="PIN-Brief gestalten" className="mt"><ErrorBox error={error} />{!error && <Spinner />}</Card>;
+  if (!data) return <Card title={tr("PIN-Brief gestalten")} className="mt"><ErrorBox error={error} />{!error && <Spinner />}</Card>;
 
   const sel = blocks.find((b) => b.id === selected) ?? null;
   const present = (type: string) => blocks.some((b) => b.type === type);
@@ -206,21 +207,21 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
   // ----- Speichern und Vorschau -----
   const save = () => run(async () => {
     await api.put('/api/branding/letter' + qs, { layout: { version: 1, blocks } });
-    toast.ok('PIN-Brief gespeichert');
+    toast.ok(tr("PIN-Brief gespeichert"));
     reload();
   });
   const resetToInherited = async () => {
     const ok = await confirm({
-      title: tenantId ? 'Globalen Brief übernehmen?' : 'Auf den Standardbrief zurücksetzen?',
+      title: tenantId ? tr("Globalen Brief übernehmen?") : tr("Auf den Standardbrief zurücksetzen?"),
       message: tenantId
-        ? 'Der eigene Brief dieses Tenants wird gelöscht. Danach gilt wieder der Brief aus den globalen Einstellungen.'
-        : 'Der gestaltete Brief wird gelöscht. Danach gilt wieder der Standardbrief (Tenants mit eigenem Brief behalten ihren).',
-      confirmLabel: 'Zurücksetzen', danger: true,
+        ? tr("Der eigene Brief dieses Tenants wird gelöscht. Danach gilt wieder der Brief aus den globalen Einstellungen.")
+        : tr("Der gestaltete Brief wird gelöscht. Danach gilt wieder der Standardbrief (Tenants mit eigenem Brief behalten ihren)."),
+      confirmLabel: tr("Zurücksetzen"), danger: true,
     });
     if (!ok) return;
     await run(async () => {
       await api.put('/api/branding/letter' + qs, { layout: null });
-      toast.ok(tenantId ? 'Tenant übernimmt wieder den globalen Brief' : 'Standardbrief wiederhergestellt');
+      toast.ok(tenantId ? tr("Tenant übernimmt wieder den globalen Brief") : tr("Standardbrief wiederhergestellt"));
       reload();
     });
   };
@@ -234,7 +235,7 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
       });
       if (!res.ok) {
         const j = await res.json().catch(() => ({}));
-        throw new ApiError(res.status, j.code ?? 'error', j.message ?? `Fehler ${res.status}`);
+        throw new ApiError(res.status, j.code ?? 'error', j.message ?? tr("Fehler {status}", { status: res.status }));
       }
       const blob = await res.blob();
       setPdf({ busy: false, url: URL.createObjectURL(blob.type ? blob : new Blob([blob], { type: 'application/pdf' })) });
@@ -259,7 +260,7 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
       drop === i + 1 && (i === blocks.length - 1 || blocks[i + 1]?.width !== 'half' || !half) ? (half ? 'lb-drop-right' : 'lb-drop-bottom') : ''].filter(Boolean).join(' ');
     return (
       <div key={b.id} className={cls} draggable={editable} tabIndex={0} role="button"
-        aria-label={`${t?.label ?? b.type}${hidden ? ' (in dieser Variante ausgeblendet)' : ''}`}
+        aria-label={`${t?.label ?? b.type}${hidden ? tr(" (in dieser Variante ausgeblendet)") : ''}`}
         onDragStart={(e) => onDragStartMove(e, b.id)} onDragEnd={endDrag}
         onDragOver={(e) => onDragOverBlock(e, i, half)}
         onClick={(e) => { e.stopPropagation(); setSelected(b.id); }}
@@ -269,20 +270,20 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
           if (e.altKey && e.key === 'ArrowUp') { e.preventDefault(); step(b.id, -1); }
           if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); step(b.id, 1); }
         }}>
-        <span className="lb-tag"><BlockIcon type={b.type} size={12} />{t?.label}{b.show !== 'always' && <em>{b.show === 'forced' ? 'nur Initial-PIN' : 'nur dauerhafte PIN'}</em>}</span>
+        <span className="lb-tag"><BlockIcon type={b.type} size={12} />{t?.label}{b.show !== 'always' && <em>{b.show === 'forced' ? tr("nur Initial-PIN") : tr("nur dauerhafte PIN")}</em>}</span>
         {editable && (
           <span className="lb-tools" onClick={(e) => e.stopPropagation()}>
-            <button type="button" title="Nach oben (Alt+↑)" aria-label="Nach oben" disabled={i === 0} onClick={() => step(b.id, -1)}>↑</button>
-            <button type="button" title="Nach unten (Alt+↓)" aria-label="Nach unten" disabled={i === blocks.length - 1} onClick={() => step(b.id, 1)}>↓</button>
+            <button type="button" title={tr("Nach oben (Alt+↑)")} aria-label={tr("Nach oben")} disabled={i === 0} onClick={() => step(b.id, -1)}>↑</button>
+            <button type="button" title={tr("Nach unten (Alt+↓)")} aria-label={tr("Nach unten")} disabled={i === blocks.length - 1} onClick={() => step(b.id, 1)}>↓</button>
             {t?.halfWidth && (
-              <button type="button" title={half ? 'Volle Breite' : 'Halbe Breite (zwei nebeneinander)'} onClick={() => update(b.id, { width: half ? 'full' : 'half' })}>{half ? '▭' : '◫'}</button>
+              <button type="button" title={half ? tr("Volle Breite") : tr("Halbe Breite (zwei nebeneinander)")} onClick={() => update(b.id, { width: half ? 'full' : 'half' })}>{half ? '▭' : '◫'}</button>
             )}
-            {!t?.unique && <button type="button" title="Duplizieren" aria-label="Duplizieren" onClick={() => duplicate(b.id)}><Icon name="copy" size={12} /></button>}
-            {!t?.required && <button type="button" title="Entfernen (Entf)" aria-label="Entfernen" onClick={() => remove(b.id)}><Icon name="trash" size={12} /></button>}
+            {!t?.unique && <button type="button" title={tr("Duplizieren")} aria-label={tr("Duplizieren")} onClick={() => duplicate(b.id)}><Icon name="copy" size={12} /></button>}
+            {!t?.required && <button type="button" title={tr("Entfernen (Entf)")} aria-label={tr("Entfernen")} onClick={() => remove(b.id)}><Icon name="trash" size={12} /></button>}
           </span>
         )}
         {hidden
-          ? <div className="lb-hidden-note">{b.type === 'info' && !data.infoUrl ? 'Erscheint, sobald die Adresse der Plattform eingetragen ist.' : `In der Variante „${forced ? 'Initial-PIN' : 'Dauerhafte PIN'}“ ausgeblendet.`}</div>
+          ? <div className="lb-hidden-note">{b.type === 'info' && !data.infoUrl ? tr("Erscheint, sobald die Adresse der Plattform eingetragen ist.") : tr("In der Variante „{n}“ ausgeblendet.", { n: forced ? 'Initial-PIN' : tr("Dauerhafte PIN") })}</div>
           : <SheetBlock block={b} ctx={ctx} />}
       </div>
     );
@@ -290,40 +291,40 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
 
   return (
     <Card
-      title={<span id="letter">PIN-Brief gestalten</span>}
+      title={<span id="letter">{tr("PIN-Brief gestalten")}</span>}
       className="mt"
       actions={inheriting
-        ? <Badge tone="neutral">{tenantId ? 'Übernimmt den globalen Brief' : 'Standardbrief'}</Badge>
-        : <Badge tone="info">{tenantId ? 'Eigener Brief für diesen Tenant' : 'Eigener Brief'}</Badge>}
+        ? <Badge tone="neutral">{tenantId ? tr("Übernimmt den globalen Brief") : tr("Standardbrief")}</Badge>
+        : <Badge tone="info">{tenantId ? tr("Eigener Brief für diesen Tenant") : tr("Eigener Brief")}</Badge>}
     >
       <p className="muted small" style={{ marginTop: 0 }}>
         {editable
           ? 'Ziehen Sie Bausteine aus der Leiste auf das Blatt und verschieben Sie sie per Maus. Ein Klick auf einen Baustein öffnet rechts seine Texte; Platzhalter wie {{Vorname}} werden beim Drucken ersetzt. Zwei halbe Bausteine stehen nebeneinander. Mit „Seite hinzufügen“ oder dem Baustein „Neue Seite“ verteilen Sie den Brief auf mehrere Seiten.'
-          : 'So sieht der PIN-Brief aus. Zum Ändern fehlt Ihnen die Berechtigung.'}
-        {editable && tenantId && inheriting && ' Sobald Sie hier etwas speichern, bekommt dieser Tenant einen eigenen Brief.'}
+          : tr("So sieht der PIN-Brief aus. Zum Ändern fehlt Ihnen die Berechtigung.")}
+        {editable && tenantId && inheriting && tr(" Sobald Sie hier etwas speichern, bekommt dieser Tenant einen eigenen Brief.")}
       </p>
 
       <div className="lb-toolbar">
-        <div className="segmented" role="group" aria-label="Variante der Vorschau">
-          <button className={forced ? 'on' : ''} aria-pressed={forced} onClick={() => setForced(true)}>Initial-PIN (Wechsel erzwungen)</button>
-          <button className={!forced ? 'on' : ''} aria-pressed={!forced} onClick={() => setForced(false)}>Dauerhafte PIN</button>
+        <div className="segmented" role="group" aria-label={tr("Variante der Vorschau")}>
+          <button className={forced ? 'on' : ''} aria-pressed={forced} onClick={() => setForced(true)}>{tr("Initial-PIN (Wechsel erzwungen)")}</button>
+          <button className={!forced ? 'on' : ''} aria-pressed={!forced} onClick={() => setForced(false)}>{tr("Dauerhafte PIN")}</button>
         </div>
         <span className="lb-spacer" />
-        {editable && <button type="button" className="ghost small" disabled={!history.length} onClick={undo} title="Rückgängig (Strg+Z)"><Icon name="history" size={14} />Rückgängig</button>}
+        {editable && <button type="button" className="ghost small" disabled={!history.length} onClick={undo} title={tr("Rückgängig (Strg+Z)")}><Icon name="history" size={14} />{tr("Rückgängig")}</button>}
         {editable
-          ? <button type="button" className="ghost small" onClick={openPdf}><Icon name="download" size={14} />PDF-Vorschau</button>
-          : <button type="button" className="ghost small" onClick={() => download('/api/branding/preview.pdf' + qs)}><Icon name="download" size={14} />Muster-PIN-Brief</button>}
+          ? <button type="button" className="ghost small" onClick={openPdf}><Icon name="download" size={14} />{tr("PDF-Vorschau")}</button>
+          : <button type="button" className="ghost small" onClick={() => download('/api/branding/preview.pdf' + qs)}><Icon name="download" size={14} />{tr("Muster-PIN-Brief")}</button>}
       </div>
 
       <div className={'letter-builder' + (editable ? '' : ' lb-readonly')}>
         {editable && (
-          <aside className="lb-palette" aria-label="Bausteine">
-            <div className="lb-palette-title">Bausteine</div>
+          <aside className="lb-palette" aria-label={tr("Bausteine")}>
+            <div className="lb-palette-title">{tr("Bausteine")}</div>
             {data.types.map((t) => {
               const used = t.unique && present(t.type);
               return (
                 <button key={t.type} type="button" className="lb-tile" draggable={!used} disabled={used}
-                  title={used ? `${t.label}: steht schon im Brief` : `${t.description} Ziehen oder klicken zum Einfügen.`}
+                  title={used ? tr("{label}: steht schon im Brief", { label: t.label }) : tr("{description} Ziehen oder klicken zum Einfügen.", { description: t.description })}
                   onDragStart={(e) => onDragStartNew(e, t.type)} onDragEnd={endDrag} onClick={() => add(t.type)}>
                   <span className="lb-tile-icon"><BlockIcon type={t.type} /></span>
                   <span className="lb-tile-label">{t.label}</span>
@@ -340,7 +341,7 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
               <Fragment key={brk?.id ?? 'erste-seite'}>
                 {brk && (
                   <div style={{ ['--lb-accent' as string]: data.brand.accent }} className={'lb-break' + (selected === brk.id ? ' lb-selected' : '') + (drag?.kind === 'move' && drag.id === brk.id ? ' lb-dragging' : '')}
-                    draggable={editable} tabIndex={0} role="button" aria-label={`Seitenumbruch vor Seite ${pi + 1}`}
+                    draggable={editable} tabIndex={0} role="button" aria-label={tr("Seitenumbruch vor Seite {n}", { n: pi + 1 })}
                     onDragStart={(e) => onDragStartMove(e, brk.id)} onDragEnd={endDrag}
                     onDragOver={(e) => onDragOverBlock(e, pg.breakIndex, false)} onDrop={onDrop}
                     onClick={(e) => { e.stopPropagation(); setSelected(brk.id); }}
@@ -351,14 +352,14 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
                       if (e.altKey && e.key === 'ArrowDown') { e.preventDefault(); step(brk.id, 1); }
                     }}>
                     <span className="lb-break-label">
-                      <BlockIcon type="pageBreak" size={14} />Seite {pi + 1}
-                      {brk.show !== 'always' && <em>{brk.show === 'forced' ? 'Umbruch nur mit Initial-PIN' : 'Umbruch nur mit dauerhafter PIN'}</em>}
+                      <BlockIcon type="pageBreak" size={14} />{tr("Seite {n}", { n: pi + 1 })}
+                      {brk.show !== 'always' && <em>{brk.show === 'forced' ? tr("Umbruch nur mit Initial-PIN") : tr("Umbruch nur mit dauerhafter PIN")}</em>}
                     </span>
                     {editable && (
                       <span className="lb-break-tools" onClick={(e) => e.stopPropagation()}>
-                        <button type="button" title="Seitenumbruch einen Baustein nach oben (Alt+↑)" aria-label="Umbruch nach oben" disabled={pg.breakIndex === 0} onClick={() => step(brk.id, -1)}>↑</button>
-                        <button type="button" title="Seitenumbruch einen Baustein nach unten (Alt+↓)" aria-label="Umbruch nach unten" disabled={pg.breakIndex === blocks.length - 1} onClick={() => step(brk.id, 1)}>↓</button>
-                        <button type="button" title="Seite entfernen: die Bausteine rücken auf die Seite davor" onClick={() => remove(brk.id)}><Icon name="trash" size={12} />Seite entfernen</button>
+                        <button type="button" title={tr("Seitenumbruch einen Baustein nach oben (Alt+↑)")} aria-label={tr("Umbruch nach oben")} disabled={pg.breakIndex === 0} onClick={() => step(brk.id, -1)}>↑</button>
+                        <button type="button" title={tr("Seitenumbruch einen Baustein nach unten (Alt+↓)")} aria-label={tr("Umbruch nach unten")} disabled={pg.breakIndex === blocks.length - 1} onClick={() => step(brk.id, 1)}>↓</button>
+                        <button type="button" title={tr("Seite entfernen: die Bausteine rücken auf die Seite davor")} onClick={() => remove(brk.id)}><Icon name="trash" size={12} />{tr("Seite entfernen")}</button>
                       </span>
                     )}
                   </div>
@@ -367,16 +368,16 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
                   onDragOver={(e) => { if (drag) { e.preventDefault(); if (e.target === e.currentTarget) setDrop(pg.end); } }}
                   onDrop={onDrop}>
                   <div className="lb-sheet">
-                    <div className="lb-pageend" aria-hidden="true"><span>Seitenende (ungefähr)</span></div>
+                    <div className="lb-pageend" aria-hidden="true"><span>{tr("Seitenende (ungefähr)")}</span></div>
                     {pg.end === pg.start && <div className="lb-empty"
                       onDragOver={(e) => { if (drag) { e.preventDefault(); e.stopPropagation(); setDrop(pg.end); } }}>
-                      {pi === 0 ? 'Ziehen Sie Bausteine hierher.' : 'Leere Seite: Ziehen Sie Bausteine hierher. Leere Seiten fallen im PDF weg.'}
+                      {pi === 0 ? tr("Ziehen Sie Bausteine hierher.") : tr("Leere Seite: Ziehen Sie Bausteine hierher. Leere Seiten fallen im PDF weg.")}
                     </div>}
                     {blocks.slice(pg.start, pg.end).map((b, k) => renderBlock(b, pg.start + k))}
                     {editable && drag && pg.end > pg.start && <div className={'lb-dropzone' + (drop === pg.end ? ' on' : '')}
-                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDrop(pg.end); }}>Hier ablegen</div>}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDrop(pg.end); }}>{tr("Hier ablegen")}</div>}
                   </div>
-                  <div className="lb-footer">{[pages.length > 1 ? `Seite ${pi + 1} von ${pages.length}` : null, data.sample.Firma, data.sample.Tenant, 'Die PIN wurde nicht gespeichert.'].filter(Boolean).join(' · ')}</div>
+                  <div className="lb-footer">{[pages.length > 1 ? tr("Seite {n} von {length}", { n: pi + 1, length: pages.length }) : null, data.sample.Firma, data.sample.Tenant, tr("Die PIN wurde nicht gespeichert.")].filter(Boolean).join(' · ')}</div>
                 </div>
               </Fragment>
             );
@@ -384,28 +385,28 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
           {editable && (
             <div className="lb-addpage">
               <button type="button" className="ghost small" disabled={pages.length >= maxPages}
-                title={pages.length >= maxPages ? `Höchstens ${maxPages} Seiten pro Brief` : 'Fügt am Ende eine neue, leere Seite an'}
+                title={pages.length >= maxPages ? tr("Höchstens {maxPages} Seiten pro Brief", { maxPages }) : tr("Fügt am Ende eine neue, leere Seite an")}
                 onClick={(e) => { e.stopPropagation(); addPage(); }}>
-                <BlockIcon type="pageBreak" size={14} />Seite hinzufügen
+                <BlockIcon type="pageBreak" size={14} />{tr("Seite hinzufügen")}
               </button>
             </div>
           )}
         </div>
 
-        <aside className="lb-panel" aria-label="Eigenschaften">
+        <aside className="lb-panel" aria-label={tr("Eigenschaften")}>
           {sel
             ? <BlockProps key={sel.id} block={sel} type={types.get(sel.type)} variables={data.variables} editable={editable}
                 onProp={(k, v) => setProp(sel.id, k, v)} onChange={(p) => update(sel.id, p)}
                 onRemove={() => remove(sel.id)} onClose={() => setSelected(null)} />
             : (
               <div className="lb-panel-empty">
-                <div className="lb-panel-title">Eigenschaften</div>
-                <p className="muted small">Klicken Sie auf einen Baustein im Brief, um seine Texte, Breite und Sichtbarkeit zu bearbeiten.</p>
+                <div className="lb-panel-title">{tr("Eigenschaften")}</div>
+                <p className="muted small">{tr("Klicken Sie auf einen Baustein im Brief, um seine Texte, Breite und Sichtbarkeit zu bearbeiten.")}</p>
                 <ul className="lb-tips small">
-                  <li><strong>Ziehen</strong> verschiebt Bausteine, auch neben einen anderen halben Baustein.</li>
-                  <li><strong>Sichtbarkeit</strong> steuert, ob ein Baustein nur im Brief mit Initial-PIN oder nur mit dauerhafter PIN erscheint.</li>
-                  <li><strong>Seite hinzufügen</strong> legt unten eine neue Seite an. Den Umbruch zwischen zwei Seiten können Sie wie einen Baustein verschieben.</li>
-                  <li>Oben umschalten, um beide Varianten zu prüfen. Die <strong>PDF-Vorschau</strong> zeigt das genaue Druckbild.</li>
+                  <li><strong>{tr("Ziehen")}</strong> {tr("verschiebt Bausteine, auch neben einen anderen halben Baustein.")}</li>
+                  <li><strong>{tr("Sichtbarkeit")}</strong> {tr("steuert, ob ein Baustein nur im Brief mit Initial-PIN oder nur mit dauerhafter PIN erscheint.")}</li>
+                  <li><strong>{tr("Seite hinzufügen")}</strong> {tr("legt unten eine neue Seite an. Den Umbruch zwischen zwei Seiten können Sie wie einen Baustein verschieben.")}</li>
+                  <li>{tr("Oben umschalten, um beide Varianten zu prüfen. Die")} <strong>{tr("PDF-Vorschau")}</strong> {tr("zeigt das genaue Druckbild.")}</li>
                 </ul>
               </div>
             )}
@@ -415,24 +416,24 @@ export function LetterEditorCard({ tenantId, editable }: { tenantId?: string; ed
       <ErrorBox error={actError} />
       {editable && (
         <div className="actions-row lb-actions">
-          <button className="primary" disabled={busy || !dirty} onClick={save}>Speichern</button>
-          {dirty && <button type="button" onClick={() => { setBlocks(saved); setHistory([]); setError(undefined); }}>Verwerfen</button>}
+          <button className="primary" disabled={busy || !dirty} onClick={save}>{tr("Speichern")}</button>
+          {dirty && <button type="button" onClick={() => { setBlocks(saved); setHistory([]); setError(undefined); }}>{tr("Verwerfen")}</button>}
           {!inheriting && (
             <button type="button" className="ghost" disabled={busy} onClick={resetToInherited}>
-              <Icon name="refresh" size={14} />{tenantId ? 'Wieder globalen Brief übernehmen' : 'Auf Standardbrief zurücksetzen'}
+              <Icon name="refresh" size={14} />{tenantId ? tr("Wieder globalen Brief übernehmen") : tr("Auf Standardbrief zurücksetzen")}
             </button>
           )}
-          {dirty && <span className="muted small">Ungespeicherte Änderungen</span>}
+          {dirty && <span className="muted small">{tr("Ungespeicherte Änderungen")}</span>}
         </div>
       )}
 
       {pdf && (
-        <Modal title="PDF-Vorschau" onClose={closePdf}
-          footer={pdf.url ? <a className="btn" href={pdf.url} download="Muster-PIN-Brief.pdf"><Icon name="download" size={14} />Herunterladen</a> : undefined}>
-          <p className="muted small" style={{ marginTop: 0 }}>Mit Beispieldaten (Erika Mustermann, PIN 482913), Variante „{forced ? 'Initial-PIN' : 'Dauerhafte PIN'}“{dirty ? ', ungespeicherter Entwurf' : ''}.</p>
-          {pdf.busy && <Spinner label="PDF wird erstellt …" />}
+        <Modal title={tr("PDF-Vorschau")} onClose={closePdf}
+          footer={pdf.url ? <a className="btn" href={pdf.url} download={tr("Muster-PIN-Brief.pdf")}><Icon name="download" size={14} />{tr("Herunterladen")}</a> : undefined}>
+          <p className="muted small" style={{ marginTop: 0 }}>{tr("Mit Beispieldaten (Erika Mustermann, PIN 482913), Variante „")}{forced ? tr("Initial-PIN") : tr("Dauerhafte PIN")}“{dirty ? tr(", ungespeicherter Entwurf") : ''}.</p>
+          {pdf.busy && <Spinner label={tr("PDF wird erstellt …")} />}
           <ErrorBox error={pdf.error} />
-          {pdf.url && <iframe className="lb-pdf" title="PDF-Vorschau PIN-Brief" src={pdf.url + '#toolbar=0&navpanes=0&view=FitH'} />}
+          {pdf.url && <iframe className="lb-pdf" title={tr("PDF-Vorschau PIN-Brief")} src={pdf.url + '#toolbar=0&navpanes=0&view=FitH'} />}
         </Modal>
       )}
     </Card>
@@ -454,7 +455,7 @@ function BlockProps({ block, type, variables, editable, onProp, onChange, onRemo
   const insert = (name: string) => {
     const key = focused ?? (textProps.length === 1 ? textProps[0].key : null);
     const el = key ? refs.current[key] : null;
-    if (!key || !el) { toast.error('Klicken Sie zuerst in das Textfeld, in das der Platzhalter soll.'); return; }
+    if (!key || !el) { toast.error(tr("Klicken Sie zuerst in das Textfeld, in das der Platzhalter soll.")); return; }
     const token = `{{${name}}}`;
     const value = el.value;
     const start = el.selectionStart ?? value.length, end = el.selectionEnd ?? value.length;
@@ -470,21 +471,21 @@ function BlockProps({ block, type, variables, editable, onProp, onChange, onRemo
           <div className="lb-panel-title">{type.label}</div>
           <div className="muted small">{type.description}</div>
         </div>
-        <button type="button" className="icon-btn" aria-label="Schließen" onClick={onClose}>×</button>
+        <button type="button" className="icon-btn" aria-label={tr("Schließen")} onClick={onClose}>×</button>
       </div>
 
       {type.halfWidth && (
         <div className="lb-prop">
-          <span className="lb-prop-label">Breite</span>
+          <span className="lb-prop-label">{tr("Breite")}</span>
           <div className="segmented">
-            <button className={block.width === 'full' ? 'on' : ''} disabled={!editable} onClick={() => onChange({ width: 'full' })}>Volle Breite</button>
-            <button className={block.width === 'half' ? 'on' : ''} disabled={!editable} onClick={() => onChange({ width: 'half' })}>Halbe Breite</button>
+            <button className={block.width === 'full' ? 'on' : ''} disabled={!editable} onClick={() => onChange({ width: 'full' })}>{tr("Volle Breite")}</button>
+            <button className={block.width === 'half' ? 'on' : ''} disabled={!editable} onClick={() => onChange({ width: 'half' })}>{tr("Halbe Breite")}</button>
           </div>
         </div>
       )}
       {!type.required && (
         <label className="lb-prop">
-          <span className="lb-prop-label">Sichtbarkeit</span>
+          <span className="lb-prop-label">{tr("Sichtbarkeit")}</span>
           <select value={block.show} disabled={!editable} onChange={(e) => onChange({ show: e.target.value as LetterBlock['show'] })}>
             {(Object.keys(showLabels) as LetterBlock['show'][]).map((k) => <option key={k} value={k}>{showLabels[k]}</option>)}
           </select>
@@ -492,10 +493,10 @@ function BlockProps({ block, type, variables, editable, onProp, onChange, onRemo
       )}
 
       {editable && textProps.length > 0 && (
-        <div className="le-vars" aria-label="Platzhalter einfügen">
-          <span className="muted small">Platzhalter einfügen:</span>
+        <div className="le-vars" aria-label={tr("Platzhalter einfügen")}>
+          <span className="muted small">{tr("Platzhalter einfügen:")}</span>
           {variables.map((v) => (
-            <button key={v.name} type="button" className="le-chip" title={`${v.description}, z. B. „${v.example}“`}
+            <button key={v.name} type="button" className="le-chip" title={tr("{description}, z. B. „{example}“", { description: v.description, example: v.example })}
               onMouseDown={(e) => e.preventDefault()} onClick={() => insert(v.name)}>{v.name}</button>
           ))}
         </div>
@@ -505,7 +506,7 @@ function BlockProps({ block, type, variables, editable, onProp, onChange, onRemo
         const custom = block.props[p.key] !== undefined && block.props[p.key] !== p.default;
         const value = block.props[p.key] ?? p.default;
         const reset = editable && custom && (
-          <button type="button" className="link small" onClick={() => onProp(p.key, undefined)}>Standard</button>
+          <button type="button" className="link small" onClick={() => onProp(p.key, undefined)}>{tr("Standard")}</button>
         );
         if (p.kind === 'select') return (
           <label key={p.key} className="lb-prop">
@@ -531,7 +532,7 @@ function BlockProps({ block, type, variables, editable, onProp, onChange, onRemo
           <div key={p.key} className={'lb-prop' + (custom ? ' le-custom' : '')}>
             <div className="lb-prop-label">
               <label htmlFor={common.id}>{p.label}</label>
-              {custom && <Badge tone="info">angepasst</Badge>}
+              {custom && <Badge tone="info">{tr("angepasst")}</Badge>}
               {reset}
             </div>
             {p.kind === 'multiline'
@@ -543,9 +544,9 @@ function BlockProps({ block, type, variables, editable, onProp, onChange, onRemo
       })}
 
       {editable && !type.required && (
-        <button type="button" className="ghost small lb-remove" onClick={onRemove}><Icon name="trash" size={14} />{type.type === 'pageBreak' ? 'Seite entfernen' : 'Baustein entfernen'}</button>
+        <button type="button" className="ghost small lb-remove" onClick={onRemove}><Icon name="trash" size={14} />{type.type === 'pageBreak' ? tr("Seite entfernen") : tr("Baustein entfernen")}</button>
       )}
-      {type.required && <p className="muted small">Die PIN muss im Brief stehen und lässt sich nicht entfernen, nur verschieben.</p>}
+      {type.required && <p className="muted small">{tr("Die PIN muss im Brief stehen und lässt sich nicht entfernen, nur verschieben.")}</p>}
     </div>
   );
 }
@@ -574,7 +575,7 @@ function SheetBlock({ block, ctx }: { block: LetterBlock; ctx: SheetCtx }) {
         {p('keyLine') !== 'false' && <div className="lc-muted lc-small">{ctx.fill('{{Modell}} · Seriennummer {{Seriennummer}} · erstellt am {{Datum}}')}</div>}
       </div>
     );
-    case 'text': return p('text').trim() === '-' ? <div className="lc-muted lc-small">(Kein Text)</div> : <div className={'lc-text' + (p('size') === 's' ? ' lc-small' : '')}>{f('text')}</div>;
+    case 'text': return p('text').trim() === '-' ? <div className="lc-muted lc-small">{tr("(Kein Text)")}</div> : <div className={'lc-text' + (p('size') === 's' ? ' lc-small' : '')}>{f('text')}</div>;
     case 'pin': {
       const forced = ctx.forced;
       return (
@@ -642,7 +643,7 @@ function SheetBlock({ block, ctx }: { block: LetterBlock; ctx: SheetCtx }) {
 function SheetHeader({ ctx }: { ctx: SheetCtx }) {
   const [logo, setLogo] = useState(ctx.brand.hasLogo);
   const name = (ctx.brand.companyName ?? ctx.fill('{{Firma}}')).toUpperCase();
-  if (!logo && !name.trim()) return <div className="lc-muted lc-small">(Kopfzeile ohne Firmenname und Logo)</div>;
+  if (!logo && !name.trim()) return <div className="lc-muted lc-small">{tr("(Kopfzeile ohne Firmenname und Logo)")}</div>;
   return (
     <div className={'lc-header' + (logo ? ' lc-has-logo' : '')}>
       <span className="lc-org">{name}</span>
@@ -668,20 +669,20 @@ function StepArt({ n }: { n: number }) {
       <rect x="8" y="4" width="84" height="52" rx="4" fill="#fff" stroke="#d6dbe3" />
       <rect x="14" y="10" width="5" height="5" fill="#f25022" /><rect x="20" y="10" width="5" height="5" fill="#7fba00" />
       <rect x="14" y="16" width="5" height="5" fill="#00a4ef" /><rect x="20" y="16" width="5" height="5" fill="#ffb900" />
-      <text x="30" y="19" fontSize="7" fontWeight="700" fill="#1d232e">Anmelden</text>
+      <text x="30" y="19" fontSize="7" fontWeight="700" fill="#1d232e">{tr("Anmelden")}</text>
       <rect x="14" y="26" width="72" height="6" fill="#d6dbe3" />
       <rect x="14" y="37" width="72" height="13" rx="2" fill="color-mix(in srgb, var(--lb-accent) 10%, #fff)" stroke={accent} />
       <rect x="18" y="41" width="14" height="5" rx="2" fill="#eef0f4" stroke="#2b2f36" strokeWidth=".6" />
-      <text x="35" y="46" fontSize="4.6" fontWeight="700" fill={accent} textLength="48" lengthAdjust="spacingAndGlyphs">Sicherheitsschlüssel</text>
+      <text x="35" y="46" fontSize="4.6" fontWeight="700" fill={accent} textLength="48" lengthAdjust="spacingAndGlyphs">{tr("Sicherheitsschlüssel")}</text>
     </svg>
   );
   if (n === 3) return (
     <svg viewBox="0 0 100 60" aria-hidden="true">
-      <text x="8" y="14" fontSize="7" fontWeight="700" fill="#1d232e">Sicherheitsschlüssel-PIN</text>
+      <text x="8" y="14" fontSize="7" fontWeight="700" fill="#1d232e">{tr("Sicherheitsschlüssel-PIN")}</text>
       <rect x="8" y="19" width="84" height="16" rx="3" fill="#fff" stroke={accent} />
       {[0, 1, 2, 3, 4, 5].map((i) => <circle key={i} cx={16 + i * 9} cy="27" r="2.4" fill="#5b6575" />)}
       <rect x="60" y="41" width="32" height="12" rx="3" fill="color-mix(in srgb, var(--lb-accent) 10%, #fff)" stroke={accent} />
-      <text x="76" y="49.5" fontSize="6" fontWeight="700" fill={accent} textAnchor="middle">OK</text>
+      <text x="76" y="49.5" fontSize="6" fontWeight="700" fill={accent} textAnchor="middle">{tr("OK")}</text>
     </svg>
   );
   return (

@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 import { api } from '../api';
 import { ErrorBox, Field, Info, Spinner, useAction } from '../ui';
 import { createPasskey, passkeyError, passkeysSupported } from '../webauthn';
+import { tr } from '../i18n';
 
 type SetupInfo = { upn: string; displayName: string; loginKind: 'Local' | 'Emergency'; setupTokenExpiresAt: string };
 
@@ -20,12 +21,12 @@ export default function AccountSetupPage() {
       <div className="login-card card" style={{ maxWidth: 520 }}>
         <div className="brand">
           <svg width="36" height="36" viewBox="0 0 32 32" aria-hidden><rect x="21" y="12" width="9" height="8" fill="#b8bec7" /><rect className="brand-body" x="2" y="8" width="22" height="16" rx="6" /><circle cx="11" cy="16" r="5" fill="#d4a52a" /></svg>
-          <div>Konto einrichten</div>
+          <div>{tr("Konto einrichten")}</div>
         </div>
-        {!token && <ErrorBox error="Im Link fehlt der Einrichtungscode. Bitte den vollständigen Link aus der Nachricht öffnen." />}
+        {!token && <ErrorBox error={tr("Im Link fehlt der Einrichtungscode. Bitte den vollständigen Link aus der Nachricht öffnen.")} />}
         <ErrorBox error={loadError} />
         {token && !info && !loadError && <Spinner />}
-        {info && <p>Hallo {info.displayName}. Sie richten den Zugang für <strong>{info.upn}</strong> ein.</p>}
+        {info && <p>{tr("Hallo {displayName}. Sie richten den Zugang für", { displayName: info.displayName })} <strong>{info.upn}</strong> {tr("ein.")}</p>}
         {info?.loginKind === 'Local' && <PasskeySetup token={token} />}
         {info?.loginKind === 'Emergency' && <EmergencySetup token={token} upn={info.upn} />}
       </div>
@@ -43,12 +44,12 @@ function PasskeySetup({ token }: { token: string }) {
     await api.post('/auth/account-setup/passkey', { token, requestId, response, name });
     window.location.href = '/';
   });
-  if (!passkeysSupported()) return <ErrorBox error="Dieser Browser unterstützt keine Passkeys." />;
+  if (!passkeysSupported()) return <ErrorBox error={tr("Dieser Browser unterstützt keine Passkeys.")} />;
   return (
     <>
-      <p className="muted">Stecken Sie Ihren YubiKey ein. Sie werden nach einer PIN gefragt (falls noch keine gesetzt ist, legen Sie jetzt eine fest) und berühren dann den Schlüssel.</p>
-      <Field label="Name des Schlüssels" hint="Hilft später, mehrere Schlüssel auseinanderzuhalten."><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
-      <button className="primary" disabled={busy} onClick={register}>{busy ? 'Schlüssel berühren …' : 'Passkey einrichten'}</button>
+      <p className="muted">{tr("Stecken Sie Ihren YubiKey ein. Sie werden nach einer PIN gefragt (falls noch keine gesetzt ist, legen Sie jetzt eine fest) und berühren dann den Schlüssel.")}</p>
+      <Field label={tr("Name des Schlüssels")} hint={tr("Hilft später, mehrere Schlüssel auseinanderzuhalten.")}><input value={name} onChange={(e) => setName(e.target.value)} /></Field>
+      <button className="primary" disabled={busy} onClick={register}>{busy ? tr("Schlüssel berühren …") : tr("Passkey einrichten")}</button>
       <ErrorBox error={error} />
     </>
   );
@@ -71,28 +72,28 @@ function EmergencySetup({ token, upn }: { token: string; upn: string }) {
   });
   return (
     <>
-      <Info tone="warn">Passwort und Authenticator-Code sind weniger sicher als ein Passkey. Bewahren Sie beides sicher und getrennt auf.</Info>
+      <Info tone="warn">{tr("Passwort und Authenticator-Code sind weniger sicher als ein Passkey. Bewahren Sie beides sicher und getrennt auf.")}</Info>
       {!totp && <>
-        <p className="muted">Schritt 1: Authenticator-App (z. B. Microsoft Authenticator) mit dem Konto verbinden.</p>
-        <button className="primary" disabled={start.busy} onClick={begin}>QR-Code anzeigen</button>
+        <p className="muted">{tr("Schritt 1: Authenticator-App (z. B. Microsoft Authenticator) mit dem Konto verbinden.")}</p>
+        <button className="primary" disabled={start.busy} onClick={begin}>{tr("QR-Code anzeigen")}</button>
         <ErrorBox error={start.error} />
       </>}
       {totp && <>
-        <p className="muted">Schritt 1: QR-Code mit der Authenticator-App scannen.</p>
+        <p className="muted">{tr("Schritt 1: QR-Code mit der Authenticator-App scannen.")}</p>
         <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <img src={totp.qr} width={180} height={180} alt="QR-Code für die Authenticator-App" />
-          <div className="small">Oder manuell eingeben:<div className="mono" style={{ wordBreak: 'break-all' }}>{totp.secret}</div></div>
+          <img src={totp.qr} width={180} height={180} alt={tr("QR-Code für die Authenticator-App")} />
+          <div className="small">{tr("Oder manuell eingeben:")}<div className="mono" style={{ wordBreak: 'break-all' }}>{totp.secret}</div></div>
         </div>
-        <p className="muted">Schritt 2: Passwort festlegen (mindestens 14 Zeichen) und den aktuellen Code aus der App eingeben.</p>
+        <p className="muted">{tr("Schritt 2: Passwort festlegen (mindestens 14 Zeichen) und den aktuellen Code aus der App eingeben.")}</p>
         <form onSubmit={(e) => { e.preventDefault(); complete(); }}>
           <input type="text" autoComplete="username" value={upn} readOnly hidden />
           <div className="grid cols-2">
-            <Field label="Passwort"><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
-            <Field label="Passwort wiederholen"><input type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} /></Field>
+            <Field label={tr("Passwort")}><input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+            <Field label={tr("Passwort wiederholen")}><input type="password" autoComplete="new-password" value={repeat} onChange={(e) => setRepeat(e.target.value)} /></Field>
           </div>
-          <Field label="Code aus der App"><input inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code} onChange={(e) => setCode(e.target.value)} /></Field>
-          {repeat && password !== repeat && <Info tone="warn">Die Passwörter stimmen nicht überein.</Info>}
-          <button type="submit" className="primary" disabled={finish.busy || password.length < 14 || password !== repeat || code.length < 6}>Konto einrichten</button>
+          <Field label={tr("Code aus der App")}><input inputMode="numeric" autoComplete="one-time-code" maxLength={7} value={code} onChange={(e) => setCode(e.target.value)} /></Field>
+          {repeat && password !== repeat && <Info tone="warn">{tr("Die Passwörter stimmen nicht überein.")}</Info>}
+          <button type="submit" className="primary" disabled={finish.busy || password.length < 14 || password !== repeat || code.length < 6}>{tr("Konto einrichten")}</button>
           <ErrorBox error={finish.error} />
         </form>
       </>}

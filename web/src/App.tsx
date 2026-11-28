@@ -39,11 +39,13 @@ import VersionsPage from './pages/Versions';
 import type { UpdateSummary } from './changelog';
 import { isRegisterPath } from './register';
 import { ChooseTenant, TenantProvider, TenantSwitcher, useTenant } from './tenant';
+import { adoptUserLanguage, tr } from './i18n';
+import { LanguageToggle } from './language';
 
 // Dunkle Seitenleiste (Entscheidung Timo, 2026-11-19); 'sidebar-light' wäre die helle Variante.
 const SidebarStyle = 'sidebar-dark';
 
-const roleLabel: Record<string, string> = { Owner: 'Owner', Operator: 'Operator', Helpdesk: 'Helpdesk', Auditor: 'Auditor' };
+const roleLabel: Record<string, string> = { Owner: tr("Owner"), Operator: tr("Operator"), Helpdesk: tr("Helpdesk"), Auditor: tr("Auditor") };
 
 // Seiten der Partnerebene (gelten für alle Kunden); alles andere läuft im Kontext des gewählten Tenants.
 const partnerPaths = ['/partner', '/tenants', '/profiles', '/users', '/platform', '/agents'];
@@ -55,7 +57,9 @@ export default function App() {
 
   const reload = useCallback(async () => {
     try {
-      setMe(await api.get<Me>('/api/me'));
+      const m = await api.get<Me>('/api/me');
+      adoptUserLanguage(m.language);
+      setMe(m);
     } catch {
       const status = await fetch('/api/setup/status').then((r) => r.json()).catch(() => ({ setupComplete: true }));
       setMe({ authenticated: false, setupComplete: status.setupComplete });
@@ -68,7 +72,7 @@ export default function App() {
   // Angemeldet läuft sie im App-Rahmen mit Menü; ?oeffentlich=1 zeigt sie so, wie Endbenutzer sie sehen.
   const passkeyPath = location.pathname === '/passkey' || location.pathname.startsWith('/passkey/');
   const publicPasskey = passkeyPath && (!me?.authenticated || new URLSearchParams(location.search).has('oeffentlich'));
-  if (!me) return <div className="center-page"><Spinner label="Wird geladen …" /></div>;
+  if (!me) return <div className="center-page"><Spinner label={tr("Wird geladen …")} /></div>;
   if (publicPasskey) return <PasskeyInfoPage authenticated={me.authenticated} />;
 
   // Rücksprung der Microsoft-Anmeldung aus dem Setup-Assistenten (http://localhost:<port>/?code=…&state=…).
@@ -114,7 +118,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
   return (
     <div className={'shell ' + SidebarStyle + (menuOpen ? ' menu-open' : '')}>
       <header className="mobilebar">
-        <button type="button" className="icon-btn" aria-label="Menü öffnen" aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" size={22} /></button>
+        <button type="button" className="icon-btn" aria-label={tr("Menü öffnen")} aria-expanded={menuOpen} onClick={() => setMenuOpen(true)}><Icon name="menu" size={22} /></button>
         <span className="mobilebar-title"><LogoMark size={28} /><Wordmark /></span>
       </header>
       <div className="sidebar-backdrop" onClick={() => setMenuOpen(false)} aria-hidden />
@@ -122,38 +126,38 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         <div className="brand">
           <LogoMark size={54} />
           <Wordmark sub={me.organizationName || undefined} />
-          <button type="button" className="icon-btn sidebar-close" aria-label="Menü schließen" onClick={() => setMenuOpen(false)}><Icon name="x" size={20} /></button>
+          <button type="button" className="icon-btn sidebar-close" aria-label={tr("Menü schließen")} onClick={() => setMenuOpen(false)}><Icon name="x" size={20} /></button>
         </div>
         <nav className="nav">
           <div className="nav-group nav-group-customer">
-          <div className="section customer"><span className="context-dot" />Kunde</div>
-          <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : 'Alle Tenants'}</div>
-          {item('/', 'home', 'Übersicht', true)}
-          {item('/keys', 'key', 'Inventar')}
-          {item('/sicherheitshinweise', 'shield', 'Sicherheitshinweise')}
-          {reminders && item('/erinnerungen', 'bell', 'Erinnerungen')}
-          {can('ReadReports') && item('/rollout', 'target', 'Rollout Übersicht')}
-          {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" /><span className="nav-label">Registrieren</span></NavLink>}
-          {can('RegisterKeys') && item('/todos', 'list', 'ToDo-Liste')}
-          {fourEyes && item('/approvals', 'shield', 'Freigaben')}
-          {tenant && item('/tenant', 'building', 'Tenant-Einstellungen')}
-          {can('ReadAudit') && item('/audit', 'scroll', 'Audit-Log')}
+          <div className="section customer"><span className="context-dot" />{tr("Kunde")}</div>
+          <div className="section-sub" title={tenant?.displayName}>{tenant ? tenant.displayName : tr("Alle Tenants")}</div>
+          {item('/', 'home', tr("Übersicht"), true)}
+          {item('/keys', 'key', tr("Inventar"))}
+          {item('/sicherheitshinweise', 'shield', tr("Sicherheitshinweise"))}
+          {reminders && item('/erinnerungen', 'bell', tr("Erinnerungen"))}
+          {can('ReadReports') && item('/rollout', 'target', tr("Rollout Übersicht"))}
+          {can('RegisterKeys') && <NavLink to="/register" className={() => (isRegisterPath(location.pathname) ? 'active' : '')}><Icon name="keyPlus" /><span className="nav-label">{tr("Registrieren")}</span></NavLink>}
+          {can('RegisterKeys') && item('/todos', 'list', tr("ToDo-Liste"))}
+          {fourEyes && item('/approvals', 'shield', tr("Freigaben"))}
+          {tenant && item('/tenant', 'building', tr("Tenant-Einstellungen"))}
+          {can('ReadAudit') && item('/audit', 'scroll', tr("Audit-Log"))}
           </div>
 
           <div className="nav-group nav-group-partner" tabIndex={-1}>
-          <div className="section partner"><span className="context-dot" />Partner</div>
-          {item('/tenants', 'building', 'Tenants')}
-          {can('ManagePartnerStock') && item('/partner/stock', 'box', 'Partnerlager')}
-          {item('/profiles', 'sliders', 'Profile')}
-          {can('ManageUsers') && item('/users', 'users', 'Benutzer & Rollen')}
-          {can('ManageApiKeys') && item('/partner/notifications', 'bell', 'Benachrichtigungen')}
-          {item('/platform', 'settings', <>Globale Einstellungen{updates?.updateAvailable && updates.canApply && <span className="dot-warn pulse" title={`Update auf ${updates.latestVersion} verfügbar`} />}</>)}
-          {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', 'Mein Agent')}
+          <div className="section partner"><span className="context-dot" />{tr("Partner")}</div>
+          {item('/tenants', 'building', tr("Tenants"))}
+          {can('ManagePartnerStock') && item('/partner/stock', 'box', tr("Partnerlager"))}
+          {item('/profiles', 'sliders', tr("Profile"))}
+          {can('ManageUsers') && item('/users', 'users', tr("Benutzer & Rollen"))}
+          {can('ManageApiKeys') && item('/partner/notifications', 'bell', tr("Benachrichtigungen"))}
+          {item('/platform', 'settings', <>{tr("Globale Einstellungen")}{updates?.updateAvailable && updates.canApply && <span className="dot-warn pulse" title={tr("Update auf {latestVersion} verfügbar", { latestVersion: updates.latestVersion })} />}</>)}
+          {(can('RegisterKeys') || can('ManageInventory')) && item('/agents', 'monitor', tr("Mein Agent"))}
           </div>
 
           <div className="nav-group nav-group-help">
-          <div className="section">Hilfe</div>
-          {item('/passkey', 'info', 'Passkeys erklärt')}
+          <div className="section">{tr("Hilfe")}</div>
+          {item('/passkey', 'info', tr("Passkeys erklärt"))}
           </div>
         </nav>
         <div className="sidebar-foot">
@@ -166,10 +170,11 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           </NavLink>
           <div className="foot-actions">
             <ThemeToggle />
-            <button type="button" className="ghost small" onClick={logout}><Icon name="logout" size={16} />Abmelden</button>
+            <LanguageToggle saveToAccount />
+            <button type="button" className="ghost small" onClick={logout}><Icon name="logout" size={16} />{tr("Abmelden")}</button>
           </div>
           {/* Klick auf die Version öffnet den Versionsverlauf (kein eigener Menüpunkt). */}
-          {me.version && <Link to="/versionen" className="small muted version" title="Versionsverlauf anzeigen"><Icon name="history" size={13} /><span>Version {me.version}</span>{updates?.updateAvailable && <span className="version-update"><span className="dot-warn pulse" />Update auf {updates.latestVersion}</span>}</Link>}
+          {me.version && <Link to="/versionen" className="small muted version" title={tr("Versionsverlauf anzeigen")}><Icon name="history" size={13} /><span>{tr("Version {version}", { version: me.version })}</span>{updates?.updateAvailable && <span className="version-update"><span className="dot-warn pulse" />{tr("Update auf {latestVersion}", { latestVersion: updates.latestVersion })}</span>}</Link>}
         </div>
       </aside>
       <main className="main">
@@ -177,16 +182,16 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
         <div className="topbar">
           <TenantSwitcher partnerContext={partner} />
           {partner
-            ? <span className="context-badge partner" title="Einstellungen hier gelten für die ganze Plattform und alle Kunden">Partnerebene</span>
-            : <span className="context-badge customer">Kundenebene{tenant ? ': ' + tenant.displayName : ', alle Tenants'}</span>}
+            ? <span className="context-badge partner" title={tr("Einstellungen hier gelten für die ganze Plattform und alle Kunden")}>{tr("Partnerebene")}</span>
+            : <span className="context-badge customer">{tr("Kundenebene")}{tenant ? ': ' + tenant.displayName : tr(", alle Tenants")}</span>}
         </div>
         <div className="page" key={location.pathname}>
         {me.recoveryCodes != null && me.recoveryCodes <= 2 && location.pathname !== '/account' && (
           <div className="alert warn">
             {me.recoveryCodes === 0
-              ? 'Für Ihr Owner-Konto gibt es noch keine Notfallcodes. Damit kommen Sie auch dann in die Plattform, wenn die Anmeldung mit Microsoft oder Passkey nicht klappt.'
-              : `Nur noch ${me.recoveryCodes} Notfallcode${me.recoveryCodes === 1 ? '' : 's'} übrig.`}{' '}
-            <Link to="/account#notfallcodes">{me.recoveryCodes === 0 ? 'Jetzt erzeugen und ausdrucken' : 'Neue Codes erzeugen'}</Link>
+              ? tr("Für Ihr Owner-Konto gibt es noch keine Notfallcodes. Damit kommen Sie auch dann in die Plattform, wenn die Anmeldung mit Microsoft oder Passkey nicht klappt.")
+              : tr("Nur noch {recoveryCodes} Notfallcode{n} übrig.", { recoveryCodes: me.recoveryCodes, n: me.recoveryCodes === 1 ? '' : 's' })}{' '}
+            <Link to="/account#notfallcodes">{me.recoveryCodes === 0 ? tr("Jetzt erzeugen und ausdrucken") : tr("Neue Codes erzeugen")}</Link>
           </div>
         )}
         <Routes>
@@ -222,7 +227,7 @@ function Shell({ me, can, logout }: { me: Me; can: (p: string) => boolean | unde
           <Route path="/account" element={<AccountPage />} />
           <Route path="/passkey/*" element={<PasskeyInfoPage authenticated embedded />} />
           <Route path="/login" element={<Navigate to="/" replace />} />
-          <Route path="*" element={<Empty>Seite nicht gefunden. <Link to="/">Zur Übersicht</Link></Empty>} />
+          <Route path="*" element={<Empty>{tr("Seite nicht gefunden.")} <Link to="/">{tr("Zur Übersicht")}</Link></Empty>} />
         </Routes>
         </div>
       </main>
@@ -248,7 +253,7 @@ function AllTenants({ to }: { to: string }) {
 /** Tenant-Einstellungen des oben gewählten Tenants. */
 function SelectedTenantPage() {
   const { tenant } = useTenant();
-  if (!tenant) return <><PageHeader title="Tenant-Einstellungen" /><ChooseTenant purpose="Für die Einstellungen" /></>;
+  if (!tenant) return <><PageHeader title={tr("Tenant-Einstellungen")} /><ChooseTenant purpose={tr("Für die Einstellungen")} /></>;
   return <TenantDetailPage key={tenant.id} id={tenant.id} />;
 }
 

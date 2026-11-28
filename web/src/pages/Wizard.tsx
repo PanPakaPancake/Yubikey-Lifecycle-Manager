@@ -5,6 +5,7 @@ import { Badge, Card, download, Empty, ErrorBox, Field, Info, PageHeader, Spinne
 import { JobProgress } from './KeyDetail';
 import { RegisterModes } from '../register';
 import { ChooseTenant, useTenant } from '../tenant';
+import { tr } from '../i18n';
 
 export interface EntraUser { id: string; userPrincipalName: string; displayName?: string; mail?: string; department?: string; accountEnabled: boolean; activeKeys: number; entraPasskeys?: { displayName?: string; model?: string; isYubiKey: boolean }[] | null }
 export interface Violation { code: string; message: string; canOverride: boolean; resolvedByReset: boolean }
@@ -15,7 +16,7 @@ export interface Preview {
   userActiveKeys: number;
 }
 
-const stepNames = ['Person', 'Key', 'Profil & Prüfung', 'Registrierung', 'PIN-Brief'];
+const stepNames = [tr("Person"), 'Key', tr("Profil & Prüfung"), tr("Registrierung"), tr("PIN-Brief")];
 
 export default function WizardPage() {
   const [params] = useSearchParams();
@@ -77,7 +78,7 @@ export default function WizardPage() {
 
   return (
     <>
-      <PageHeader title="Key registrieren" subtitle="Im Auftrag einer Person (Registrierung on Behalf)" actions={step > 0 && <button onClick={restart}>Neu beginnen</button>} />
+      <PageHeader title={tr("Key registrieren")} subtitle={tr("Im Auftrag einer Person (Registrierung on Behalf)")} actions={step > 0 && <button onClick={restart}>{tr("Neu beginnen")}</button>} />
       {step === 0 && <RegisterModes />}
       <Steps names={stepNames} current={step} />
       <ErrorBox error={error} />
@@ -89,34 +90,34 @@ export default function WizardPage() {
       {step === 2 && user && (
         <ProfileStep tenantId={tenantId} profileId={profileId} suggestion={suggestion} setProfileId={(id) => { setProfileId(id); setPreview(undefined); }}>
           <div className="actions">
-            <button onClick={() => setStep(1)}>Zurück</button>
-            <button disabled={!profileId || busy} onClick={loadPreview}>{preview ? 'Erneut prüfen' : 'Prüfen'}</button>
+            <button onClick={() => setStep(1)}>{tr("Zurück")}</button>
+            <button disabled={!profileId || busy} onClick={loadPreview}>{preview ? tr("Erneut prüfen") : tr("Prüfen")}</button>
           </div>
           {preview && (
             <div style={{ marginTop: 16 }}>
               <PreviewDetails preview={preview} overrides={overrides} setOverrides={setOverrides} performReset={performReset} setPerformReset={setPerformReset} />
-              <button className="primary" disabled={!canStart || busy} onClick={start}>Registrierung starten</button>
+              <button className="primary" disabled={!canStart || busy} onClick={start}>{tr("Registrierung starten")}</button>
             </div>
           )}
         </ProfileStep>
       )}
 
       {step === 3 && job && (
-        <Card title="Registrierung läuft">
+        <Card title={tr("Registrierung läuft")}>
           <JobProgress job={job} />
-          {job.state === 'Failed' && <div className="actions"><button onClick={() => { setJob(undefined); setStep(2); }}>Zurück zur Prüfung</button></div>}
+          {job.state === 'Failed' && <div className="actions"><button onClick={() => { setJob(undefined); setStep(2); }}>{tr("Zurück zur Prüfung")}</button></div>}
         </Card>
       )}
 
       {step === 4 && job && (
-        <Card title="Fertig">
-          <Info tone="ok">Der Key ist für {user?.displayName ?? user?.userPrincipalName} registriert.</Info>
+        <Card title={tr("Fertig")}>
+          <Info tone="ok">{tr("Der Key ist für {n} registriert.", { n: user?.displayName ?? user?.userPrincipalName })}</Info>
           {job.notes.length > 0 && <ul className="small muted">{job.notes.map((n, i) => <li key={i}>{n}</li>)}</ul>}
-          <p>Laden Sie den PIN-Brief jetzt herunter. Die PIN wird nicht gespeichert; der Brief ist 30 Minuten abrufbar.</p>
+          <p>{tr("Laden Sie den PIN-Brief jetzt herunter. Die PIN wird nicht gespeichert; der Brief ist 30 Minuten abrufbar.")}</p>
           <div className="actions">
-            <button className="primary" onClick={() => download('/api/pin-letters/' + job.pinLetterId)}>PIN-Brief (PDF)</button>
-            {job.keyId && <Link className="btn" to={'/keys/' + job.keyId}>Key ansehen</Link>}
-            <button onClick={restart}>Nächsten Key registrieren</button>
+            <button className="primary" onClick={() => download('/api/pin-letters/' + job.pinLetterId)}>{tr("PIN-Brief (PDF)")}</button>
+            {job.keyId && <Link className="btn" to={'/keys/' + job.keyId}>{tr("Key ansehen")}</Link>}
+            <button onClick={restart}>{tr("Nächsten Key registrieren")}</button>
           </div>
         </Card>
       )}
@@ -128,14 +129,14 @@ function PersonStep({ tenantId, onPick, initialQuery = '' }: { tenantId: string;
   const [q, setQ] = useState(initialQuery);
   const { results: users, busy, error } = useLiveSearch<EntraUser>(tenantId ? (term) => `/api/tenants/${tenantId}/users?q=${encodeURIComponent(term)}` : null, q);
   return (
-    <Card title="Für wen wird der Key registriert?">
+    <Card title={tr("Für wen wird der Key registriert?")}>
       <div className="toolbar">
-        <input type="search" placeholder="Name, UPN oder Mail eintippen (ab 2 Zeichen)" value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus />
+        <input type="search" placeholder={tr("Name, UPN oder Mail eintippen (ab 2 Zeichen)")} value={q} onChange={(e) => setQ(e.target.value)} style={{ flex: 1 }} autoFocus />
       </div>
-      {!tenantId && <ChooseTenant purpose="Für die Registrierung" />}
+      {!tenantId && <ChooseTenant purpose={tr("Für die Registrierung")} />}
       <ErrorBox error={error} />
-      {busy && <Spinner label="Suche in Entra ID …" />}
-      {!busy && users && users.length === 0 && <Empty>Keine Person gefunden.</Empty>}
+      {busy && <Spinner label={tr("Suche in Entra ID …")} />}
+      {!busy && users && users.length === 0 && <Empty>{tr("Keine Person gefunden.")}</Empty>}
       {users && users.length > 0 && (
         <div className="pick">
           {users.map((u) => (
@@ -152,17 +153,17 @@ function PersonStep({ tenantId, onPick, initialQuery = '' }: { tenantId: string;
 
 /** Keys in the inventory plus passkeys Entra knows about (also ones registered elsewhere or not yet synced). */
 function PersonKeys({ u }: { u: EntraUser }) {
-  if (!u.accountEnabled) return <Badge tone="error">deaktiviert</Badge>;
+  if (!u.accountEnabled) return <Badge tone="error">{tr("deaktiviert")}</Badge>;
   const entra = u.entraPasskeys ?? [];
   const yubi = entra.filter((p) => p.isYubiKey).length;
   const other = entra.length - yubi;
   const title = entra.map((p) => [p.displayName, p.model].filter(Boolean).join(' · ')).join('\n');
   const parts: ReactNode[] = [];
-  if (u.activeKeys > 0) parts.push(<Badge key="inv" tone="info">{u.activeKeys} Key(s) im Inventar</Badge>);
-  if (yubi > u.activeKeys) parts.push(<span key="y" title={title}><Badge tone="warn">{yubi} YubiKey(s) in Entra</Badge></span>);
-  if (other > 0) parts.push(<span key="o" title={title}><Badge>{other} anderer Passkey{other > 1 ? 's' : ''}</Badge></span>);
-  if (u.entraPasskeys === null || u.entraPasskeys === undefined) parts.push(<Badge key="u">Entra-Status unbekannt</Badge>);
-  if (parts.length === 0) parts.push(<Badge key="n">kein Key</Badge>);
+  if (u.activeKeys > 0) parts.push(<Badge key="inv" tone="info">{tr("{activeKeys} Key(s) im Inventar", { activeKeys: u.activeKeys })}</Badge>);
+  if (yubi > u.activeKeys) parts.push(<span key="y" title={title}><Badge tone="warn">{tr("{yubi} YubiKey(s) in Entra", { yubi })}</Badge></span>);
+  if (other > 0) parts.push(<span key="o" title={title}><Badge>{tr("{other} anderer Passkey{n}", { other, n: other > 1 ? 's' : '' })}</Badge></span>);
+  if (u.entraPasskeys === null || u.entraPasskeys === undefined) parts.push(<Badge key="u">{tr("Entra-Status unbekannt")}</Badge>);
+  if (parts.length === 0) parts.push(<Badge key="n">{tr("kein Key")}</Badge>);
   return <>{parts}</>;
 }
 
@@ -178,13 +179,13 @@ export function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: stri
     if (waitingFor) void api.post(`/api/agents/${waitingFor}/request-key`, {}).catch(() => undefined);
   }, [waitingFor]);
   return (
-    <Card title="YubiKey einstecken">
+    <Card title={tr("YubiKey einstecken")}>
       <ErrorBox error={error} />
       {agents && online.length === 0 && (
-        <Info tone="warn">Auf Ihrem PC ist kein Agent verbunden. Starten Sie die Tray-App oder <Link to="/agents">koppeln Sie einen Agent</Link>.</Info>
+        <Info tone="warn">{tr("Auf Ihrem PC ist kein Agent verbunden. Starten Sie die Tray-App oder")} <Link to="/agents">{tr("koppeln Sie einen Agent")}</Link>.</Info>
       )}
       {online.length > 1 && (
-        <Field label="Agent">
+        <Field label={tr("Agent")}>
           <select value={agent?.id} onChange={(e) => setAgentId(e.target.value)}>
             {online.map((a) => <option key={a.id} value={a.id}>{a.machineName}</option>)}
           </select>
@@ -195,27 +196,27 @@ export function KeyStep({ agentId, setAgentId, onNext, onBack }: { agentId: stri
           <div className="keyglyph"><span /></div>
           <div>
             <strong>{agent.key.model ?? 'YubiKey'}</strong>
-            <div>Seriennummer <span className="mono">{agent.key.serialNumber ?? '–'}</span> · Firmware <span className="mono">{agent.key.firmwareVersion}</span></div>
-            <div className="small muted">{agent.key.pinIsSet ? 'FIDO-PIN ist gesetzt' : 'Keine FIDO-PIN gesetzt (Werkszustand)'}</div>
+            <div>{tr("Seriennummer")} <span className="mono">{agent.key.serialNumber ?? '–'}</span> {tr("· Firmware")} <span className="mono">{agent.key.firmwareVersion}</span></div>
+            <div className="small muted">{agent.key.pinIsSet ? tr("FIDO-PIN ist gesetzt") : tr("Keine FIDO-PIN gesetzt (Werkszustand)")}</div>
             {!agent.key.supportsForcePinChange && (
-              <div className="key-warning"><span className="violation-icon" aria-hidden>!</span> Firmware {agent.key.firmwareVersion}: Der PIN-Wechsel kann nicht erzwungen werden (erst ab 5.7).</div>
+              <div className="key-warning"><span className="violation-icon" aria-hidden>!</span> {tr("Firmware {firmwareVersion}: Der PIN-Wechsel kann nicht erzwungen werden (erst ab 5.7).", { firmwareVersion: agent.key.firmwareVersion })}</div>
             )}
-            {!agent.key.hasFido2 && <Badge tone="error">Kein FIDO2</Badge>}
+            {!agent.key.hasFido2 && <Badge tone="error">{tr("Kein FIDO2")}</Badge>}
           </div>
         </div>
       ) : (
         <div className="waiting-key">
           <Spinner />
           <div>
-            <strong>Bitte jetzt den YubiKey an {agent.machineName} einstecken.</strong>
-            <div className="small muted">Der Agent wartet auf den Key. Bitte nur einen Key einstecken. Den Fortschritt zeigt auf Wunsch auch das Statusfenster der Tray-App (Doppelklick auf das Symbol).</div>
+            <strong>{tr("Bitte jetzt den YubiKey an {machineName} einstecken.", { machineName: agent.machineName })}</strong>
+            <div className="small muted">{tr("Der Agent wartet auf den Key. Bitte nur einen Key einstecken. Den Fortschritt zeigt auf Wunsch auch das Statusfenster der Tray-App (Doppelklick auf das Symbol).")}</div>
           </div>
         </div>
       ))}
-      {agent?.busy && <Info tone="warn">Der Agent ist beschäftigt: {agent.busy}</Info>}
+      {agent?.busy && <Info tone="warn">{tr("Der Agent ist beschäftigt: {busy}", { busy: agent.busy })}</Info>}
       <div className="actions" style={{ marginTop: 12 }}>
-        <button onClick={onBack}>Zurück</button>
-        <button className="primary" disabled={!agent?.key || !!agent.busy} onClick={onNext}>Weiter</button>
+        <button onClick={onBack}>{tr("Zurück")}</button>
+        <button className="primary" disabled={!agent?.key || !!agent.busy} onClick={onNext}>{tr("Weiter")}</button>
       </div>
     </Card>
   );
@@ -233,22 +234,22 @@ export function ProfileStep({ tenantId, profileId, setProfileId, suggestion, chi
   }, [profiles, profileId, setProfileId, tenantId]);
   const selected = profiles?.find((p) => p.id === profileId);
   return (
-    <Card title="Profil wählen und prüfen">
+    <Card title={tr("Profil wählen und prüfen")}>
       <ErrorBox error={error} />
-      <Field label="Registrierungsprofil">
+      <Field label={tr("Registrierungsprofil")}>
         <select value={profileId} onChange={(e) => setProfileId(e.target.value)}>
-          {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.tenantId ? '' : ' (alle Tenants)'}</option>)}
+          {profiles?.map((p) => <option key={p.id} value={p.id}>{p.name}{p.tenantId ? '' : tr(" (alle Tenants)")}</option>)}
         </select>
       </Field>
       {suggestion?.profileId && suggestion.profileId === profileId && (
-        <Info>Vorgeschlagen, weil die Person Mitglied der Gruppe <strong>{suggestion.groupName}</strong> ist (Profile nach Gruppe im Tenant).</Info>
+        <Info>{tr("Vorgeschlagen, weil die Person Mitglied der Gruppe")} <strong>{suggestion.groupName}</strong> {tr("ist (Profile nach Gruppe im Tenant).")}</Info>
       )}
       {selected && (
         <p className="small muted">
-          {selected.pinStrategy === 'Random' ? `Zufällige PIN mit ${selected.pinLength} Ziffern` : 'Feste Standard-PIN'}
-          {selected.forcePinChange ? ' · PIN-Wechsel erzwingen' : ''}
-          {selected.factoryResetBeforeRegistration ? ' · Werksreset vorher' : ''}
-          {selected.minimumFirmware ? ` · Firmware ab ${selected.minimumFirmware}` : ''}
+          {selected.pinStrategy === 'Random' ? tr("Zufällige PIN mit {pinLength} Ziffern", { pinLength: selected.pinLength }) : tr("Feste Standard-PIN")}
+          {selected.forcePinChange ? tr(" · PIN-Wechsel erzwingen") : ''}
+          {selected.factoryResetBeforeRegistration ? tr(" · Werksreset vorher") : ''}
+          {selected.minimumFirmware ? tr(" · Firmware ab {minimumFirmware}", { minimumFirmware: selected.minimumFirmware }) : ''}
         </p>
       )}
       {children}
@@ -270,32 +271,32 @@ export function PreviewDetails({ preview, overrides, setOverrides, performReset,
     <>
       <table>
         <tbody>
-          <tr><th>Person</th><td>{preview.user.displayName} <span className="muted">({preview.user.userPrincipalName})</span> {!preview.user.accountEnabled && <Badge tone="error">deaktiviert</Badge>}</td></tr>
-          <tr><th>Key</th><td>{preview.key.model} · Seriennummer <span className="mono">{preview.key.serialNumber}</span> · Firmware <span className="mono">{preview.key.firmwareVersion}</span></td></tr>
-          <tr><th>Anzeigename in Entra</th><td>{preview.displayName}</td></tr>
-          <tr><th>PIN-Wechsel erzwingen</th><td>{preview.willForcePinChange ? 'Ja' : 'Nein'}</td></tr>
+          <tr><th>{tr("Person")}</th><td>{preview.user.displayName} <span className="muted">({preview.user.userPrincipalName})</span> {!preview.user.accountEnabled && <Badge tone="error">{tr("deaktiviert")}</Badge>}</td></tr>
+          <tr><th>{tr("Key")}</th><td>{tr("{model} · Seriennummer", { model: preview.key.model })} <span className="mono">{preview.key.serialNumber}</span> {tr("· Firmware")} <span className="mono">{preview.key.firmwareVersion}</span></td></tr>
+          <tr><th>{tr("Anzeigename in Entra")}</th><td>{preview.displayName}</td></tr>
+          <tr><th>{tr("PIN-Wechsel erzwingen")}</th><td>{preview.willForcePinChange ? tr("Ja") : tr("Nein")}</td></tr>
         </tbody>
       </table>
-      {preview.userActiveKeys > 0 && <Info tone="warn">{preview.user.displayName} hat bereits {preview.userActiveKeys} aktive(n) Key(s). Die Registrierung fügt einen weiteren hinzu.</Info>}
+      {preview.userActiveKeys > 0 && <Info tone="warn">{tr("{displayName} hat bereits {userActiveKeys} aktive(n) Key(s). Die Registrierung fügt einen weiteren hinzu.", { displayName: preview.user.displayName, userActiveKeys: preview.userActiveKeys })}</Info>}
       {preview.inventoryKey && (
         preview.inventoryKey.activeRegistrations.length > 0
-          ? <Info tone="error">Dieser Key ist bereits registriert für {preview.inventoryKey.activeRegistrations.join(', ')}. Bitte zuerst <Link to={'/keys/' + preview.inventoryKey.id}>zurücksetzen</Link> oder weitere Konten über <Link to="/register/shared">Geteilter Key</Link> hinzufügen.</Info>
-          : <Info>Key ist im Inventar ({preview.inventoryKey.tenantName ?? 'Partnerlager, wird diesem Tenant zugewiesen'}, Status {preview.inventoryKey.status}) und wird zugewiesen.</Info>
+          ? <Info tone="error">{tr("Dieser Key ist bereits registriert für {n}. Bitte zuerst", { n: preview.inventoryKey.activeRegistrations.join(', ') })} <Link to={'/keys/' + preview.inventoryKey.id}>{tr("zurücksetzen")}</Link> {tr("oder weitere Konten über")} <Link to="/register/shared">{tr("Geteilter Key")}</Link> {tr("hinzufügen.")}</Info>
+          : <Info>{tr("Key ist im Inventar (")}{preview.inventoryKey.tenantName ?? tr("Partnerlager, wird diesem Tenant zugewiesen")}{tr(", Status {status}) und wird zugewiesen.", { status: preview.inventoryKey.status })}</Info>
       )}
-      {preview.violations.length === 0 ? <Info tone="ok">Der Key erfüllt das Profil.</Info> : (
+      {preview.violations.length === 0 ? <Info tone="ok">{tr("Der Key erfüllt das Profil.")}</Info> : (
         <div className="alert warn">
-          <strong>Der Key passt nicht vollständig zum Profil:</strong>
+          <strong>{tr("Der Key passt nicht vollständig zum Profil:")}</strong>
           {preview.violations.map((v) => (
             <div key={v.code} className={'violation-row' + (!v.canOverride && !v.resolvedByReset ? ' blocking' : '')}>
               <span className="violation-icon" aria-hidden>!</span>
-              <div>{v.message}{v.resolvedByReset && <div className="small muted">Wird durch einen Werksreset behoben.</div>}</div>
+              <div>{v.message}{v.resolvedByReset && <div className="small muted">{tr("Wird durch einen Werksreset behoben.")}</div>}</div>
               {v.canOverride && !(v.resolvedByReset && performReset) && (
                 <label className="check">
                   <input type="checkbox" checked={overrides.includes(v.code)} onChange={(e) => setOverrides((o) => e.target.checked ? [...o, v.code] : o.filter((x) => x !== v.code))} />
-                  Für diesen Key bewusst überschreiben
+                  {tr("Für diesen Key bewusst überschreiben")}
                 </label>
               )}
-              {!v.canOverride && !v.resolvedByReset && <Badge tone="error">nicht überschreibbar</Badge>}
+              {!v.canOverride && !v.resolvedByReset && <Badge tone="error">{tr("nicht überschreibbar")}</Badge>}
             </div>
           ))}
         </div>
@@ -304,9 +305,9 @@ export function PreviewDetails({ preview, overrides, setOverrides, performReset,
       {(preview.resetRequired || preview.resetPlanned || preview.key.pinIsSet) && <>
         <label className="check" style={{ margin: '12px 0' }}>
           <input type="checkbox" checked={performReset} disabled={preview.resetRequired} onChange={(e) => setPerformReset(e.target.checked)} />
-          FIDO-Werksreset vor der Registrierung {preview.resetRequired && '(erforderlich)'}
+          {tr("FIDO-Werksreset vor der Registrierung")} {preview.resetRequired && '(erforderlich)'}
         </label>
-        {performReset && <Info tone="error"><strong>Achtung:</strong> Der Reset löscht alle Passkeys auf dem Key unwiderruflich. Der Key muss dafür kurz abgezogen und wieder eingesteckt werden.</Info>}
+        {performReset && <Info tone="error"><strong>{tr("Achtung:")}</strong> {tr("Der Reset löscht alle Passkeys auf dem Key unwiderruflich. Der Key muss dafür kurz abgezogen und wieder eingesteckt werden.")}</Info>}
       </>}
     </>
   );

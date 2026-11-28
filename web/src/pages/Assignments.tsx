@@ -4,6 +4,7 @@ import { fmtDate, usageLabels, type KeyUsage } from '../api';
 import { useCan } from '../auth';
 import { Badge, CountUp, download, Empty, formatSort, LiveSearchInput, parseSort, SortTh, type MenuItem, type SortState } from '../ui';
 import { Icon, type IconName } from '../icons';
+import { tr } from '../i18n';
 
 export interface AssignmentAccount { entraUserId: string; userPrincipalName: string; userDisplayName?: string | null; registeredAt: string; registeredByName?: string | null; source: string }
 export interface AssignmentKey {
@@ -33,12 +34,12 @@ export function AssignmentKpis({ s, usage, issues, onFilter }: { s: Summary; usa
   return (
     <>
       <div className="assign-kpis">
-        <KpiTile icon="key" label="Ausgegebene Keys" value={s.keys} sub={s.withoutSerial ? `${s.withoutSerial} ohne Seriennummer` : undefined} />
-        <KpiTile icon="users" label="Personen mit Key" value={s.people} sub={s.peopleWithSeveralKeys ? `${s.peopleWithSeveralKeys} mit mehreren Keys` : 'jede Person ein Key'} />
-        <KpiTile icon="share" label="Geteilt / Breakglass" value={`${s.shared} / ${s.breakglass}`} sub="beim Verwahrer"
+        <KpiTile icon="key" label={tr("Ausgegebene Keys")} value={s.keys} sub={s.withoutSerial ? tr("{withoutSerial} ohne Seriennummer", { withoutSerial: s.withoutSerial }) : undefined} />
+        <KpiTile icon="users" label={tr("Personen mit Key")} value={s.people} sub={s.peopleWithSeveralKeys ? tr("{peopleWithSeveralKeys} mit mehreren Keys", { peopleWithSeveralKeys: s.peopleWithSeveralKeys }) : tr("jede Person ein Key")} />
+        <KpiTile icon="share" label={tr("Geteilt / Breakglass")} value={`${s.shared} / ${s.breakglass}`} sub={tr("beim Verwahrer")}
           active={usage === 'Shared'} onClick={s.shared ? () => onFilter('usage', usage === 'Shared' ? '' : 'Shared') : undefined} />
-        <KpiTile icon="alert" label="Auffälligkeiten" value={s.withIssues} tone={s.withIssues ? 'warn' : 'ok'}
-          sub={s.withIssues ? 'z. B. Verwahrer fehlt' : 'alles stimmig'} active={issues} onClick={s.withIssues ? () => onFilter('issues', issues ? '' : '1') : undefined} />
+        <KpiTile icon="alert" label={tr("Auffälligkeiten")} value={s.withIssues} tone={s.withIssues ? 'warn' : 'ok'}
+          sub={s.withIssues ? tr("z. B. Verwahrer fehlt") : 'alles stimmig'} active={issues} onClick={s.withIssues ? () => onFilter('issues', issues ? '' : '1') : undefined} />
       </div>
       {s.keys > 0 && <UsageBar s={s} />}
     </>
@@ -56,9 +57,9 @@ export function assignmentExportItems(tenantId: string, params: URLSearchParams)
   }
   const exp = (format: 'csv' | 'xlsx' | 'pdf') => download(`/api/exports/assignments.${format}?` + qs.toString());
   return [
-    { label: 'Wer hat welchen Key (Excel)', hint: 'Eine Zeile pro Person und Key, mit Filterzeile', icon: 'users', onClick: () => exp('xlsx') },
-    { label: 'Wer hat welchen Key (PDF)', hint: 'Zum Drucken oder Ablegen, A4 quer', icon: 'scroll', onClick: () => exp('pdf') },
-    { label: 'Wer hat welchen Key (CSV)', hint: 'Für andere Programme (Semikolon, UTF-8)', icon: 'download', onClick: () => exp('csv') },
+    { label: tr("Wer hat welchen Key (Excel)"), hint: tr("Eine Zeile pro Person und Key, mit Filterzeile"), icon: 'users', onClick: () => exp('xlsx') },
+    { label: tr("Wer hat welchen Key (PDF)"), hint: tr("Zum Drucken oder Ablegen, A4 quer"), icon: 'scroll', onClick: () => exp('pdf') },
+    { label: tr("Wer hat welchen Key (CSV)"), hint: tr("Für andere Programme (Semikolon, UTF-8)"), icon: 'download', onClick: () => exp('csv') },
   ];
 }
 
@@ -106,41 +107,41 @@ export function PeopleView({ data, allTenants }: { data: Overview; allTenants: b
   return (
     <>
       <div className="toolbar">
-        <LiveSearchInput value={q} onSearch={(v) => set('q', v)} placeholder="Person, UPN, Seriennummer, Verwahrer …" />
-        <div className="segmented" role="radiogroup" aria-label="Nutzung">
+        <LiveSearchInput value={q} onSearch={(v) => set('q', v)} placeholder={tr("Person, UPN, Seriennummer, Verwahrer …")} />
+        <div className="segmented" role="radiogroup" aria-label={tr("Nutzung")}>
           {(['', 'Personal', 'Shared', 'Breakglass'] as const).map((u) => (
             <button key={u || 'all'} type="button" role="radio" aria-checked={usage === u} className={usage === u ? 'on' : ''} onClick={() => set('usage', u)}>
-              {u ? usageLabels[u] : 'Alle'}
+              {u ? usageLabels[u] : tr("Alle")}
             </button>
           ))}
         </div>
-        <label className="check"><input type="checkbox" checked={issues} onChange={(e) => set('issues', e.target.checked ? '1' : '')} /> Nur Auffälligkeiten</label>
+        <label className="check"><input type="checkbox" checked={issues} onChange={(e) => set('issues', e.target.checked ? '1' : '')} /> {tr("Nur Auffälligkeiten")}</label>
       </div>
 
       {filtered.length === 0 ? (
         <Empty>
           {data.keys.length === 0
-            ? <>Noch keine ausgegebenen Keys. {can('RegisterKeys') && <Link to="/register">Ersten Key registrieren</Link>}</>
-            : <>Nichts gefunden. <button className="link" onClick={() => setParams(new URLSearchParams({ view: 'people' }))}>Filter zurücksetzen</button></>}
+            ? <>{tr("Noch keine ausgegebenen Keys.")} {can('RegisterKeys') && <Link to="/register">{tr("Ersten Key registrieren")}</Link>}</>
+            : <>{tr("Nichts gefunden.")} <button className="link" onClick={() => setParams(new URLSearchParams({ view: 'people' }))}>{tr("Filter zurücksetzen")}</button></>}
         </Empty>
       ) : (
         <div className="card table-wrap" style={{ padding: 0 }}>
           <table className="assign-table">
             <thead>
               <tr>
-                <SortTh label="Person" sortKey="person" sort={sort} onSort={onSort} />
-                <SortTh label="Key" sortKey="serial" sort={sort} onSort={onSort} />
-                <SortTh label="Nutzung" sortKey="usage" sort={sort} onSort={onSort} />
-                <SortTh label="Seit" sortKey="since" sort={sort} onSort={onSort} />
-                {allTenants && <SortTh label="Tenant" sortKey="tenant" sort={sort} onSort={onSort} />}
-                <th>Hinweise</th>
+                <SortTh label={tr("Person")} sortKey="person" sort={sort} onSort={onSort} />
+                <SortTh label={tr("Key")} sortKey="serial" sort={sort} onSort={onSort} />
+                <SortTh label={tr("Nutzung")} sortKey="usage" sort={sort} onSort={onSort} />
+                <SortTh label={tr("Seit")} sortKey="since" sort={sort} onSort={onSort} />
+                {allTenants && <SortTh label={tr("Tenant")} sortKey="tenant" sort={sort} onSort={onSort} />}
+                <th>{tr("Hinweise")}</th>
               </tr>
             </thead>
             <tbody>
               {people.map((r, i) => (
                 <tr key={r.id} style={{ animationDelay: Math.min(i, 20) * 18 + 'ms' }}>
-                  <td>{r.account ? <Person name={r.account.userDisplayName} upn={r.account.userPrincipalName} extra={r.keyCount > 1 && <Badge tone="info">{r.keyCount} Keys</Badge>} />
-                    : <span className="muted">– niemand –</span>}</td>
+                  <td>{r.account ? <Person name={r.account.userDisplayName} upn={r.account.userPrincipalName} extra={r.keyCount > 1 && <Badge tone="info">{tr("{keyCount} Keys", { keyCount: r.keyCount })}</Badge>} />
+                    : <span className="muted">{tr("– niemand –")}</span>}</td>
                   <td><KeyCell k={r.key} /></td>
                   <td><UsageCell k={r.key} /></td>
                   <td className="small">{r.account ? fmtDate(r.account.registeredAt, false) : '–'}</td>
@@ -153,7 +154,7 @@ export function PeopleView({ data, allTenants }: { data: Overview; allTenants: b
         </div>
       )}
       {filtered.length > 0 && <p className="small muted" style={{ marginTop: 8 }}>
-        {people.length} Zeile(n){filteredHint ? ` aus ${data.keys.length} ausgegebenen Keys` : ''} · Stand {fmtDate(data.generatedAt)}. Lager-, gesperrte und ausgemusterte Keys zeigt die Ansicht „Alle Keys“.
+        {tr("{length} Zeile(n)", { length: people.length })}{filteredHint ? tr(" aus {length} ausgegebenen Keys", { length: data.keys.length }) : ''} {tr("· Stand {generatedAt}. Lager-, gesperrte und ausgemusterte Keys zeigt die Ansicht „Alle Keys“.", { generatedAt: fmtDate(data.generatedAt) })}
       </p>}
     </>
   );
@@ -175,16 +176,16 @@ function KpiTile({ icon, label, value, sub, tone, active, onClick }: { icon: Ico
 /** Anteil persönlicher, geteilter und Breakglass-Keys als gestapelter Balken. */
 function UsageBar({ s }: { s: Summary }) {
   const parts = [
-    { key: 'personal', label: 'Persönlich', n: s.personal },
-    { key: 'shared', label: 'Geteilt', n: s.shared },
-    { key: 'breakglass', label: 'Breakglass', n: s.breakglass },
+    { key: 'personal', label: tr("Persönlich"), n: s.personal },
+    { key: 'shared', label: tr("Geteilt"), n: s.shared },
+    { key: 'breakglass', label: tr("Breakglass"), n: s.breakglass },
   ].filter((p) => p.n > 0);
   return (
-    <div className="usage-bar-wrap" aria-label="Verteilung nach Nutzung">
+    <div className="usage-bar-wrap" aria-label={tr("Verteilung nach Nutzung")}>
       <div className="usage-bar">{parts.map((p) => <span key={p.key} className={'seg-' + p.key} style={{ flexGrow: p.n }} title={`${p.label}: ${p.n}`} />)}</div>
       <div className="usage-legend">{parts.map((p) => <span key={p.key}><i className={'seg-' + p.key} />{p.label} {p.n}</span>)}
-        {s.withoutSerial > 0 && <span className="muted"><Link to="/keys/identify">{s.withoutSerial} ohne Seriennummer</Link></span>}
-        {s.withAdvisory > 0 && <span className="muted">{s.withAdvisory} mit Firmware-Hinweis</span>}
+        {s.withoutSerial > 0 && <span className="muted"><Link to="/keys/identify">{tr("{withoutSerial} ohne Seriennummer", { withoutSerial: s.withoutSerial })}</Link></span>}
+        {s.withAdvisory > 0 && <span className="muted">{tr("{withAdvisory} mit Firmware-Hinweis", { withAdvisory: s.withAdvisory })}</span>}
       </div>
     </div>
   );
@@ -206,18 +207,18 @@ function Person({ name, upn, extra }: { name?: string | null; upn?: string | nul
 function KeyCell({ k }: { k: AssignmentKey }) {
   return (
     <div>
-      <Link to={'/keys/' + k.keyId} className={k.serialNumber != null ? 'mono' : undefined}>{k.serialNumber ?? 'ohne Seriennummer'}</Link>
+      <Link to={'/keys/' + k.keyId} className={k.serialNumber != null ? 'mono' : undefined}>{k.serialNumber ?? tr("ohne Seriennummer")}</Link>
       <div className="small muted">{[k.model, k.firmwareVersion].filter(Boolean).join(' · ') || '–'}</div>
     </div>
   );
 }
 
 function UsageCell({ k }: { k: AssignmentKey }) {
-  if (k.usage === 'Personal') return <span className="muted small">Persönlich</span>;
+  if (k.usage === 'Personal') return <span className="muted small">{tr("Persönlich")}</span>;
   return (
     <div>
       <Badge tone={k.usage === 'Breakglass' ? 'error' : 'info'}>{usageLabels[k.usage]}</Badge>
-      <div className="small muted">{k.custodian ? 'bei ' + k.custodian : 'Verwahrer fehlt'}</div>
+      <div className="small muted">{k.custodian ? tr("bei {custodian}", { custodian: k.custodian }) : tr("Verwahrer fehlt")}</div>
     </div>
   );
 }
@@ -228,7 +229,7 @@ function Hints({ k }: { k: AssignmentKey }) {
     <div className="hints">
       {k.issues.map((i) => <Badge key={i} tone="warn">{i}</Badge>)}
       {k.fidoAdvisory && <Badge tone="warn">{k.advisories.join(', ')}</Badge>}
-      {k.pinChangeForced === false && <Badge>PIN-Wechsel nicht erzwungen</Badge>}
+      {k.pinChangeForced === false && <Badge>{tr("PIN-Wechsel nicht erzwungen")}</Badge>}
     </div>
   );
 }
