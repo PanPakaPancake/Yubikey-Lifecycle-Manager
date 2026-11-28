@@ -6,6 +6,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Setup;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Tenants;
 
@@ -41,11 +42,10 @@ public sealed class TenantCheckService(YlmDbContext db, IGraphClientFactory grap
             missing = Missing(await graph.GetGrantedApplicationPermissionsAsync(ct));
         }
         results.Add(missing.Count == 0
-            ? new(TenantCheckIds.GraphPermissions, "Berechtigungen der App erteilt", CheckStatus.Ok, "Alle benötigten Graph-Berechtigungen sind erteilt.", false, "")
-            : new(TenantCheckIds.GraphPermissions, "Berechtigungen der App erteilt", CheckStatus.Failed,
-                "Es fehlen Berechtigungen: " + string.Join(", ", missing) +
-                ". Direkt nach dem Admin-Consent kann Entra einige Minuten brauchen, bis die Berechtigungen wirksam sind; dann „Erneut prüfen“.", false,
-                "Den Admin-Consent erneut erteilen: in der Tenant-Übersicht „Consent erneut erteilen“ wählen, oder im Entra Admin Center → Unternehmensanwendungen → Yubikey Lifecycle Manager → Berechtigungen → „Administratorzustimmung erteilen“."));
+            ? new(TenantCheckIds.GraphPermissions, L.T("Berechtigungen der App erteilt"), CheckStatus.Ok, L.T("Alle benötigten Graph-Berechtigungen sind erteilt."), false, "")
+            : new(TenantCheckIds.GraphPermissions, L.T("Berechtigungen der App erteilt"), CheckStatus.Failed,
+                L.F($"Es fehlen Berechtigungen: {string.Join(", ", missing)}. Direkt nach dem Admin-Consent kann Entra einige Minuten brauchen, bis die Berechtigungen wirksam sind; dann „Erneut prüfen“."), false,
+                L.T("Den Admin-Consent erneut erteilen: in der Tenant-Übersicht „Consent erneut erteilen“ wählen, oder im Entra Admin Center → Unternehmensanwendungen → Yubikey Lifecycle Manager → Berechtigungen → „Administratorzustimmung erteilen“.")));
 
         if (missing.Contains("Policy.Read.All", StringComparer.OrdinalIgnoreCase))
         {

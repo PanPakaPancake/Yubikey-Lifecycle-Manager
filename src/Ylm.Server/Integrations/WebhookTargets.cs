@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Sockets;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Integrations;
 
@@ -20,7 +21,7 @@ public static class WebhookTargets
             var addresses = IPAddress.TryParse(host, out var literal) ? [literal] : await Dns.GetHostAddressesAsync(host, ct);
             var allowed = addresses.Where(a => !IsBlocked(a)).ToArray();
             if (allowed.Length == 0)
-                throw new HttpRequestException($"Ziel {host} ist nicht erlaubt (link-lokale Adresse, z. B. Cloud-Metadaten).");
+                throw new HttpRequestException(L.F($"Ziel {host} ist nicht erlaubt (link-lokale Adresse, z. B. Cloud-Metadaten)."));
             var socket = new Socket(SocketType.Stream, ProtocolType.Tcp) { NoDelay = true };
             try
             {

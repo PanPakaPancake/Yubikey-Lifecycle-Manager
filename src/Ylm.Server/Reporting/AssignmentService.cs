@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Ylm.Core;
 using Ylm.Server.Data;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Reporting;
 
@@ -64,10 +65,10 @@ public sealed class AssignmentService(YlmDbContext db)
         var personal = k.Usage == KeyUsage.Personal;
         var first = accounts.FirstOrDefault();
         var issues = new List<string>();
-        if (accounts.Count == 0) issues.Add("Kein Konto mehr auf dem Key registriert");
-        if (!personal && string.IsNullOrWhiteSpace(k.Custodian)) issues.Add("Verwahrer fehlt");
-        if (personal && accounts.Select(a => a.EntraUserId).Distinct().Count() > 1) issues.Add("Persönlicher Key mit mehreren Konten");
-        if (k.Status != KeyStatus.Active) issues.Add($"Status {KeyLifecycle.DisplayName(k.Status)}, aber noch Konten registriert");
+        if (accounts.Count == 0) issues.Add(L.T("Kein Konto mehr auf dem Key registriert"));
+        if (!personal && string.IsNullOrWhiteSpace(k.Custodian)) issues.Add(L.T("Verwahrer fehlt"));
+        if (personal && accounts.Select(a => a.EntraUserId).Distinct().Count() > 1) issues.Add(L.T("Persönlicher Key mit mehreren Konten"));
+        if (k.Status != KeyStatus.Active) issues.Add(L.F($"Status {KeyLifecycle.DisplayName(k.Status)}, aber noch Konten registriert"));
         var advisories = FirmwareAdvisories.For(k.FirmwareVersion, k.Model, k.IsFips);
         return new AssignmentKey(
             k.Id, k.TenantId!.Value, k.Tenant?.DisplayName ?? "", k.SerialNumber, k.Model, k.FirmwareVersion, k.Status.ToString(), k.Usage.ToString(),
@@ -119,15 +120,15 @@ public sealed class AssignmentService(YlmDbContext db)
 
     public static string UsageLabel(string usage) => usage switch
     {
-        nameof(KeyUsage.Shared) => "Geteilter Key",
-        nameof(KeyUsage.Breakglass) => "Breakglass",
-        _ => "Persönlich",
+        nameof(KeyUsage.Shared) => L.T("Geteilter Key"),
+        nameof(KeyUsage.Breakglass) => L.T("Breakglass"),
+        _ => L.T("Persönlich"),
     };
 
     /// <summary>Tabellenform für CSV und Excel: eine Zeile pro Person und Key (Keys ohne Konto erscheinen einmal).</summary>
     public static (string[] Header, List<object?[]> Rows) Table(AssignmentOverview o, bool includeTenant)
     {
-        string[] header = [.. (includeTenant ? new[] { "Tenant" } : []), "Person", "UPN", "Seriennummer", "Modell", "Firmware", "Nutzung", "Hat den Key", "Konten auf dem Key", "Registriert am", "Registriert von", "PIN-Wechsel erzwungen", "Sicherheitshinweise", "Auffälligkeiten"];
+        string[] header = [.. (includeTenant ? new[] { L.T("Tenant") } : []), L.T("Person"), "UPN", L.T("Seriennummer"), L.T("Modell"), L.T("Firmware"), L.T("Nutzung"), L.T("Hat den Key"), L.T("Konten auf dem Key"), L.T("Registriert am"), L.T("Registriert von"), L.T("PIN-Wechsel erzwungen"), L.T("Sicherheitshinweise"), L.T("Auffälligkeiten")];
         var rows = new List<object?[]>();
         foreach (var k in o.Keys)
         {
@@ -146,7 +147,7 @@ public sealed class AssignmentService(YlmDbContext db)
                     k.Accounts.Count,
                     a?.RegisteredAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm"),
                     a?.RegisteredByName,
-                    k.PinChangeForced is null ? null : k.PinChangeForced.Value ? "ja" : "nein",
+                    k.PinChangeForced is null ? null : k.PinChangeForced.Value ? L.T("ja") : L.T("nein"),
                     string.Join(", ", k.Advisories),
                     string.Join("; ", k.Issues),
                 ]);

@@ -2,6 +2,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Security;
 using System.Text;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Core;
 
@@ -99,7 +100,7 @@ public static class Xlsx
         null => "",
         DateTimeOffset d => d.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
         DateTime d => d.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture),
-        bool b => b ? "ja" : "nein",
+        bool b => b ? L.T("ja") : L.T("nein"),
         IFormattable f => f.ToString(null, CultureInfo.InvariantCulture),
         _ => v.ToString() ?? "",
     };

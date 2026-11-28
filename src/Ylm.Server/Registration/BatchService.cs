@@ -7,6 +7,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Registration;
 
@@ -81,7 +82,7 @@ public sealed class BatchService(
 
         if (!string.IsNullOrWhiteSpace(req.GroupId))
         {
-            var members = await graph.ListGroupUsersAsync(req.GroupId.Trim(), ct) ?? throw ApiException.NotFound("Gruppe");
+            var members = await graph.ListGroupUsersAsync(req.GroupId.Trim(), ct) ?? throw ApiException.NotFound(L.T("Gruppe"));
             rows.AddRange(members.OrderBy(u => u.DisplayName ?? u.UserPrincipalName, StringComparer.CurrentCultureIgnoreCase).Select(u => (u, (int?)null, (Guid?)null, (string?)null)));
         }
         else if (!string.IsNullOrWhiteSpace(req.Csv))
@@ -93,14 +94,14 @@ public sealed class BatchService(
             foreach (var id in req.UserIds.Distinct().Take(MaxItems))
             {
                 var u = await graph.GetUserAsync(id, ct);
-                if (u is null) errors.Add(new BatchCandidateError(0, id, "Person nicht gefunden."));
+                if (u is null) errors.Add(new BatchCandidateError(0, id, L.T("Person nicht gefunden.")));
                 else rows.Add((u, null, null, null));
             }
         }
-        else throw ApiException.BadRequest("invalid", "Bitte eine Gruppe, eine CSV-Datei oder Personen angeben.");
+        else throw ApiException.BadRequest("invalid", L.T("Bitte eine Gruppe, eine CSV-Datei oder Personen angeben."));
 
         if (rows.Count > MaxItems)
-            throw ApiException.BadRequest("too_many", $"Ein Stapel kann höchstens {MaxItems} Personen enthalten (gefunden: {rows.Count}). Bitte in mehrere Stapel aufteilen.");
+            throw ApiException.BadRequest("too_many", L.F($"Ein Stapel kann höchstens {MaxItems} Personen enthalten (gefunden: {rows.Count}). Bitte in mehrere Stapel aufteilen."));
 
         var userIds = rows.Select(r => r.User.Id).ToList();
         var keyCounts = await db.Registrations.Where(r => r.TenantId == tenantId && r.RemovedAt == null && userIds.Contains(r.EntraUserId))
@@ -151,10 +152,10 @@ public sealed class BatchService(
         int upnCol = Find(first, UpnHeaders), serialCol = Find(first, SerialHeaders), profileCol = Find(first, ProfileHeaders);
         var hasHeader = upnCol >= 0 || serialCol >= 0 || profileCol >= 0;
         if (!hasHeader) { upnCol = 0; serialCol = first.Length > 1 ? 1 : -1; profileCol = first.Length > 2 ? 2 : -1; }
-        else if (upnCol < 0) throw ApiException.BadRequest("csv_invalid", "Die CSV-Datei braucht eine Spalte „UPN“ (oder „Mail“).");
+        else if (upnCol < 0) throw ApiException.BadRequest("csv_invalid", L.T("Die CSV-Datei braucht eine Spalte „UPN“ (oder „Mail“)."));
         var data = lines.Skip(hasHeader ? 1 : 0).Select((l, i) => (Line: i + (hasHeader ? 2 : 1), Cells: l)).ToList();
         if (data.Count > MaxItems)
-            throw ApiException.BadRequest("too_many", $"Ein Stapel kann höchstens {MaxItems} Personen enthalten (CSV: {data.Count} Zeilen).");
+            throw ApiException.BadRequest("too_many", L.F($"Ein Stapel kann höchstens {MaxItems} Personen enthalten (CSV: {data.Count} Zeilen)."));
 
         var profiles = await db.Profiles.AsNoTracking().Where(p => p.TenantId == tenantId || p.TenantId == null).ToListAsync(ct);
         var parsed = new List<(int Line, string Upn, int? Serial, Guid? ProfileId, string? ProfileName)>();
@@ -168,7 +169,7 @@ public sealed class BatchService(
             if (serialText.Length > 0)
             {
                 if (int.TryParse(serialText, out var s) && s > 0) serial = s;
-                else { errors.Add(new BatchCandidateError(line, upn, $"Seriennummer „{serialText}“ ist keine Zahl.")); continue; }
+                else { errors.Add(new BatchCandidateError(line, upn, L.F($"Seriennummer „{serialText}“ ist keine Zahl."))); continue; }
             }
             Guid? profileId = null;
             string? profileName = null;
@@ -177,7 +178,7 @@ public sealed class BatchService(
             {
                 // Tenant profiles win over global ones with the same name.
                 var p = profiles.Where(x => x.Name.Equals(profileText, StringComparison.CurrentCultureIgnoreCase)).OrderBy(x => x.TenantId == null).FirstOrDefault();
-                if (p is null) { errors.Add(new BatchCandidateError(line, upn, $"Profil „{profileText}“ gibt es in diesem Tenant nicht.")); continue; }
+                if (p is null) { errors.Add(new BatchCandidateError(line, upn, L.F($"Profil „{profileText}“ gibt es in diesem Tenant nicht."))); continue; }
                 profileId = p.Id;
                 profileName = "CSV";
             }
@@ -198,9 +199,9 @@ public sealed class BatchService(
         var seenSerials = new HashSet<int>();
         foreach (var (p, user) in resolved)
         {
-            if (user is null) { errors.Add(new BatchCandidateError(p.Line, p.Upn, "Person in Entra ID nicht gefunden.")); continue; }
-            if (!seenUsers.Add(user.Id)) { errors.Add(new BatchCandidateError(p.Line, p.Upn, "Person steht mehrfach in der Liste; nur der erste Eintrag zählt.")); continue; }
-            if (p.Serial is { } s && !seenSerials.Add(s)) { errors.Add(new BatchCandidateError(p.Line, p.Upn, $"Seriennummer {s} ist mehreren Personen zugeordnet.")); continue; }
+            if (user is null) { errors.Add(new BatchCandidateError(p.Line, p.Upn, L.T("Person in Entra ID nicht gefunden."))); continue; }
+            if (!seenUsers.Add(user.Id)) { errors.Add(new BatchCandidateError(p.Line, p.Upn, L.T("Person steht mehrfach in der Liste; nur der erste Eintrag zählt."))); continue; }
+            if (p.Serial is { } s && !seenSerials.Add(s)) { errors.Add(new BatchCandidateError(p.Line, p.Upn, L.F($"Seriennummer {s} ist mehreren Personen zugeordnet."))); continue; }
             result.Add((user, p.Serial, p.ProfileId, p.ProfileName));
         }
         return result;
@@ -212,17 +213,17 @@ public sealed class BatchService(
     {
         var profileIds = items.Where(i => i.ProfileId is not null).Select(i => i.ProfileId!.Value).Distinct().ToList();
         var valid = await db.Profiles.CountAsync(p => profileIds.Contains(p.Id) && (p.TenantId == null || p.TenantId == tenantId), ct);
-        if (valid != profileIds.Count) throw ApiException.BadRequest("invalid", "Mindestens ein Profil gilt nicht für diesen Tenant.");
+        if (valid != profileIds.Count) throw ApiException.BadRequest("invalid", L.T("Mindestens ein Profil gilt nicht für diesen Tenant."));
         var users = existing.Select(e => e.EntraUserId).ToHashSet();
         var serials = existing.Where(e => e.ExpectedSerialNumber is not null && e.Status != BatchItemStatus.Skipped).Select(e => e.ExpectedSerialNumber!.Value).ToHashSet();
         foreach (var i in items)
         {
             if (string.IsNullOrWhiteSpace(i.EntraUserId) || string.IsNullOrWhiteSpace(i.UserPrincipalName))
-                throw ApiException.BadRequest("invalid", "Jede Zeile braucht eine Person.");
+                throw ApiException.BadRequest("invalid", L.T("Jede Zeile braucht eine Person."));
             if (!users.Add(i.EntraUserId))
-                throw ApiException.BadRequest("duplicate_user", $"{i.UserPrincipalName} steht bereits im Stapel.");
+                throw ApiException.BadRequest("duplicate_user", L.F($"{i.UserPrincipalName} steht bereits im Stapel."));
             if (i.ExpectedSerialNumber is { } s && !serials.Add(s))
-                throw ApiException.BadRequest("duplicate_serial", $"Seriennummer {s} ist bereits einer anderen Person im Stapel zugeordnet.");
+                throw ApiException.BadRequest("duplicate_serial", L.F($"Seriennummer {s} ist bereits einer anderen Person im Stapel zugeordnet."));
         }
     }
 
@@ -241,14 +242,14 @@ public sealed class BatchService(
 
     public async Task<RegistrationBatch> CreateAsync(Guid tenantId, PlatformUser actor, CreateBatchRequest req, CancellationToken ct = default)
     {
-        if (req.Items is not { Count: > 0 }) throw ApiException.BadRequest("invalid", "Der Stapel enthält keine Personen.");
-        if (req.Items.Count > MaxItems) throw ApiException.BadRequest("too_many", $"Ein Stapel kann höchstens {MaxItems} Personen enthalten.");
+        if (req.Items is not { Count: > 0 }) throw ApiException.BadRequest("invalid", L.T("Der Stapel enthält keine Personen."));
+        if (req.Items.Count > MaxItems) throw ApiException.BadRequest("too_many", L.F($"Ein Stapel kann höchstens {MaxItems} Personen enthalten."));
         await RegistrationService.LoadProfileAsync(db, tenantId, req.DefaultProfileId, ct);
         await ValidateItemsAsync(tenantId, req.Items, [], ct);
         var batch = new RegistrationBatch
         {
             TenantId = tenantId,
-            Name = string.IsNullOrWhiteSpace(req.Name) ? $"Stapel vom {DateTime.Now:dd.MM.yyyy HH:mm}" : req.Name.Trim(),
+            Name = string.IsNullOrWhiteSpace(req.Name) ? L.F($"Stapel vom {DateTime.Now:dd.MM.yyyy HH:mm}") : req.Name.Trim(),
             Source = req.Source?.Trim(),
             DefaultProfileId = req.DefaultProfileId,
             CreatedById = actor.Id,
@@ -263,7 +264,7 @@ public sealed class BatchService(
 
     public async Task<RegistrationBatch> LoadAsync(Guid batchId, CancellationToken ct = default)
     {
-        var batch = await db.Batches.Include(b => b.Items).FirstOrDefaultAsync(b => b.Id == batchId, ct) ?? throw ApiException.NotFound("Stapel");
+        var batch = await db.Batches.Include(b => b.Items).FirstOrDefaultAsync(b => b.Id == batchId, ct) ?? throw ApiException.NotFound(L.T("Stapel"));
         batch.Items = batch.Items.OrderBy(i => i.Position).ToList();
         // A registration interrupted by a server restart leaves its item in "Running" without a job.
         var stale = batch.Items.Where(i => i.Status == BatchItemStatus.Running && (i.JobId is not { } j || !jobs.Exists(j))).ToList();
@@ -271,7 +272,7 @@ public sealed class BatchService(
         {
             i.Status = BatchItemStatus.Failed;
             i.ErrorCode = "interrupted";
-            i.Error = "Der Vorgang wurde unterbrochen (z. B. Neustart des Servers). Auf dem Key ist evtl. schon eine PIN gesetzt; für einen neuen Versuch mit Werksreset registrieren.";
+            i.Error = L.T("Der Vorgang wurde unterbrochen (z. B. Neustart des Servers). Auf dem Key ist evtl. schon eine PIN gesetzt; für einen neuen Versuch mit Werksreset registrieren.");
         }
         if (stale.Count > 0) await db.SaveChangesAsync(ct);
         return batch;
@@ -279,17 +280,17 @@ public sealed class BatchService(
 
     private static void EnsureOpen(RegistrationBatch batch)
     {
-        if (batch.Status == BatchStatus.Cancelled) throw ApiException.Conflict("batch_cancelled", "Der Stapel wurde abgebrochen.");
+        if (batch.Status == BatchStatus.Cancelled) throw ApiException.Conflict("batch_cancelled", L.T("Der Stapel wurde abgebrochen."));
     }
 
     private static RegistrationBatchItem Item(RegistrationBatch batch, Guid itemId) =>
-        batch.Items.FirstOrDefault(i => i.Id == itemId) ?? throw ApiException.NotFound("Person im Stapel");
+        batch.Items.FirstOrDefault(i => i.Id == itemId) ?? throw ApiException.NotFound(L.T("Person im Stapel"));
 
     public async Task AddItemsAsync(RegistrationBatch batch, PlatformUser actor, AddBatchItemsRequest req, CancellationToken ct = default)
     {
         EnsureOpen(batch);
         if (req.Items is not { Count: > 0 }) return;
-        if (batch.Items.Count + req.Items.Count > MaxItems) throw ApiException.BadRequest("too_many", $"Ein Stapel kann höchstens {MaxItems} Personen enthalten.");
+        if (batch.Items.Count + req.Items.Count > MaxItems) throw ApiException.BadRequest("too_many", L.F($"Ein Stapel kann höchstens {MaxItems} Personen enthalten."));
         await ValidateItemsAsync(batch.TenantId, req.Items, batch.Items, ct);
         var pos = batch.Items.Count == 0 ? 0 : batch.Items.Max(i => i.Position) + 1;
         foreach (var i in req.Items) db.BatchItems.Add(ToItem(batch.Id, pos++, i));
@@ -304,7 +305,7 @@ public sealed class BatchService(
         EnsureOpen(batch);
         var item = Item(batch, itemId);
         if (item.Status is not (BatchItemStatus.Pending or BatchItemStatus.Failed or BatchItemStatus.Skipped))
-            throw ApiException.Conflict("item_locked", "Diese Person ist bereits registriert oder wird gerade registriert.");
+            throw ApiException.Conflict("item_locked", L.T("Diese Person ist bereits registriert oder wird gerade registriert."));
         if (req.ClearProfile) { item.ProfileId = null; item.ProfileGroupName = null; }
         else if (req.ProfileId is { } p)
         {
@@ -316,7 +317,7 @@ public sealed class BatchService(
         else if (req.ExpectedSerialNumber is { } s)
         {
             if (batch.Items.Any(i => i.Id != item.Id && i.ExpectedSerialNumber == s && i.Status != BatchItemStatus.Skipped))
-                throw ApiException.BadRequest("duplicate_serial", $"Seriennummer {s} ist bereits einer anderen Person im Stapel zugeordnet.");
+                throw ApiException.BadRequest("duplicate_serial", L.F($"Seriennummer {s} ist bereits einer anderen Person im Stapel zugeordnet."));
             item.ExpectedSerialNumber = s;
         }
         await db.SaveChangesAsync(ct);
@@ -329,13 +330,13 @@ public sealed class BatchService(
         if (skipped)
         {
             if (item.Status is not (BatchItemStatus.Pending or BatchItemStatus.Failed))
-                throw ApiException.Conflict("item_locked", "Nur offene oder fehlgeschlagene Personen können übersprungen werden.");
+                throw ApiException.Conflict("item_locked", L.T("Nur offene oder fehlgeschlagene Personen können übersprungen werden."));
             item.Status = BatchItemStatus.Skipped;
         }
         else
         {
             if (item.Status is not (BatchItemStatus.Skipped or BatchItemStatus.Failed))
-                throw ApiException.Conflict("item_locked", "Nur übersprungene oder fehlgeschlagene Personen können wieder eingereiht werden.");
+                throw ApiException.Conflict("item_locked", L.T("Nur übersprungene oder fehlgeschlagene Personen können wieder eingereiht werden."));
             item.Status = BatchItemStatus.Pending;
             item.Error = null;
             item.ErrorCode = null;
@@ -351,7 +352,7 @@ public sealed class BatchService(
         EnsureOpen(batch);
         var item = Item(batch, itemId);
         if (item.Status is not (BatchItemStatus.Pending or BatchItemStatus.Skipped))
-            throw ApiException.Conflict("item_locked", "Nur offene oder übersprungene Personen können entfernt werden.");
+            throw ApiException.Conflict("item_locked", L.T("Nur offene oder übersprungene Personen können entfernt werden."));
         db.BatchItems.Remove(item);
         await db.SaveChangesAsync(ct);
     }
@@ -359,7 +360,7 @@ public sealed class BatchService(
     public async Task SetStatusAsync(RegistrationBatch batch, BatchStatus status, PlatformUser actor, CancellationToken ct = default)
     {
         if (batch.Items.Any(i => i.Status == BatchItemStatus.Running))
-            throw ApiException.Conflict("batch_running", "Gerade läuft eine Registrierung. Bitte warten, bis sie fertig ist.");
+            throw ApiException.Conflict("batch_running", L.T("Gerade läuft eine Registrierung. Bitte warten, bis sie fertig ist."));
         batch.Status = status;
         batch.CompletedAt = status == BatchStatus.Open ? null : DateTimeOffset.UtcNow;
         var counts = Counts(batch.Items);
@@ -382,7 +383,7 @@ public sealed class BatchService(
     {
         EnsureOpen(batch);
         var agent = agents.Require(req.AgentId, actor.Id);
-        var key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", "Am Agent ist kein YubiKey eingesteckt.");
+        var key = await agents.ReadKeyAsync(agent, ct) ?? throw ApiException.Conflict("no_key", L.T("Am Agent ist kein YubiKey eingesteckt."));
         var open = batch.Items.Where(i => i.Status is BatchItemStatus.Pending or BatchItemStatus.Failed).ToList();
         var fixedTo = key.SerialNumber is { } serial ? open.FirstOrDefault(i => i.ExpectedSerialNumber == serial) : null;
 
@@ -391,9 +392,9 @@ public sealed class BatchService(
         {
             item = Item(batch, wanted);
             if (item.Status is not (BatchItemStatus.Pending or BatchItemStatus.Failed))
-                throw ApiException.Conflict("item_locked", "Diese Person ist bereits registriert, übersprungen oder wird gerade registriert.");
+                throw ApiException.Conflict("item_locked", L.T("Diese Person ist bereits registriert, übersprungen oder wird gerade registriert."));
             if (fixedTo is not null && fixedTo.Id != item.Id)
-                throw ApiException.Conflict("key_reserved", $"Dieser Key ist laut Liste für {fixedTo.UserDisplayName ?? fixedTo.UserPrincipalName} vorgesehen.");
+                throw ApiException.Conflict("key_reserved", L.F($"Dieser Key ist laut Liste für {fixedTo.UserDisplayName ?? fixedTo.UserPrincipalName} vorgesehen."));
         }
         else
         {
@@ -407,13 +408,12 @@ public sealed class BatchService(
                 {
                     state = "no_match",
                     key,
-                    message = $"Für Key {key.SerialNumber} ist niemand im Stapel vorgesehen. Offen sind nur noch Personen mit fester Seriennummer"
-                              + (open.Any(i => i.Status == BatchItemStatus.Failed) ? " oder fehlgeschlagene Registrierungen (dort „Jetzt registrieren“ wählen)." : "."),
+                    message = L.F($"Für Key {key.SerialNumber} ist niemand im Stapel vorgesehen. Offen sind nur noch Personen mit fester Seriennummer{(open.Any(i => i.Status == BatchItemStatus.Failed) ? L.T(" oder fehlgeschlagene Registrierungen (dort „Jetzt registrieren“ wählen).") : ".")}"),
                 };
             }
         }
         if (item.ExpectedSerialNumber is { } expected && key.SerialNumber != expected)
-            throw ApiException.Conflict("wrong_key", $"Für {item.UserDisplayName ?? item.UserPrincipalName} ist Key {expected} vorgesehen, eingesteckt ist {key.SerialNumber}.");
+            throw ApiException.Conflict("wrong_key", L.F($"Für {item.UserDisplayName ?? item.UserPrincipalName} ist Key {expected} vorgesehen, eingesteckt ist {key.SerialNumber}."));
 
         var profileId = item.ProfileId ?? batch.DefaultProfileId;
         var preview = await registration.PreviewAsync(batch.TenantId, actor, new RegistrationPreviewRequest(item.EntraUserId, profileId, req.AgentId), ct);
@@ -425,13 +425,13 @@ public sealed class BatchService(
         EnsureOpen(batch);
         var item = Item(batch, itemId);
         if (item.ExpectedSerialNumber is { } expected && req.ExpectedSerialNumber != expected)
-            throw ApiException.Conflict("wrong_key", $"Für diese Person ist Key {expected} vorgesehen.");
+            throw ApiException.Conflict("wrong_key", L.F($"Für diese Person ist Key {expected} vorgesehen."));
         var jobId = Guid.NewGuid();
         // Atomic claim: two admins working on the same batch never register the same person twice.
         var claimed = await db.BatchItems
             .Where(i => i.Id == item.Id && (i.Status == BatchItemStatus.Pending || i.Status == BatchItemStatus.Failed))
             .ExecuteUpdateAsync(s => s.SetProperty(i => i.Status, BatchItemStatus.Running).SetProperty(i => i.JobId, jobId), ct);
-        if (claimed == 0) throw ApiException.Conflict("item_locked", "Diese Person ist bereits registriert, übersprungen oder wird gerade registriert.");
+        if (claimed == 0) throw ApiException.Conflict("item_locked", L.T("Diese Person ist bereits registriert, übersprungen oder wird gerade registriert."));
         if (batch.Status == BatchStatus.Completed)
         {
             batch.Status = BatchStatus.Open;
@@ -497,7 +497,7 @@ public sealed class BatchService(
             .Select(l => l!.Value.Pdf)
             .ToList();
         if (pdfs.Count == 0)
-            throw new ApiException(410, "expired", "Keine PIN-Briefe mehr verfügbar. PINs werden nicht gespeichert; die Briefe liegen nur 4 Stunden im Arbeitsspeicher und nur für den Admin, der registriert hat.");
+            throw new ApiException(410, "expired", L.T("Keine PIN-Briefe mehr verfügbar. PINs werden nicht gespeichert; die Briefe liegen nur 4 Stunden im Arbeitsspeicher und nur für den Admin, der registriert hat."));
         using var output = new PdfDocument();
         output.Info.Title = "PIN-Briefe " + batch.Name;
         output.Info.Creator = "Yubikey Lifecycle Manager";
@@ -510,7 +510,7 @@ public sealed class BatchService(
         output.Save(ms, false);
         await audit.WriteAsync(AuditService.User(actor), AuditActions.PinLetterDownloaded, batch.TenantId, target: $"PIN-Briefe {batch.Name}", details: new { batch = batch.Id, letters = pdfs.Count });
         var safeName = string.Concat(batch.Name.Select(c => Path.GetInvalidFileNameChars().Contains(c) ? '_' : c));
-        return (ms.ToArray(), $"PIN-Briefe {safeName}.pdf", pdfs.Count);
+        return (ms.ToArray(), L.F($"PIN-Briefe {safeName}.pdf"), pdfs.Count);
     }
 
     // ---------- DTOs ----------

@@ -2,6 +2,7 @@ using PdfSharp.Drawing;
 using PdfSharp.Pdf;
 using Ylm.Server.Reporting;
 using static Ylm.Server.Pdf.Theme;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Pdf;
 
@@ -14,7 +15,7 @@ public static class AssignmentPdf
     {
         YlmFontResolver.Install();
         using var doc = new PdfDocument();
-        doc.Info.Title = "Key-Zuweisungen";
+        doc.Info.Title = L.T("Key-Zuweisungen");
         PdfPage page = null!;
         XGraphics g = null!;
         var pageNo = 0;
@@ -23,8 +24,8 @@ public static class AssignmentPdf
         // Spalten: Hat den Key | Seriennummer | Modell / Firmware | Nutzung | Seit | Tenant
         double[] widths = includeTenant ? [0.32, 0.11, 0.18, 0.12, 0.11, 0.16] : [0.40, 0.12, 0.22, 0.13, 0.13];
         string[] header = includeTenant
-            ? ["Hat den Key", "Seriennummer", "Modell / Firmware", "Nutzung", "Seit", "Tenant"]
-            : ["Hat den Key", "Seriennummer", "Modell / Firmware", "Nutzung", "Seit"];
+            ? [L.T("Hat den Key"), L.T("Seriennummer"), L.T("Modell / Firmware"), L.T("Nutzung"), L.T("Seit"), L.T("Tenant")]
+            : [L.T("Hat den Key"), L.T("Seriennummer"), L.T("Modell / Firmware"), L.T("Nutzung"), L.T("Seit")];
 
         void NewPage()
         {
@@ -36,9 +37,9 @@ public static class AssignmentPdf
             pageNo++;
             var w = page.Width.Point - 2 * Margin;
             g.DrawRectangle(new XSolidBrush(Accent), 0, 0, page.Width.Point, 5);
-            Text(g, string.Join(" · ", new[] { organizationName, "Key-Zuweisungen", scope }.Where(x => !string.IsNullOrWhiteSpace(x))), F(7.5), Muted, Margin, page.Height.Point - 24, w - 60, 10);
+            Text(g, string.Join(" · ", new[] { organizationName, L.T("Key-Zuweisungen"), scope }.Where(x => !string.IsNullOrWhiteSpace(x))), F(7.5), Muted, Margin, page.Height.Point - 24, w - 60, 10);
             DrawBrandFooter(g, Margin, page.Height.Point - 26, w - 60);
-            g.DrawString($"Seite {pageNo}", F(7.5), new XSolidBrush(Muted), new XRect(Margin, page.Height.Point - 24, w, 10), XStringFormats.TopRight);
+            g.DrawString(L.F($"Seite {pageNo}"), F(7.5), new XSolidBrush(Muted), new XRect(Margin, page.Height.Point - 24, w, 10), XStringFormats.TopRight);
             y = 30;
         }
 
@@ -73,18 +74,18 @@ public static class AssignmentPdf
         var width = page.Width.Point - 2 * Margin;
         DrawLogo(g, Margin + width, 14, 140, 36);
         Text(g, organizationName, F(9, true), Muted, Margin, 22, width - 150, 12);
-        Text(g, "Wer hat welchen Key?", F(19, true), Ink, Margin, 35, width, 24);
-        Text(g, $"{scope} · Stand {o.GeneratedAt.ToLocalTime():dd.MM.yyyy HH:mm}", F(9), Muted, Margin, 61, width, 12);
+        Text(g, L.T("Wer hat welchen Key?"), F(19, true), Ink, Margin, 35, width, 24);
+        Text(g, L.F($"{scope} · Stand {o.GeneratedAt.ToLocalTime():dd.MM.yyyy HH:mm}"), F(9), Muted, Margin, 61, width, 12);
         y = 84;
 
         var s = o.Summary;
         (string Label, string Value)[] kpis =
         [
-            ("Ausgegebene Keys", s.Keys.ToString()),
-            ("Personen mit Key", s.People.ToString()),
-            ("Geteilt / Breakglass", $"{s.Shared} / {s.Breakglass}"),
-            ("Mehrere Keys", s.PeopleWithSeveralKeys.ToString()),
-            ("Auffälligkeiten", s.WithIssues.ToString()),
+            (L.T("Ausgegebene Keys"), s.Keys.ToString()),
+            (L.T("Personen mit Key"), s.People.ToString()),
+            (L.T("Geteilt / Breakglass"), $"{s.Shared} / {s.Breakglass}"),
+            (L.T("Mehrere Keys"), s.PeopleWithSeveralKeys.ToString()),
+            (L.T("Auffälligkeiten"), s.WithIssues.ToString()),
         ];
         var tw = (width - (kpis.Length - 1) * 8) / kpis.Length;
         for (var i = 0; i < kpis.Length; i++)
@@ -98,7 +99,7 @@ public static class AssignmentPdf
 
         if (o.Keys.Count == 0)
         {
-            Text(g, "Keine ausgegebenen Keys für diese Auswahl.", F(10), Muted, Margin, y, width, 14);
+            Text(g, L.T("Keine ausgegebenen Keys für diese Auswahl."), F(10), Muted, Margin, y, width, 14);
         }
         else
         {
@@ -108,10 +109,10 @@ public static class AssignmentPdf
                 var shared = k.Usage != "Personal";
                 Ensure(Math.Min(17 + (shared ? 13 * k.Accounts.Count : 0), 120));
                 var holder = k.Holder is null ? "– niemand –" : k.HolderUpn is { } upn && upn != k.Holder ? $"{k.Holder} ({upn})" : k.Holder;
-                if (shared) holder = (k.Custodian is null ? "Verwahrer fehlt" : "Verwahrer: " + k.Custodian);
+                if (shared) holder = (k.Custodian is null ? L.T("Verwahrer fehlt") : L.F($"Verwahrer: {k.Custodian}"));
                 var modelFw = string.Join(" · ", new[] { k.Model, k.FirmwareVersion }.Where(x => !string.IsNullOrEmpty(x)));
                 var usage = AssignmentService.UsageLabel(k.Usage) + (shared ? $" ({k.Accounts.Count})" : "");
-                string[] cells = [holder, k.SerialNumber?.ToString() ?? "nicht erfasst", modelFw.Length > 0 ? modelFw : "–", usage, k.Since?.ToLocalTime().ToString("dd.MM.yyyy") ?? "–"];
+                string[] cells = [holder, k.SerialNumber?.ToString() ?? L.T("nicht erfasst"), modelFw.Length > 0 ? modelFw : "–", usage, k.Since?.ToLocalTime().ToString("dd.MM.yyyy") ?? "–"];
                 if (includeTenant) cells = [.. cells, k.TenantName];
                 Row(cells, warn: k.Issues.Count > 0);
                 if (shared)

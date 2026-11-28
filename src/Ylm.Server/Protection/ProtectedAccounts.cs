@@ -4,6 +4,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Protection;
 
@@ -36,7 +37,7 @@ public sealed class ProtectedAccountService(IMemoryCache cache)
                 e.AbsoluteExpirationRelativeToNow = CacheFor;
                 return await graph.IsAdminAsync(userId, ct);
             });
-            if (admin == true) return new(true, "Konto mit Entra-Admin-Rolle", true);
+            if (admin == true) return new(true, L.T("Konto mit Entra-Admin-Rolle"), true);
         }
         if (tenant.ProtectedGroups.Count > 0)
         {
@@ -45,7 +46,7 @@ public sealed class ProtectedAccountService(IMemoryCache cache)
             if (hits.Count > 0)
             {
                 var name = tenant.ProtectedGroups.First(g => hits.Contains(g.Id)).Name;
-                return new(true, $"Mitglied der geschützten Gruppe „{name}“", admin is not null || !tenant.ProtectAdmins);
+                return new(true, L.F($"Mitglied der geschützten Gruppe „{name}“"), admin is not null || !tenant.ProtectAdmins);
             }
         }
         return new(false, null, admin is not null || !tenant.ProtectAdmins);
@@ -57,7 +58,7 @@ public sealed class ProtectedAccountService(IMemoryCache cache)
         if (CanManage(actor)) return null;
         var p = await CheckAsync(tenant, graph, userId, ct);
         return p.IsProtected
-            ? $"Geschütztes Konto ({p.Reason}). Das darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat, standardmäßig ein Owner."
+            ? L.F($"Geschütztes Konto ({p.Reason}). Das darf nur, wer das Recht „Geschützte Konten bearbeiten“ hat, standardmäßig ein Owner.")
             : null;
     }
 
@@ -73,7 +74,7 @@ public sealed class ProtectedAccountService(IMemoryCache cache)
     public async Task EnsureAllowedAsync(YlmDbContext db, IGraphClientFactory graphs, Guid tenantId, PlatformUser actor, IEnumerable<string> userIds, CancellationToken ct = default)
     {
         if (CanManage(actor)) return;
-        var tenant = await db.Tenants.FindAsync([tenantId], ct) ?? throw ApiException.NotFound("Tenant");
+        var tenant = await db.Tenants.FindAsync([tenantId], ct) ?? throw ApiException.NotFound(L.T("Tenant"));
         if (!tenant.ProtectAdmins && tenant.ProtectedGroups.Count == 0) return;
         var ids = userIds.Where(u => !string.IsNullOrWhiteSpace(u)).ToList();
         if (ids.Count == 0) return;

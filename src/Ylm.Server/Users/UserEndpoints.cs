@@ -6,6 +6,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
 using Ylm.Server.Setup;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Users;
 
@@ -51,7 +52,7 @@ public static class UserEndpoints
             var user = await cu.TryGetAsync();
             if (user is null) return Results.Unauthorized();
             var lang = req.Language?.Trim().ToLowerInvariant();
-            if (lang is not (null or "" or "de" or "en")) throw ApiException.BadRequest("invalid_language", "Unbekannte Sprache. Erlaubt sind de und en.");
+            if (lang is not (null or "" or "de" or "en")) throw ApiException.BadRequest("invalid_language", L.T("Unbekannte Sprache. Erlaubt sind de und en."));
             var tracked = await db.PlatformUsers.FirstAsync(u => u.Id == user.Id);
             tracked.Language = string.IsNullOrEmpty(lang) ? null : lang;
             await db.SaveChangesAsync();
@@ -92,10 +93,10 @@ public static class UserEndpoints
         g.MapPost("", async (UserRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
             var actor = await cu.RequireAsync(Permission.ManageUsers);
-            if (!Enum.IsDefined(body.LoginKind)) throw ApiException.BadRequest("invalid", "Unbekannte Anmeldeart.");
-            if (body.LoginKind == UserLoginKind.Entra && !body.Upn.Contains('@')) throw ApiException.BadRequest("invalid", "Bitte den Anmeldenamen (UPN) angeben.");
-            if (string.IsNullOrWhiteSpace(body.Upn) || body.Upn.Trim().Length < 3) throw ApiException.BadRequest("invalid", "Bitte einen Anmeldenamen angeben.");
-            if (await db.PlatformUsers.AnyAsync(u => u.Upn.ToLower() == body.Upn.ToLower())) throw ApiException.Conflict("exists", "Dieses Konto ist bereits angelegt.");
+            if (!Enum.IsDefined(body.LoginKind)) throw ApiException.BadRequest("invalid", L.T("Unbekannte Anmeldeart."));
+            if (body.LoginKind == UserLoginKind.Entra && !body.Upn.Contains('@')) throw ApiException.BadRequest("invalid", L.T("Bitte den Anmeldenamen (UPN) angeben."));
+            if (string.IsNullOrWhiteSpace(body.Upn) || body.Upn.Trim().Length < 3) throw ApiException.BadRequest("invalid", L.T("Bitte einen Anmeldenamen angeben."));
+            if (await db.PlatformUsers.AnyAsync(u => u.Upn.ToLower() == body.Upn.ToLower())) throw ApiException.Conflict("exists", L.T("Dieses Konto ist bereits angelegt."));
             var user = new PlatformUser { Upn = body.Upn.Trim(), LoginKind = body.LoginKind, DisplayName = body.DisplayName?.Trim() is { Length: > 0 } n ? n : body.Upn.Trim() };
             await ApplyAsync(user, body, db);
             db.PlatformUsers.Add(user);
@@ -107,13 +108,13 @@ public static class UserEndpoints
         g.MapPut("/{id:guid}", async (Guid id, UserRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
             var actor = await cu.RequireAsync(Permission.ManageUsers);
-            var user = await db.PlatformUsers.Include(u => u.TenantAssignments).Include(u => u.CustomRole).Include(u => u.Passkeys).FirstOrDefaultAsync(u => u.Id == id) ?? throw ApiException.NotFound("Benutzer");
+            var user = await db.PlatformUsers.Include(u => u.TenantAssignments).Include(u => u.CustomRole).Include(u => u.Passkeys).FirstOrDefaultAsync(u => u.Id == id) ?? throw ApiException.NotFound(L.T("Benutzer"));
             var wasOwner = user.Role == PlatformRole.Owner && user.IsActive;
             if (body.DisplayName is { Length: > 0 } n) user.DisplayName = n.Trim();
             await ApplyAsync(user, body, db);
             if (wasOwner && (user.Role != PlatformRole.Owner || !user.IsActive)
                 && !await db.PlatformUsers.AnyAsync(u => u.Id != id && u.Role == PlatformRole.Owner && u.IsActive))
-                throw ApiException.Conflict("last_owner", "Es muss mindestens ein aktiver Owner bleiben.");
+                throw ApiException.Conflict("last_owner", L.T("Es muss mindestens ein aktiver Owner bleiben."));
             audit.Add(AuditService.User(actor), AuditActions.UserUpdated, target: user.Upn, details: new { role = user.Role.ToString(), customRole = user.CustomRole?.Name, user.AllTenants, tenants = body.TenantIds, user.IsActive });
             await db.SaveChangesAsync();
             return Results.Ok(ToDto(user));
@@ -122,12 +123,12 @@ public static class UserEndpoints
 
     private static async Task ApplyAsync(PlatformUser user, UserRequest body, YlmDbContext db)
     {
-        if (!Enum.IsDefined(body.Role)) throw ApiException.BadRequest("invalid", "Unbekannte Rolle.");
+        if (!Enum.IsDefined(body.Role)) throw ApiException.BadRequest("invalid", L.T("Unbekannte Rolle."));
         user.Role = body.Role;
         if (body.Role == PlatformRole.Custom)
         {
             user.CustomRole = await db.CustomRoles.FirstOrDefaultAsync(r => r.Id == body.CustomRoleId)
-                              ?? throw ApiException.BadRequest("invalid", "Bitte eine eigene Rolle auswählen.");
+                              ?? throw ApiException.BadRequest("invalid", L.T("Bitte eine eigene Rolle auswählen."));
             user.CustomRoleId = user.CustomRole.Id;
         }
         else
@@ -139,7 +140,7 @@ public static class UserEndpoints
         user.IsActive = body.IsActive;
         var ids = body.AllTenants ? [] : (body.TenantIds ?? []).Distinct().ToList();
         var valid = await db.Tenants.Where(t => ids.Contains(t.Id)).Select(t => t.Id).ToListAsync();
-        if (valid.Count != ids.Count) throw ApiException.BadRequest("invalid", "Unbekannter Tenant in der Zuständigkeit.");
+        if (valid.Count != ids.Count) throw ApiException.BadRequest("invalid", L.T("Unbekannter Tenant in der Zuständigkeit."));
         user.TenantAssignments.RemoveAll(a => !ids.Contains(a.TenantId));
         foreach (var t in ids.Where(t => user.TenantAssignments.All(a => a.TenantId != t)))
             user.TenantAssignments.Add(new PlatformUserTenant { PlatformUserId = user.Id, TenantId = t });

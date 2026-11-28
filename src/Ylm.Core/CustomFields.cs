@@ -1,4 +1,5 @@
 using System.Globalization;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Core;
 
@@ -13,7 +14,7 @@ public static class CustomFieldValidator
         var errors = new List<string>();
         var byKey = specs.ToDictionary(s => s.Key, StringComparer.OrdinalIgnoreCase);
         foreach (var key in values.Keys.Where(k => !byKey.ContainsKey(k)))
-            errors.Add($"Unbekanntes Feld „{key}“.");
+            errors.Add(L.F($"Unbekanntes Feld „{key}“."));
 
         foreach (var spec in specs)
         {
@@ -21,23 +22,23 @@ public static class CustomFieldValidator
             var value = raw?.Trim();
             if (string.IsNullOrEmpty(value))
             {
-                if (spec.Required) errors.Add($"„{spec.Label}“ ist ein Pflichtfeld.");
+                if (spec.Required) errors.Add(L.F($"„{spec.Label}“ ist ein Pflichtfeld."));
                 continue;
             }
             switch (spec.Type)
             {
                 case CustomFieldType.Number when !decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out _)
                                                  && !decimal.TryParse(value, NumberStyles.Number, CultureInfo.GetCultureInfo("de-DE"), out _):
-                    errors.Add($"„{spec.Label}“ muss eine Zahl sein.");
+                    errors.Add(L.F($"„{spec.Label}“ muss eine Zahl sein."));
                     break;
                 case CustomFieldType.Date when !DateOnly.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out _):
-                    errors.Add($"„{spec.Label}“ muss ein Datum im Format JJJJ-MM-TT sein.");
+                    errors.Add(L.F($"„{spec.Label}“ muss ein Datum im Format JJJJ-MM-TT sein."));
                     break;
                 case CustomFieldType.Select when !spec.Options.Contains(value, StringComparer.OrdinalIgnoreCase):
-                    errors.Add($"„{spec.Label}“ muss einer der Werte {string.Join(", ", spec.Options)} sein.");
+                    errors.Add(L.F($"„{spec.Label}“ muss einer der Werte {string.Join(", ", spec.Options)} sein."));
                     break;
                 case CustomFieldType.Boolean when value is not ("true" or "false"):
-                    errors.Add($"„{spec.Label}“ muss true oder false sein.");
+                    errors.Add(L.F($"„{spec.Label}“ muss true oder false sein."));
                     break;
             }
         }

@@ -6,7 +6,7 @@ import { Icon } from '../icons';
 import { logoColors } from '../logoColors';
 import { tr } from '../i18n';
 
-interface BrandingValues { companyName?: string | null; accentColor?: string | null; contact?: string | null; footer?: string | null; hasLogo: boolean; updatedAt?: string | null }
+interface BrandingValues { companyName?: string | null; accentColor?: string | null; contact?: string | null; footer?: string | null; language?: string | null; hasLogo: boolean; updatedAt?: string | null }
 interface BrandingResponse {
   partner: BrandingValues;
   tenant: BrandingValues | null;
@@ -14,8 +14,8 @@ interface BrandingResponse {
 }
 
 const DEFAULT_ACCENT = '#1f5fbf';
-type Form = { companyName: string; accentColor: string; contact: string; footer: string };
-const toForm = (v?: BrandingValues | null): Form => ({ companyName: v?.companyName ?? '', accentColor: v?.accentColor ?? '', contact: v?.contact ?? '', footer: v?.footer ?? '' });
+type Form = { companyName: string; accentColor: string; contact: string; footer: string; language: string };
+const toForm = (v?: BrandingValues | null): Form => ({ companyName: v?.companyName ?? '', accentColor: v?.accentColor ?? '', contact: v?.contact ?? '', footer: v?.footer ?? '', language: v?.language ?? '' });
 
 /**
  * Whitelabeling der PIN-Briefe, Berichte und Exporte.
@@ -50,6 +50,7 @@ export function BrandingCard({ tenantId, editable }: { tenantId?: string; editab
   const save = () => run(async () => {
     await api.put('/api/branding' + qs, {
       companyName: form.companyName || null, accentColor: form.accentColor || null, contact: form.contact || null, footer: form.footer || null,
+      language: form.language || null,
     });
     toast.ok(tr("Erscheinungsbild gespeichert"));
     reload();
@@ -120,6 +121,16 @@ export function BrandingCard({ tenantId, editable }: { tenantId?: string; editab
           <Field label={tr("Fußzeile")} hint={inheritedHint(partner.footer) ?? tr("Ersetzt im PIN-Brief den Hinweis „Erstellt mit dem Yubikey Lifecycle Manager“.")}>
             <input value={form.footer} onChange={set('footer')} disabled={!editable} maxLength={200} placeholder={tr("z. B. Muster IT GmbH · Musterstraße 1 · 12345 Musterstadt")} />
           </Field>
+          <Field label={tenantId ? tr("Sprache der PIN-Briefe") : tr("Sprache der PIN-Briefe, Mails und Webhooks")}
+            hint={tenantId
+              ? tr("Leer übernimmt die Vorgabe des Partners ({language}).", { language: languageName(partner.language) })
+              : tr("Gilt für alle Tenants, die nichts anderes einstellen. Mail-Berichte, Mail-Alarme und Webhooks erscheinen immer in dieser Sprache, unabhängig von der Sprache der Oberfläche.")}>
+            <select value={form.language} onChange={set('language')} disabled={!editable}>
+              <option value="">{tenantId ? tr("Wie beim Partner") : tr("Deutsch (Vorgabe)")}</option>
+              <option value="de">Deutsch</option>
+              <option value="en">English</option>
+            </select>
+          </Field>
           <Field label={tr("Logo")} hint={tr("PNG oder JPEG, höchstens 1 MB. Am besten quer und mit transparentem Hintergrund.")}>
             <div className="logo-field">
               <div className="logo-box">
@@ -150,6 +161,8 @@ export function BrandingCard({ tenantId, editable }: { tenantId?: string; editab
 }
 
 /** Verkleinerte Vorschau des PIN-Briefs; folgt den Eingaben sofort. */
+const languageName = (l?: string | null) => (l === 'en' ? 'English' : 'Deutsch');
+
 function LetterPreview({ company, accent, contact, footer, logoUrl }: { company: string; accent: string; contact: string; footer: string; logoUrl?: string }) {
   return (
     <figure className="letter-preview" style={{ ['--brand' as string]: accent }} aria-label={tr("Vorschau PIN-Brief")}>

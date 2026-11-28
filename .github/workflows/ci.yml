@@ -40,6 +40,8 @@ jobs:
           npm ci
           npm run i18n:check
           npm run build
+      - name: Server-Übersetzungen prüfen
+        run: node tools/i18n-check-server.mjs
       - name: .NET bauen
         run: dotnet build YubikeyLifecycleManager.slnx -c Release
       - name: Tests

@@ -5,6 +5,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Inventory;
 
@@ -31,7 +32,7 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
     private async Task<SyncResult> SyncCoreAsync(Guid tenantId, AuditActor actor, CancellationToken ct)
     {
         var tenant = await db.Tenants.FirstAsync(t => t.Id == tenantId, ct);
-        if (tenant.Status != TenantStatus.Active) throw ApiException.Conflict("tenant_inactive", "Der Tenant ist nicht aktiv.");
+        if (tenant.Status != TenantStatus.Active) throw ApiException.Conflict("tenant_inactive", L.T("Der Tenant ist nicht aktiv."));
         var now = DateTimeOffset.UtcNow;
         try
         {
@@ -98,7 +99,7 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
             foreach (var reg in existing.Where(r => r.RemovedAt is null && !seen.Contains(r.EntraMethodId)))
             {
                 reg.RemovedAt = now;
-                reg.RemovedReason = "In Entra nicht mehr vorhanden";
+                reg.RemovedReason = L.T("In Entra nicht mehr vorhanden");
                 removed++;
                 audit.Add(actor, AuditActions.RegistrationRemovedInEntra, tenantId, reg.KeyId, reg.UserPrincipalName, new { reg.EntraMethodId });
                 var key = reg.Key!;
@@ -107,7 +108,7 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
                 if (!stillActive && key.Source == KeySource.EntraSync && key.Status == KeyStatus.Active)
                 {
                     key.Status = KeyStatus.Retired;
-                    key.StatusNote = "Passkey in Entra entfernt";
+                    key.StatusNote = L.T("Passkey in Entra entfernt");
                     key.StatusChangedAt = now;
                     key.UpdatedAt = now;
                 }
@@ -127,7 +128,7 @@ public sealed class SyncService(YlmDbContext db, IGraphClientFactory graphFactor
             tenant.TargetUserCount = await TargetAudience.CountAsync(graph, tenant.TargetIncludeGroups, tenant.TargetExcludeGroups, ct) ?? tenant.TargetUserCount;
             tenant.LastSyncAt = now;
             tenant.LastSyncSucceeded = true;
-            tenant.LastSyncMessage = $"{users} Personen mit Passkey geprüft, {imported} neu, {removed} entfernt.";
+            tenant.LastSyncMessage = L.F($"{users} Personen mit Passkey geprüft, {imported} neu, {removed} entfernt.");
             audit.Add(actor, AuditActions.SyncCompleted, tenantId, details: new { users, imported, updated, removed });
             await db.SaveChangesAsync(ct);
             if (tenant.AnyReminderEnabled)
@@ -182,6 +183,8 @@ public sealed class BackgroundJobs(IServiceScopeFactory scopes, IOptions<YlmOpti
         var db = scope.ServiceProvider.GetRequiredService<YlmDbContext>();
         var settings = await db.Installation.AsNoTracking().FirstOrDefaultAsync(ct);
         if (settings?.IsSetupComplete != true) return;
+        // Meldungen ohne Anfrage (Sync-Ergebnis, Audit-Details) in der Sprache aus dem Erscheinungsbild des Partners.
+        using var language = L.Use(await Setup.BrandingService.PlatformLanguageAsync(db, ct));
 
         var now = DateTimeOffset.UtcNow;
         var due = await db.Tenants.Where(t => t.Status == TenantStatus.Active).ToListAsync(ct);

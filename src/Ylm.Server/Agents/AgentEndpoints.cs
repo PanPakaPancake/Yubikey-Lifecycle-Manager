@@ -6,6 +6,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Agents;
 
@@ -41,7 +42,7 @@ public static class AgentEndpoints
             var user = await cu.GetAsync();
             var agent = gateway.Require(id, user.Id);
             if (agent.CurrentKey is null && agent.BusyWith is null)
-                gateway.Progress(agent, new AgentProgress("YubiKey einstecken", "Bitte jetzt den YubiKey einstecken, der registriert werden soll.", Done: true));
+                gateway.Progress(agent, new AgentProgress(L.T("YubiKey einstecken"), L.T("Bitte jetzt den YubiKey einstecken, der registriert werden soll."), Done: true));
             return Results.NoContent();
         });
 
@@ -59,7 +60,7 @@ public static class AgentEndpoints
         g.MapPost("/pairing-codes", async (CurrentUser cu, YlmDbContext db) =>
         {
             var user = await cu.GetAsync();
-            if ((CurrentUser.Effective(user) & AgentPermissions) == 0) throw ApiException.Forbidden("Ihre Rolle benötigt keinen Agent.");
+            if ((CurrentUser.Effective(user) & AgentPermissions) == 0) throw ApiException.Forbidden(L.T("Ihre Rolle benötigt keinen Agent."));
             var code = TokenHashing.NewPairingCode();
             var expires = DateTimeOffset.UtcNow.AddMinutes(10);
             db.PairingCodes.Add(new PairingCode { CodeHash = TokenHashing.Hash(TokenHashing.NormalizePairingCode(code)), PlatformUserId = user.Id, ExpiresAt = expires });
@@ -71,7 +72,7 @@ public static class AgentEndpoints
         {
             var user = await cu.GetAsync();
             var agent = await db.Agents.FirstOrDefaultAsync(a => a.Id == id && (a.PlatformUserId == user.Id || user.Role == PlatformRole.Owner))
-                        ?? throw ApiException.NotFound("Agent");
+                        ?? throw ApiException.NotFound(L.T("Agent"));
             agent.RevokedAt = DateTimeOffset.UtcNow;
             audit.Add(AuditService.User(user), AuditActions.AgentRevoked, target: agent.MachineName, details: new { agent.Id });
             await db.SaveChangesAsync();
@@ -85,15 +86,15 @@ public static class AgentEndpoints
             var hash = TokenHashing.Hash(TokenHashing.NormalizePairingCode(body.Code ?? ""));
             var code = await db.PairingCodes.FirstOrDefaultAsync(c => c.CodeHash == hash);
             if (code is null || code.UsedAt is not null || code.ExpiresAt < DateTimeOffset.UtcNow)
-                return Results.Json(new ApiError("invalid_code", "Der Kopplungscode ist ungültig oder abgelaufen."), statusCode: 400);
+                return Results.Json(new ApiError("invalid_code", L.T("Der Kopplungscode ist ungültig oder abgelaufen.")), statusCode: 400);
             // Atomar einlösen: Zwei gleichzeitige Anfragen mit demselben Code dürfen nicht beide einen Agent bekommen.
             var claimed = await db.PairingCodes.Where(c => c.Id == code.Id && c.UsedAt == null)
                 .ExecuteUpdateAsync(s => s.SetProperty(c => c.UsedAt, DateTimeOffset.UtcNow));
             if (claimed == 0)
-                return Results.Json(new ApiError("invalid_code", "Der Kopplungscode ist ungültig oder abgelaufen."), statusCode: 400);
+                return Results.Json(new ApiError("invalid_code", L.T("Der Kopplungscode ist ungültig oder abgelaufen.")), statusCode: 400);
             var user = await db.PlatformUsers.FirstAsync(u => u.Id == code.PlatformUserId);
             var secret = TokenHashing.NewSecret();
-            var machine = string.IsNullOrWhiteSpace(body.MachineName) ? "Unbekannt" : body.MachineName.Trim()[..Math.Min(body.MachineName.Trim().Length, 100)];
+            var machine = string.IsNullOrWhiteSpace(body.MachineName) ? L.T("Unbekannt") : body.MachineName.Trim()[..Math.Min(body.MachineName.Trim().Length, 100)];
             var agent = new Agent { PlatformUserId = user.Id, MachineName = machine, AgentVersion = body.AgentVersion, TokenHash = TokenHashing.Hash(secret) };
             db.Agents.Add(agent);
             audit.Add(new AuditActor(ActorType.User, user.Id, $"{user.DisplayName} <{user.Upn}>"), AuditActions.AgentPaired, target: machine, details: new { agent.Id, body.AgentVersion });

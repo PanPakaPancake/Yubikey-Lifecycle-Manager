@@ -5,6 +5,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Pdf;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Setup;
 
@@ -19,6 +20,7 @@ public static class BrandingEndpoints
         b?.AccentColor,
         b?.Contact,
         b?.Footer,
+        b?.Language,
         HasLogo = b?.Logo is { Length: > 0 },
         b?.UpdatedAt,
     };
@@ -70,6 +72,7 @@ public static class BrandingEndpoints
                     AccentColor = $"#{effective.Accent.R:x2}{effective.Accent.G:x2}{effective.Accent.B:x2}",
                     effective.Contact,
                     effective.Footer,
+                    Language = effective.Language ?? L.German,
                     HasLogo = effective.Logo is { Length: > 0 },
                 },
             });
@@ -90,7 +93,7 @@ public static class BrandingEndpoints
             var user = await RequireEditAsync(cu, tenantId);
             using var ms = new MemoryStream();
             await req.Body.CopyToAsync(ms);
-            if (ms.Length == 0) throw ApiException.BadRequest("empty", "Keine Bilddatei empfangen.");
+            if (ms.Length == 0) throw ApiException.BadRequest("empty", L.T("Keine Bilddatei empfangen."));
             var row = await branding.SetLogoAsync(tenantId, ms.ToArray());
             await audit.WriteAsync(AuditService.User(user), AuditActions.BrandingChanged, tenantId, details: new { logo = "hochgeladen", bytes = ms.Length });
             return Results.Ok(Dto(row));
@@ -119,17 +122,22 @@ public static class BrandingEndpoints
         {
             if (tenantId is { } t) await cu.RequireTenantAsync(t, Permission.ReadInventory);
             else await cu.RequireAsync(Permission.ReadInventory);
-            var (own, inherited) = await branding.LayoutsAsync(tenantId);
             var brand = await branding.ResolveAsync(tenantId);
-            var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? "Tenant" : "Muster-Tenant";
+            // Bezeichnungen in der Sprache der Oberfläche, Vorgabetexte, Beispielwerte und geerbter Aufbau in der Sprache des Briefs.
+            var types = LetterBlocks.Types;
+            using var letterLanguage = L.Use(brand.Language ?? L.German);
+            var letterTypes = LetterBlocks.Types;
+            var (own, inherited) = await branding.LayoutsAsync(tenantId);
+            var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? L.T("Tenant") : L.T("Muster-Tenant");
             var infoUrl = PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, options.Value, request), tenantId);
             Dictionary<string, string?> sample;
             using (Theme.Use(brand))
-                sample = PinLetterPdf.Values(new PinLetterData(brand.CompanyName ?? "", tenantName, "Erika Mustermann", "erika.mustermann@example.com",
+                sample = PinLetterPdf.Values(new PinLetterData(brand.CompanyName ?? "", tenantName, L.T("Erika Mustermann"), L.T("erika.mustermann@example.com"),
                     "482913", "YubiKey 5 NFC", 12345678, true, DateTime.Now));
             return Results.Ok(new
             {
-                Types = LetterBlocks.Types,
+                Language = brand.Language ?? L.German,
+                Types = types.Select((t, i) => t with { Props = t.Props.Select((p, j) => p with { Default = letterTypes[i].Props[j].Default }).ToList() }),
                 Variables = LetterTemplate.Variables,
                 Layout = own,
                 Inherited = inherited,
@@ -153,10 +161,11 @@ public static class BrandingEndpoints
             var row = await branding.SaveLayoutAsync(tenantId, body.Layout);
             await audit.WriteAsync(AuditService.User(user), AuditActions.BrandingChanged, tenantId, details: new
             {
-                letter = body.Layout is null ? "Briefaufbau zurückgesetzt" : "Briefaufbau geändert",
+                letter = body.Layout is null ? L.T("Briefaufbau zurückgesetzt") : L.T("Briefaufbau geändert"),
                 before = before?.LetterLayout ?? before?.LetterTexts,
                 after = row.LetterLayout,
             });
+            using var letterLanguage = L.Use((await branding.ResolveAsync(tenantId)).Language ?? L.German);
             var (own, inherited) = await branding.LayoutsAsync(tenantId);
             return Results.Ok(new { Layout = own, Inherited = inherited });
         });
@@ -166,11 +175,12 @@ public static class BrandingEndpoints
         {
             await RequireEditAsync(cu, tenantId);
             var brand = await branding.ResolveAsync(tenantId);
+            using var letterLanguage = L.Use(brand.Language ?? L.German);
             var layout = body.Layout is null ? (await branding.LayoutsAsync(tenantId)).Inherited : LetterBlocks.Validate(body.Layout);
             brand = brand with { Layout = layout };
-            var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? "Tenant" : "Muster-Tenant";
+            var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? L.T("Tenant") : L.T("Muster-Tenant");
             using var _ = Theme.Use(brand);
-            var pdf = PinLetterPdf.Create(new PinLetterData(brand.CompanyName ?? "", tenantName, "Erika Mustermann", "erika.mustermann@example.com",
+            var pdf = PinLetterPdf.Create(new PinLetterData(brand.CompanyName ?? "", tenantName, L.T("Erika Mustermann"), L.T("erika.mustermann@example.com"),
                 "482913", "YubiKey 5 NFC", 12345678, body.PinChangeForced ?? true, DateTime.Now,
                 InfoUrl: PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, options.Value, request), tenantId)));
             return Results.File(pdf, "application/pdf");
@@ -182,12 +192,14 @@ public static class BrandingEndpoints
             if (tenantId is { } t) await cu.RequireTenantAsync(t, Permission.ReadInventory);
             else await cu.RequireAsync(Permission.ReadInventory);
             var brand = await branding.ResolveAsync(tenantId);
-            var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? "Tenant" : "Muster-Tenant";
+            var fileName = L.T("Muster-PIN-Brief.pdf");
+            using var letterLanguage = L.Use(brand.Language ?? L.German);
+            var tenantName = tenantId is { } id ? (await db.Tenants.FindAsync(id))?.DisplayName ?? L.T("Tenant") : L.T("Muster-Tenant");
             using var _ = Theme.Use(brand);
-            var pdf = PinLetterPdf.Create(new PinLetterData(brand.CompanyName ?? "", tenantName, "Erika Mustermann", "erika.mustermann@example.com",
+            var pdf = PinLetterPdf.Create(new PinLetterData(brand.CompanyName ?? "", tenantName, L.T("Erika Mustermann"), L.T("erika.mustermann@example.com"),
                 "482913", "YubiKey 5 NFC", 12345678, true, DateTime.Now,
                 InfoUrl: PinLetterPdf.InfoUrl(await PinLetterPdf.BaseUrlAsync(db, options.Value, request), tenantId)));
-            return Results.File(pdf, "application/pdf", "Muster-PIN-Brief.pdf");
+            return Results.File(pdf, "application/pdf", fileName);
         });
     }
 }

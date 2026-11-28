@@ -6,6 +6,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Registration;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Profiles;
 
@@ -35,8 +36,8 @@ public static class ProfileEndpoints
     /// <summary>Default profile (planning 6.1): random PIN + forced PIN change.</summary>
     public static RegistrationProfile CreateStandard() => new()
     {
-        Name = "Standard",
-        Description = "Zufällige PIN, PIN-Wechsel bei der ersten Verwendung erzwingen.",
+        Name = L.T("Standard"),
+        Description = L.T("Zufällige PIN, PIN-Wechsel bei der ersten Verwendung erzwingen."),
         PinStrategy = PinStrategy.Random,
         PinLength = 8,
         ForcePinChange = true,
@@ -46,9 +47,9 @@ public static class ProfileEndpoints
 
     private static void Apply(RegistrationProfile p, ProfileRequest r, IDataProtector protector)
     {
-        if (string.IsNullOrWhiteSpace(r.Name)) throw ApiException.BadRequest("invalid", "Bitte einen Namen angeben.");
-        if (r.PinLength is < PinGenerator.MinLength or > 32) throw ApiException.BadRequest("invalid", $"Die PIN-Länge muss zwischen {PinGenerator.MinLength} und 32 liegen.");
-        if (r.MinimumFirmware is { Length: > 0 } fw && !FirmwareVersion.TryParse(fw, out _)) throw ApiException.BadRequest("invalid", "Ungültige Mindest-Firmware (Format 5.7 oder 5.7.0).");
+        if (string.IsNullOrWhiteSpace(r.Name)) throw ApiException.BadRequest("invalid", L.T("Bitte einen Namen angeben."));
+        if (r.PinLength is < PinGenerator.MinLength or > 32) throw ApiException.BadRequest("invalid", L.F($"Die PIN-Länge muss zwischen {PinGenerator.MinLength} und 32 liegen."));
+        if (r.MinimumFirmware is { Length: > 0 } fw && !FirmwareVersion.TryParse(fw, out _)) throw ApiException.BadRequest("invalid", L.T("Ungültige Mindest-Firmware (Format 5.7 oder 5.7.0)."));
         if (r.PinStrategy == PinStrategy.Fixed)
         {
             if (r.FixedPin is { Length: > 0 } pin)
@@ -56,7 +57,7 @@ public static class ProfileEndpoints
                 if (PinGenerator.ValidateFixedPin(pin, r.PinLength) is { } err) throw ApiException.BadRequest("invalid_pin", err);
                 p.FixedPinProtected = protector.Protect(pin);
             }
-            else if (p.FixedPinProtected is null) throw ApiException.BadRequest("invalid_pin", "Für die feste PIN bitte eine PIN angeben.");
+            else if (p.FixedPinProtected is null) throw ApiException.BadRequest("invalid_pin", L.T("Für die feste PIN bitte eine PIN angeben."));
         }
         else p.FixedPinProtected = null;
 
@@ -108,9 +109,9 @@ public static class ProfileEndpoints
 
         g.MapPut("/{id:guid}", async (Guid id, ProfileRequest body, CurrentUser cu, YlmDbContext db, IDataProtectionProvider dp, AuditService audit) =>
         {
-            var p = await db.Profiles.FindAsync(id) ?? throw ApiException.NotFound("Profil");
+            var p = await db.Profiles.FindAsync(id) ?? throw ApiException.NotFound(L.T("Profil"));
             var user = p.TenantId is { } t ? await cu.RequireTenantAsync(t, Permission.ManageProfiles) : await cu.RequireAsync(Permission.ManageProfiles);
-            if (body.TenantId != p.TenantId) throw ApiException.BadRequest("invalid", "Der Geltungsbereich eines Profils kann nicht geändert werden.");
+            if (body.TenantId != p.TenantId) throw ApiException.BadRequest("invalid", L.T("Der Geltungsbereich eines Profils kann nicht geändert werden."));
             var before = AuditView(p);
             Apply(p, body, dp.CreateProtector(RegistrationService.FixedPinPurpose));
             if (p.IsDefault) await ClearDefaultAsync(db, p.TenantId, p.Id);
@@ -121,7 +122,7 @@ public static class ProfileEndpoints
 
         g.MapDelete("/{id:guid}", async (Guid id, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
-            var p = await db.Profiles.FindAsync(id) ?? throw ApiException.NotFound("Profil");
+            var p = await db.Profiles.FindAsync(id) ?? throw ApiException.NotFound(L.T("Profil"));
             var user = p.TenantId is { } t ? await cu.RequireTenantAsync(t, Permission.ManageProfiles) : await cu.RequireAsync(Permission.ManageProfiles);
             db.Profiles.Remove(p);
             audit.Add(AuditService.User(user), AuditActions.ProfileDeleted, p.TenantId, target: p.Name);

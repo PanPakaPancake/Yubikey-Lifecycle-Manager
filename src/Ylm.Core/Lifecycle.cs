@@ -1,3 +1,5 @@
+using Ylm.Contracts.Localization;
+
 namespace Ylm.Core;
 
 /// <summary>Im Lager → Zugewiesen/Aktiv → Gesperrt → Ausgemustert (planning 5.2).</summary>
@@ -48,7 +50,7 @@ public static class KeyLifecycle
         if (!CanTransition(from, to))
         {
             throw new DomainException("invalid_transition",
-                $"Statuswechsel von „{DisplayName(from)}“ nach „{DisplayName(to)}“ ist nicht erlaubt.");
+                L.F($"Statuswechsel von „{DisplayName(from)}“ nach „{DisplayName(to)}“ ist nicht erlaubt."));
         }
     }
 
@@ -56,19 +58,19 @@ public static class KeyLifecycle
 
     public static string DisplayName(KeyStatus status) => status switch
     {
-        KeyStatus.InStock => "Im Lager",
-        KeyStatus.Active => "Zugewiesen/Aktiv",
-        KeyStatus.Locked => "Gesperrt",
-        KeyStatus.Retired => "Ausgemustert",
+        KeyStatus.InStock => L.T("Im Lager"),
+        KeyStatus.Active => L.T("Zugewiesen/Aktiv"),
+        KeyStatus.Locked => L.T("Gesperrt"),
+        KeyStatus.Retired => L.T("Ausgemustert"),
         _ => status.ToString(),
     };
 
     public static string DisplayName(LockReason reason) => reason switch
     {
-        LockReason.Lost => "Verloren",
-        LockReason.Defective => "Defekt",
-        LockReason.Stolen => "Gestohlen",
-        _ => "Sonstiges",
+        LockReason.Lost => L.T("Verloren"),
+        LockReason.Defective => L.T("Defekt"),
+        LockReason.Stolen => L.T("Gestohlen"),
+        _ => L.T("Sonstiges"),
     };
 }
 

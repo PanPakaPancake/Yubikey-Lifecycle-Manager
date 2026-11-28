@@ -8,7 +8,9 @@ Optional vor dem Stichpunkt: "Neu:", "Verbessert:", "Behoben:" oder "Sicherheit:
 -->
 
 ## 0.14.0 · 2026-11-27
-- Neu: Die Oberfläche gibt es jetzt auch auf Englisch. Die Sprache richtet sich zunächst nach dem Browser, lässt sich über das Globus-Symbol (im Menü unten, auf der Anmeldeseite und bei „Passkeys erklärt“) umschalten und wird je Benutzer gespeichert. PIN-Brief, Berichte, Mails und der Agent folgen in weiteren Schritten.
+- Neu: Die Oberfläche gibt es jetzt auch auf Englisch. Die Sprache richtet sich zunächst nach dem Browser, lässt sich über das Globus-Symbol (im Menü unten, auf der Anmeldeseite und bei „Passkeys erklärt“) umschalten und wird je Benutzer gespeichert. Der Agent folgt in einem weiteren Schritt.
+- Neu: Auch Meldungen und Fehlermeldungen des Servers, Exporte (Excel, CSV), PDF-Berichte und die Rollenbeschreibungen erscheinen in der Sprache der Oberfläche.
+- Neu: PIN-Briefe, Mail-Berichte, Mail-Alarme und Webhooks gibt es auf Deutsch oder Englisch. Die Sprache steht im Erscheinungsbild (Partner-Vorgabe, je Tenant für die PIN-Briefe überschreibbar), Standard bleibt Deutsch. Der Link zur Infoseite im Brief öffnet sie in derselben Sprache.
 - Neu: Optionale Lebenszyklus-Erinnerungen, je Tenant einzeln einschaltbar und standardmäßig aus (Tenant-Einstellungen → „Lebenszyklus-Erinnerungen“): Keys lange nicht benutzt (Schwelle einstellbar, Standard 180 Tage, letzte Nutzung laut Entra, Breakglass-Keys ausgenommen), Personen ohne Ersatz-Key, ausgeschiedene Personen mit aktivem Key (Konto in Entra deaktiviert oder gelöscht) und gesperrte oder ausgemusterte Keys, deren Passkey in Entra noch angemeldet ist.
 - Neu: Offene Erinnerungen stehen unter „Handlungsbedarf“ auf der Übersicht und auf der neuen Seite „Erinnerungen“ (Menüpunkt erscheint, sobald ein Tenant sie nutzt). Einzelne Fälle lassen sich mit Begründung ausblenden und wieder einblenden.
 - Neu: Neue Fälle meldet die Plattform einmal je Art als Ereignis. Unter Benachrichtigungen lassen sie sich als Webhook oder Mail-Alarm abonnieren (Gruppe „Erinnerungen“); die Mail listet die Betroffenen auf.

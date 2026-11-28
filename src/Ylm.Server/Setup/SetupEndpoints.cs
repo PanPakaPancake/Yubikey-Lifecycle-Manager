@@ -1,5 +1,6 @@
 using System.Security.Cryptography.X509Certificates;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Setup;
 
@@ -26,7 +27,7 @@ public static class SetupEndpoints
         app.MapPost("/api/setup/signin/complete", async (InteractiveCompleteRequest body, SetupService setup, CancellationToken ct) =>
         {
             var s = await setup.GetSettingsAsync();
-            if (s.IsSetupComplete) return Results.Json(new ApiError("setup_token", "Die Einrichtung ist bereits abgeschlossen."), statusCode: 401);
+            if (s.IsSetupComplete) return Results.Json(new ApiError("setup_token", L.T("Die Einrichtung ist bereits abgeschlossen.")), statusCode: 401);
             return Results.Ok(await setup.CompleteInteractiveSignInAsync(body.Url, body.Code, body.State, ct));
         }).AllowAnonymous().RequireRateLimiting(Security.SecurityHeaders.AuthRateLimit);
 
@@ -34,7 +35,7 @@ public static class SetupEndpoints
         {
             var setup = ctx.HttpContext.RequestServices.GetRequiredService<SetupService>();
             if (!await setup.ValidateTokenAsync(ctx.HttpContext.Request.Headers[TokenHeader]))
-                return Results.Json(new ApiError("setup_token", "Ungültiges Setup-Token oder Einrichtung bereits abgeschlossen."), statusCode: 401);
+                return Results.Json(new ApiError("setup_token", L.T("Ungültiges Setup-Token oder Einrichtung bereits abgeschlossen.")), statusCode: 401);
             return await next(ctx);
         });
 
@@ -115,7 +116,7 @@ public static class SetupEndpoints
         group.MapPost("/app-registration", async (AppRegistrationRequest body, SetupService setup) =>
         {
             if (body.ClientId == Guid.Empty || body.HomeTenantId == Guid.Empty)
-                throw ApiException.BadRequest("invalid", "Bitte Client-ID und Tenant-ID angeben.");
+                throw ApiException.BadRequest("invalid", L.T("Bitte Client-ID und Tenant-ID angeben."));
             await setup.SaveAppRegistrationAsync(body.ClientId, body.HomeTenantId);
             var (ok, message, granted) = await setup.TestAppRegistrationAsync();
             var missing = SetupService.RequiredApplicationPermissions.Except(granted).ToList();

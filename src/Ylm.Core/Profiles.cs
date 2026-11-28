@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Ylm.Contracts;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Core;
 
@@ -60,7 +61,7 @@ public static class ProfileEvaluator
 
         if (!key.HasFido2)
         {
-            list.Add(new(ViolationCode.NoFido2, "Auf diesem Key ist die FIDO2-Funktion nicht verfügbar oder deaktiviert.", false, false));
+            list.Add(new(ViolationCode.NoFido2, L.T("Auf diesem Key ist die FIDO2-Funktion nicht verfügbar oder deaktiviert."), false, false));
             return new EvaluationResult(list);
         }
 
@@ -70,7 +71,7 @@ public static class ProfileEvaluator
             if (!profile.AllowedModels.Any(m => model.Contains(m, StringComparison.OrdinalIgnoreCase)))
             {
                 list.Add(new(ViolationCode.ModelNotAllowed,
-                    $"Modell „{(model.Length > 0 ? model : "unbekannt")}“ ist im Profil nicht erlaubt (erlaubt: {string.Join(", ", profile.AllowedModels)}).",
+                    L.F($"Modell „{(model.Length > 0 ? model : L.T("unbekannt"))}“ ist im Profil nicht erlaubt (erlaubt: {string.Join(", ", profile.AllowedModels)})."),
                     true, false));
             }
         }
@@ -79,33 +80,32 @@ public static class ProfileEvaluator
         if (FirmwareVersion.TryParse(profile.MinimumFirmware, out var minFw) && fw < minFw)
         {
             list.Add(new(ViolationCode.FirmwareBelowMinimum,
-                $"Firmware {key.FirmwareVersion} liegt unter der im Profil geforderten Mindestversion {minFw}.", true, false));
+                L.F($"Firmware {key.FirmwareVersion} liegt unter der im Profil geforderten Mindestversion {minFw}."), true, false));
         }
 
         if (profile.ForcePinChange && !key.SupportsForcePinChange)
         {
             list.Add(new(ViolationCode.ForcePinChangeUnsupported,
-                $"Dieser Key (Firmware {key.FirmwareVersion}) kann keinen PIN-Wechsel erzwingen. Das geht erst ab Firmware {FirmwareVersion.ForcePinChangeMinimum}. " +
-                "Wenn Sie fortfahren, steht im PIN-PDF „Bitte ändern Sie Ihre PIN selbst“.", true, false));
+                L.F($"Dieser Key (Firmware {key.FirmwareVersion}) kann keinen PIN-Wechsel erzwingen. Das geht erst ab Firmware {FirmwareVersion.ForcePinChangeMinimum}. Wenn Sie fortfahren, steht im PIN-PDF „Bitte ändern Sie Ihre PIN selbst“."), true, false));
         }
 
         if (key.PinIsSet && !profile.FactoryResetBeforeRegistration)
         {
             list.Add(new(ViolationCode.PinAlreadySet,
-                "Auf dem Key ist bereits eine FIDO2-PIN gesetzt. Für die Registrierung ist ein Werksreset der FIDO2-Funktion nötig.", false, true));
+                L.T("Auf dem Key ist bereits eine FIDO2-PIN gesetzt. Für die Registrierung ist ein Werksreset der FIDO2-Funktion nötig."), false, true));
         }
 
         if (key.RemainingDiscoverableCredentials is 0 && !profile.FactoryResetBeforeRegistration)
         {
             list.Add(new(ViolationCode.NoCredentialSpace,
-                "Auf dem Key ist kein Platz für einen weiteren Passkey. Ein Werksreset schafft Platz.", false, true));
+                L.T("Auf dem Key ist kein Platz für einen weiteren Passkey. Ein Werksreset schafft Platz."), false, true));
         }
 
         var keyMin = key.MinimumPinLength ?? 4;
         if (profile.PinLength < keyMin)
         {
             list.Add(new(ViolationCode.PinTooShortForKey,
-                $"Der Key verlangt mindestens {keyMin} Stellen, das Profil erzeugt nur {profile.PinLength}.", false, false));
+                L.F($"Der Key verlangt mindestens {keyMin} Stellen, das Profil erzeugt nur {profile.PinLength}."), false, false));
         }
 
         return new EvaluationResult(list);
@@ -156,9 +156,9 @@ public static class PinGenerator
 
     public static string? ValidateFixedPin(string pin, int minLength)
     {
-        if (pin.Length < Math.Max(minLength, MinLength)) return $"Die PIN muss mindestens {Math.Max(minLength, MinLength)} Zeichen haben.";
-        if (pin.Length > MaxLength) return $"Die PIN darf höchstens {MaxLength} Zeichen haben.";
-        if (IsTrivial(pin)) return "Die PIN ist zu einfach (Wiederholungen oder Zahlenfolgen).";
+        if (pin.Length < Math.Max(minLength, MinLength)) return L.F($"Die PIN muss mindestens {Math.Max(minLength, MinLength)} Zeichen haben.");
+        if (pin.Length > MaxLength) return L.F($"Die PIN darf höchstens {MaxLength} Zeichen haben.");
+        if (IsTrivial(pin)) return L.T("Die PIN ist zu einfach (Wiederholungen oder Zahlenfolgen).");
         return null;
     }
 }
@@ -169,7 +169,7 @@ public static class DisplayNameTemplate
 
     public static string Render(string template, KeyInfo key, string? userPrincipalName, DateOnly date)
     {
-        var serial = key.SerialNumber?.ToString() ?? "ohne Seriennummer";
+        var serial = key.SerialNumber?.ToString() ?? L.T("ohne Seriennummer");
         var result = (string.IsNullOrWhiteSpace(template) ? "YubiKey {Seriennummer}" : template)
             .Replace("{Seriennummer}", serial, StringComparison.OrdinalIgnoreCase)
             .Replace("{Serial}", serial, StringComparison.OrdinalIgnoreCase)

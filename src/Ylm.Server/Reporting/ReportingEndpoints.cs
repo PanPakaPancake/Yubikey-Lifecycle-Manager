@@ -4,6 +4,7 @@ using Ylm.Server.Infrastructure;
 using Ylm.Server.Pdf;
 using Ylm.Server.Security;
 using Ylm.Server.Setup;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Reporting;
 
@@ -13,7 +14,7 @@ public static class ReportingEndpoints
     {
         var ids = await cu.AccessibleTenantIdsAsync();
         if (tenantId is not { } t) return ids;
-        if (!ids.Contains(t)) throw ApiException.Forbidden("Sie sind für diesen Tenant nicht zuständig.");
+        if (!ids.Contains(t)) throw ApiException.Forbidden(L.T("Sie sind für diesen Tenant nicht zuständig."));
         return [t];
     }
 
@@ -65,7 +66,7 @@ public static class ReportingEndpoints
             if (format == "pdf")
             {
                 var settings = await setup.GetSettingsAsync();
-                var scope = tenantId is { } t ? (await db.Tenants.FindAsync(t))?.DisplayName ?? "Tenant" : "Alle Tenants";
+                var scope = tenantId is { } t ? (await db.Tenants.FindAsync(t))?.DisplayName ?? L.T("Tenant") : L.T("Alle Tenants");
                 var brand = await branding.ResolveAsync(tenantId);
                 using var _ = Pdf.Theme.Use(brand);
                 return Results.File(Pdf.AssignmentPdf.Create(brand.CompanyName ?? settings.OrganizationName, scope, o, includeTenant), "application/pdf", name + ".pdf");
@@ -73,7 +74,7 @@ public static class ReportingEndpoints
             var (header, rows) = AssignmentService.Table(o, includeTenant);
             return format == "csv"
                 ? Results.File(Csv.Write(header, rows.Select(r => (IReadOnlyList<string?>)r.Select(v => v?.ToString()).ToList())), "text/csv; charset=utf-8", name + ".csv")
-                : Results.File(Xlsx.Write("Key-Zuweisungen", header, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
+                : Results.File(Xlsx.Write(L.T("Key-Zuweisungen"), header, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
         });
 
         // Yubico-Sicherheitshinweise: betroffene Keys und Personen je Hinweis. Ohne tenantId zusätzlich das Partnerlager (mit Recht).
@@ -89,7 +90,7 @@ public static class ReportingEndpoints
         {
             format = format.ToLowerInvariant();
             if (format is not ("csv" or "xlsx")) return Results.NotFound();
-            if (advisory is not null && FirmwareAdvisories.Find(advisory) is null) throw ApiException.NotFound("Sicherheitshinweis");
+            if (advisory is not null && FirmwareAdvisories.Find(advisory) is null) throw ApiException.NotFound(L.T("Sicherheitshinweis"));
             var user = await cu.RequireAsync(Permission.ReadReports);
             var o = await advisories.BuildAsync(await ScopeAsync(cu, tenantId), tenantId is null && CurrentUser.Has(user, Permission.ManagePartnerStock));
             await audit.WriteAsync(AuditService.User(user), AuditActions.ExportCreated, tenantId, details: new { kind = "advisories." + format, advisory });
@@ -97,7 +98,7 @@ public static class ReportingEndpoints
             var name = $"sicherheitshinweise{(advisory is null ? "" : "-" + advisory.ToLowerInvariant())}-{DateTime.Today:yyyy-MM-dd}";
             return format == "csv"
                 ? Results.File(Csv.Write(header, rows.Select(r => (IReadOnlyList<string?>)r.Select(v => v?.ToString()).ToList())), "text/csv; charset=utf-8", name + ".csv")
-                : Results.File(Xlsx.Write("Sicherheitshinweise", header, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
+                : Results.File(Xlsx.Write(L.T("Sicherheitshinweise"), header, rows), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", name + ".xlsx");
         });
 
         g.MapGet("/exports/dashboard.pdf", async (Guid? tenantId, CurrentUser cu, DashboardService dash, SetupService setup, BrandingService branding, AuditService audit, Data.YlmDbContext db) =>
@@ -106,7 +107,7 @@ public static class ReportingEndpoints
             var ids = await ScopeAsync(cu, tenantId);
             var d = await dash.BuildAsync(ids);
             var settings = await setup.GetSettingsAsync();
-            var scope = tenantId is { } t ? (await db.Tenants.FindAsync(t))?.DisplayName ?? "Tenant" : "Alle Tenants";
+            var scope = tenantId is { } t ? (await db.Tenants.FindAsync(t))?.DisplayName ?? L.T("Tenant") : L.T("Alle Tenants");
             var brand = await branding.ResolveAsync(tenantId);
             byte[] pdf;
             using (Theme.Use(brand)) pdf = ReportPdf.Create(brand.CompanyName ?? settings.OrganizationName, scope, d);

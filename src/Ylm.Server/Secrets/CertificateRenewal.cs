@@ -10,6 +10,7 @@ using Ylm.Server.Data;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Secrets;
 
@@ -74,11 +75,11 @@ public sealed class CertificateRenewalService(
     {
         var s = await db.Installation.FirstAsync(ct);
         if (s.ClientId is null || s.HomeTenantId is null)
-            throw ApiException.Conflict("setup_incomplete", "Die App-Registrierung der Installation ist noch nicht eingerichtet.");
-        var current = await certificates.GetAsync(ct) ?? throw ApiException.Conflict("setup_incomplete", "Das App-Zertifikat fehlt.");
+            throw ApiException.Conflict("setup_incomplete", L.T("Die App-Registrierung der Installation ist noch nicht eingerichtet."));
+        var current = await certificates.GetAsync(ct) ?? throw ApiException.Conflict("setup_incomplete", L.T("Das App-Zertifikat fehlt."));
         if (current.NotAfter.ToUniversalTime() <= DateTime.UtcNow)
             throw ApiException.Conflict("certificate_expired",
-                "Das App-Zertifikat ist abgelaufen. Automatisch geht es nicht mehr: Bitte ein neues Zertifikat vorbereiten, in Entra hochladen und aktivieren.");
+                L.T("Das App-Zertifikat ist abgelaufen. Automatisch geht es nicht mehr: Bitte ein neues Zertifikat vorbereiten, in Entra hochladen und aktivieren."));
 
         // Ein Nachfolger aus einem früheren Versuch wartet vielleicht nur auf Entra.
         if (await certificates.GetNextAsync(ct) is not null && await TryActivateAsync(actor, ct)) return await StatusAsync(ct);
@@ -90,7 +91,7 @@ public sealed class CertificateRenewalService(
             var graph = await graphs.ForTenantAsync(s.HomeTenantId.Value, ct);
             var objectId = s.ApplicationObjectId ?? await graph.GetApplicationObjectIdAsync(s.ClientId.Value, ct)
                 ?? throw ApiException.Conflict("certificate_manual",
-                    "Die Plattform kennt die Objekt-ID ihrer App-Registrierung nicht (App wurde von Hand angelegt). Bitte das neue Zertifikat vorbereiten, in Entra hochladen und aktivieren.");
+                    L.T("Die Plattform kennt die Objekt-ID ihrer App-Registrierung nicht (App wurde von Hand angelegt). Bitte das neue Zertifikat vorbereiten, in Entra hochladen und aktivieren."));
             s.ApplicationObjectId = objectId;
             next = await certificates.CreateNextAsync(s.OrganizationName, ct);
             await graph.AddApplicationCertificateAsync(objectId, next.Export(X509ContentType.Cert),
@@ -103,7 +104,7 @@ public sealed class CertificateRenewalService(
         {
             if (next is not null) await certificates.DiscardNextAsync(ct);
             var message = ex is GraphException g
-                ? $"Entra hat das neue Zertifikat abgelehnt ({g.StatusCode}{(g.GraphCode is null ? "" : ", " + g.GraphCode)}): {g.Message}"
+                ? L.F($"Entra hat das neue Zertifikat abgelehnt ({g.StatusCode}{(g.GraphCode is null ? "" : ", " + g.GraphCode)}): {g.Message}")
                 : ex.Message;
             s.CertificateRenewalError = message;
             audit.Add(actor, AuditActions.AppCertificateRenewalFailed, details: new { error = message });
@@ -206,7 +207,7 @@ public sealed class CertificateRenewalService(
         var header = JsonSerializer.Serialize(new { alg = "RS256", typ = "JWT", x5t = B64Url(current.GetCertHash()), kid = current.Thumbprint });
         var payload = JsonSerializer.Serialize(new { aud = ProofAudience, iss = applicationObjectId, nbf = now, exp = now + 600 });
         var data = B64Url(Encoding.UTF8.GetBytes(header)) + "." + B64Url(Encoding.UTF8.GetBytes(payload));
-        using var rsa = current.GetRSAPrivateKey() ?? throw new InvalidOperationException("Das App-Zertifikat hat keinen privaten RSA-Schlüssel.");
+        using var rsa = current.GetRSAPrivateKey() ?? throw new InvalidOperationException(L.T("Das App-Zertifikat hat keinen privaten RSA-Schlüssel."));
         var signature = rsa.SignData(Encoding.ASCII.GetBytes(data), HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
         return data + "." + B64Url(signature);
     }
@@ -240,7 +241,7 @@ public static class CertificateEndpoints
         g.MapGet("/next.cer", async (CurrentUser cu, AppCertificateService certificates, CancellationToken ct) =>
         {
             await cu.RequireAsync(Permission.ManageSettings);
-            var next = await certificates.GetNextAsync(ct) ?? throw new ApiException(404, "not_found", "Es ist kein neues Zertifikat vorbereitet.");
+            var next = await certificates.GetNextAsync(ct) ?? throw new ApiException(404, "not_found", L.T("Es ist kein neues Zertifikat vorbereitet."));
             return Results.File(next.Export(X509ContentType.Cert), "application/pkix-cert", $"ylm-app-{DateTime.UtcNow:yyyyMMdd}.cer");
         });
         g.MapPost("/activate", async (CurrentUser cu, CertificateRenewalService renewal, CancellationToken ct) =>
@@ -248,7 +249,7 @@ public static class CertificateEndpoints
             var user = await cu.RequireAsync(Permission.ManageSettings);
             if (!await renewal.TryActivateAsync(AuditService.User(user), ct))
                 throw ApiException.Conflict("certificate_not_accepted",
-                    "Entra nimmt das neue Zertifikat noch nicht an. Ist es in der App-Registrierung unter „Zertifikate und Geheimnisse“ hochgeladen? Nach dem Hochladen kann es ein bis zwei Minuten dauern.");
+                    L.T("Entra nimmt das neue Zertifikat noch nicht an. Ist es in der App-Registrierung unter „Zertifikate und Geheimnisse“ hochgeladen? Nach dem Hochladen kann es ein bis zwei Minuten dauern."));
             return Results.Ok(await renewal.StatusAsync(ct));
         });
         g.MapDelete("/next", async (CurrentUser cu, CertificateRenewalService renewal, CancellationToken ct) =>

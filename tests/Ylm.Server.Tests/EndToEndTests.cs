@@ -559,6 +559,29 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Server_messages_follow_the_request_language()
+    {
+        async Task<string> Error(string? language)
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Put, "/api/me/language") { Content = JsonContent.Create(new { language = "fr" }) };
+            if (language is not null) req.Headers.Add("X-YLM-Language", language);
+            var res = await _owner.SendAsync(req);
+            Assert.Equal(HttpStatusCode.BadRequest, res.StatusCode);
+            return (await res.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("message").GetString()!;
+        }
+        Assert.Equal("Unbekannte Sprache. Erlaubt sind de und en.", await Error(null));
+        Assert.Equal("Unknown language. Allowed are de and en.", await Error("en"));
+        Assert.Equal("Unbekannte Sprache. Erlaubt sind de und en.", await Error("de-DE"));
+
+        // Feste Tabellen (hier die Rechte der Rollen) erscheinen ebenfalls übersetzt.
+        using var roles = new HttpRequestMessage(HttpMethod.Get, "/api/roles");
+        roles.Headers.Add("X-YLM-Language", "en");
+        var body = await (await _owner.SendAsync(roles)).Content.ReadAsStringAsync();
+        Assert.Contains("Register keys", body);
+        Assert.DoesNotContain("Keys registrieren", body);
+    }
+
+    [Fact]
     public async Task Audit_chain_detects_tampering_and_csrf_header_is_required()
     {
         var tenantId = await OnboardTenantAsync();

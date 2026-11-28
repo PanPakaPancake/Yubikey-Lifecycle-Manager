@@ -1,4 +1,5 @@
 using Ylm.Core;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Infrastructure;
 
@@ -10,10 +11,11 @@ public sealed class ApiException(int status, string code, string message, object
     public string Code { get; } = code;
     public object? Details { get; } = details;
 
-    public static ApiException NotFound(string what = "Eintrag") => new(404, "not_found", $"{what} nicht gefunden.");
+    /// <param name="what">Bereits übersetzt, z. B. <c>L.T("Key")</c>.</param>
+    public static ApiException NotFound(string? what = null) => new(404, "not_found", L.F($"{what ?? L.T("Eintrag")} nicht gefunden."));
     public static ApiException BadRequest(string code, string message, object? details = null) => new(400, code, message, details);
     public static ApiException Conflict(string code, string message) => new(409, code, message);
-    public static ApiException Forbidden(string message = "Keine Berechtigung für diese Aktion.") => new(403, "forbidden", message);
+    public static ApiException Forbidden(string? message = null) => new(403, "forbidden", message ?? L.T("Keine Berechtigung für diese Aktion."));
 }
 
 public sealed class ApiExceptionMiddleware(RequestDelegate next, ILogger<ApiExceptionMiddleware> logger)

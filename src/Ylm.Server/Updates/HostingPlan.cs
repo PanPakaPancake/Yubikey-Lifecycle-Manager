@@ -1,6 +1,7 @@
 using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Updates;
 
@@ -117,14 +118,14 @@ public static partial class HostingPlan
         {
             case HostingMode.Https:
             {
-                var domain = NormalizeHost(r.Domain) ?? throw ApiException.BadRequest("invalid_domain", "Bitte einen gültigen DNS-Namen angeben, z. B. ylm.firma.de.");
+                var domain = NormalizeHost(r.Domain) ?? throw ApiException.BadRequest("invalid_domain", L.T("Bitte einen gültigen DNS-Namen angeben, z. B. ylm.firma.de."));
                 var httpsPort = Port(r.HttpsPort ?? 443, "HTTPS-Port");
                 var httpPort = Port(r.HttpPort ?? 80, "HTTP-Port");
-                if (httpsPort == httpPort) throw ApiException.BadRequest("invalid_port", "HTTP- und HTTPS-Port müssen verschieden sein.");
+                if (httpsPort == httpPort) throw ApiException.BadRequest("invalid_port", L.T("HTTP- und HTTPS-Port müssen verschieden sein."));
                 url = "https://" + domain + (httpsPort == 443 ? "" : ":" + httpsPort);
 
                 var aliases = (r.Aliases ?? "").Split([' ', ',', ';', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .Select(a => NormalizeHost(a) ?? throw ApiException.BadRequest("invalid_alias", $"Ungültiger weiterer Name: {a}")).ToList();
+                    .Select(a => NormalizeHost(a) ?? throw ApiException.BadRequest("invalid_alias", L.F($"Ungültiger weiterer Name: {a}"))).ToList();
                 var oldDomain = current.Env.GetValueOrDefault("YLM_DOMAIN");
                 if (r.KeepOldAddress && !string.IsNullOrEmpty(oldDomain) && !string.Equals(oldDomain, domain, StringComparison.OrdinalIgnoreCase))
                     aliases.Add(oldDomain.ToLowerInvariant());
@@ -143,9 +144,9 @@ public static partial class HostingPlan
                     env["YLM_HTTPS_BIND"] = null; // von localhost auf einen echten Namen: wieder im Netz erreichbar
 
                 if (domain == "localhost" && r.Tls is HostingTls.LetsEncrypt or HostingTls.LetsEncryptDns)
-                    throw ApiException.BadRequest("acme_localhost", "Für localhost stellt Let's Encrypt kein Zertifikat aus. Bitte die interne Zertifizierungsstelle wählen.");
+                    throw ApiException.BadRequest("acme_localhost", L.T("Für localhost stellt Let's Encrypt kein Zertifikat aus. Bitte die interne Zertifizierungsstelle wählen."));
                 var email = string.IsNullOrWhiteSpace(r.AcmeEmail) ? null : r.AcmeEmail.Trim();
-                if (email is not null && !EmailRegex().IsMatch(email)) throw ApiException.BadRequest("invalid_email", "Bitte eine gültige E-Mail-Adresse für Let's Encrypt angeben.");
+                if (email is not null && !EmailRegex().IsMatch(email)) throw ApiException.BadRequest("invalid_email", L.T("Bitte eine gültige E-Mail-Adresse für Let's Encrypt angeben."));
                 env["YLM_ACME_EMAIL"] = email;
                 switch (r.Tls)
                 {
@@ -156,29 +157,29 @@ public static partial class HostingPlan
                         env["YLM_CADDY_TLS"] = "tls /certs/ylm.crt /certs/ylm.key"; env["YLM_MODE"] = "cert"; break;
                     case HostingTls.LetsEncrypt:
                         if (httpPort != 80)
-                            throw ApiException.BadRequest("acme_port", "Let's Encrypt ohne DNS-Prüfung braucht Port 80 aus dem Internet. Bei anderen Ports bitte „Let's Encrypt per DNS“ wählen.");
+                            throw ApiException.BadRequest("acme_port", L.T("Let's Encrypt ohne DNS-Prüfung braucht Port 80 aus dem Internet. Bei anderen Ports bitte „Let's Encrypt per DNS“ wählen."));
                         env["YLM_CADDY_TLS"] = email is null ? "" : "tls " + email; env["YLM_MODE"] = "https"; break;
                     case HostingTls.LetsEncryptDns:
                         Dns(current, r, env);
                         env["YLM_MODE"] = "https"; break;
                     default:
-                        throw ApiException.BadRequest("invalid_tls", "Unbekannte Zertifikatsart.");
+                        throw ApiException.BadRequest("invalid_tls", L.T("Unbekannte Zertifikatsart."));
                 }
                 break;
             }
             case HostingMode.Proxy:
             {
                 if (!Uri.TryCreate(r.PublicUrl?.Trim(), UriKind.Absolute, out var u) || u.Scheme != "https" || NormalizeHost(u.Host) is null || u.AbsolutePath != "/")
-                    throw ApiException.BadRequest("invalid_url", "Bitte die Adresse mit https:// angeben, ohne Pfad, z. B. https://ylm.firma.de.");
+                    throw ApiException.BadRequest("invalid_url", L.T("Bitte die Adresse mit https:// angeben, ohne Pfad, z. B. https://ylm.firma.de."));
                 url = u.GetLeftPart(UriPartial.Authority);
                 env["COMPOSE_PROFILES"] = "";
-                env["YLM_BIND"] = BindAddress(r.BindAddress ?? "127.0.0.1") + ":" + Port(r.Port ?? 8080, "Port");
+                env["YLM_BIND"] = BindAddress(r.BindAddress ?? "127.0.0.1") + ":" + Port(r.Port ?? 8080, L.T("Port"));
                 env["YLM_MODE"] = "proxy";
                 break;
             }
             case HostingMode.Local:
             {
-                var port = Port(r.Port ?? 8080, "Port");
+                var port = Port(r.Port ?? 8080, L.T("Port"));
                 url = "http://localhost:" + port;
                 env["COMPOSE_PROFILES"] = "";
                 env["YLM_BIND"] = "127.0.0.1:" + port;
@@ -186,12 +187,12 @@ public static partial class HostingPlan
                 break;
             }
             default:
-                throw ApiException.BadRequest("invalid_mode", "Unbekannte Betriebsart.");
+                throw ApiException.BadRequest("invalid_mode", L.T("Unbekannte Betriebsart."));
         }
         env["YLM_PUBLIC_URL"] = url;
         foreach (var (k, v) in env)
             if (v is not null && (v.Length > 2000 || !SafeValue().IsMatch(v)))
-                throw ApiException.BadRequest("invalid_value", $"Ungültiges Zeichen in {k}. Nicht erlaubt sind $, Anführungszeichen und Backslash.");
+                throw ApiException.BadRequest("invalid_value", L.F($"Ungültiges Zeichen in {k}. Nicht erlaubt sind $, Anführungszeichen und Backslash."));
         // Nur geänderte Werte schicken.
         static string? Norm(string? v) => string.IsNullOrEmpty(v) ? null : v;
         var changed = env.Where(e => Norm(current.Env.GetValueOrDefault(e.Key)) != Norm(e.Value)).ToDictionary(e => e.Key, e => e.Value);
@@ -201,7 +202,7 @@ public static partial class HostingPlan
     private static void Dns(HostingCurrent current, HostingRequest r, Dictionary<string, string?> env)
     {
         var provider = DnsProviders.FirstOrDefault(p => p.Id == r.DnsProvider)
-                       ?? throw ApiException.BadRequest("invalid_dns_provider", "Bitte einen DNS-Anbieter auswählen.");
+                       ?? throw ApiException.BadRequest("invalid_dns_provider", L.T("Bitte einen DNS-Anbieter auswählen."));
         var dns = r.Dns ?? new HostingDns();
         var values = new Dictionary<string, string?>
         {
@@ -218,7 +219,7 @@ public static partial class HostingPlan
             {
                 // Geheimnisse bleiben, wenn sie schon gesetzt sind und der Anbieter gleich bleibt.
                 var keep = SecretFields.Contains(field) && sameProvider && current.SecretsSet.Contains(envKey);
-                if (required && !keep) throw ApiException.BadRequest("dns_missing", $"Für {provider.Name} fehlt: {Label(field)}.");
+                if (required && !keep) throw ApiException.BadRequest("dns_missing", L.F($"Für {provider.Name} fehlt: {Label(field)}."));
                 if (!keep) env[envKey] = null;
             }
             else env[envKey] = required ? value : null;
@@ -229,9 +230,9 @@ public static partial class HostingPlan
 
     private static string Label(string field) => field switch
     {
-        "token" => "API-Token", "keyId" => "Schlüssel-ID bzw. Client-ID", "secret" => "Geheimnis bzw. Passwort", "region" => "Region",
-        "azureTenant" => "Tenant-ID", "azureSubscription" => "Subscription-ID", "azureResourceGroup" => "Ressourcengruppe",
-        "netcupCustomer" => "Kundennummer", _ => field,
+        "token" => "API-Token", "keyId" => L.T("Schlüssel-ID bzw. Client-ID"), "secret" => L.T("Geheimnis bzw. Passwort"), "region" => L.T("Region"),
+        "azureTenant" => L.T("Tenant-ID"), "azureSubscription" => L.T("Subscription-ID"), "azureResourceGroup" => L.T("Ressourcengruppe"),
+        "netcupCustomer" => L.T("Kundennummer"), _ => field,
     };
 
     private static void OwnCertificate(HostingCurrent current, HostingRequest r, string domain, List<string> aliases, Dictionary<string, string> files)
@@ -240,10 +241,10 @@ public static partial class HostingPlan
         if (!hasNew)
         {
             if (current.Files.Contains("ylm.crt") && current.Files.Contains("ylm.key")) return;
-            throw ApiException.BadRequest("certificate_missing", "Bitte Zertifikat und privaten Schlüssel (PEM) hochladen.");
+            throw ApiException.BadRequest("certificate_missing", L.T("Bitte Zertifikat und privaten Schlüssel (PEM) hochladen."));
         }
         if (string.IsNullOrWhiteSpace(r.CertificatePem) || string.IsNullOrWhiteSpace(r.KeyPem))
-            throw ApiException.BadRequest("certificate_missing", "Bitte Zertifikat und privaten Schlüssel zusammen hochladen.");
+            throw ApiException.BadRequest("certificate_missing", L.T("Bitte Zertifikat und privaten Schlüssel zusammen hochladen."));
         X509Certificate2 cert;
         try
         {
@@ -251,27 +252,27 @@ public static partial class HostingPlan
         }
         catch (Exception e) when (e is System.Security.Cryptography.CryptographicException or ArgumentException)
         {
-            throw ApiException.BadRequest("certificate_invalid", "Zertifikat und Schlüssel passen nicht zusammen oder sind kein PEM (Schlüssel ohne Passwort): " + e.Message);
+            throw ApiException.BadRequest("certificate_invalid", L.F($"Zertifikat und Schlüssel passen nicht zusammen oder sind kein PEM (Schlüssel ohne Passwort): {e.Message}"));
         }
         using (cert)
         {
-            if (cert.NotAfter < DateTime.Now) throw ApiException.BadRequest("certificate_expired", $"Das Zertifikat ist am {cert.NotAfter:dd.MM.yyyy} abgelaufen.");
+            if (cert.NotAfter < DateTime.Now) throw ApiException.BadRequest("certificate_expired", L.F($"Das Zertifikat ist am {cert.NotAfter:dd.MM.yyyy} abgelaufen."));
             foreach (var name in aliases.Prepend(domain))
                 if (!cert.MatchesHostname(name, allowWildcards: true, allowCommonName: true))
-                    throw ApiException.BadRequest("certificate_name", $"Das Zertifikat gilt nicht für {name} ({cert.Subject}).");
+                    throw ApiException.BadRequest("certificate_name", L.F($"Das Zertifikat gilt nicht für {name} ({cert.Subject})."));
         }
         files["ylm.crt"] = r.CertificatePem.Trim() + "\n";
         files["ylm.key"] = r.KeyPem.Trim() + "\n";
     }
 
     private static int Port(int port, string label) =>
-        port is >= 1 and <= 65535 ? port : throw ApiException.BadRequest("invalid_port", $"{label}: bitte eine Zahl von 1 bis 65535.");
+        port is >= 1 and <= 65535 ? port : throw ApiException.BadRequest("invalid_port", L.F($"{label}: bitte eine Zahl von 1 bis 65535."));
 
     private static string BindAddress(string address)
     {
         var a = address.Trim();
         return System.Net.IPAddress.TryParse(a.Trim('[', ']'), out _) ? a
-            : throw ApiException.BadRequest("invalid_bind", $"Ungültige IP-Adresse: {a}. Beispiele: 127.0.0.1, 0.0.0.0, 10.0.0.5.");
+            : throw ApiException.BadRequest("invalid_bind", L.F($"Ungültige IP-Adresse: {a}. Beispiele: 127.0.0.1, 0.0.0.0, 10.0.0.5."));
     }
 
     public static string? NormalizeHost(string? host)

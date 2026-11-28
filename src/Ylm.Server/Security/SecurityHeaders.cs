@@ -1,4 +1,5 @@
 using System.Net;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Security;
 
@@ -55,7 +56,7 @@ public static class ProxyTrust
             if (!value.Contains('/') && IPAddress.TryParse(value, out var single))
                 value += single.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? "/128" : "/32";
             if (!System.Net.IPNetwork.TryParse(value, out var network))
-                throw new InvalidOperationException($"Ylm:TrustedProxies: \"{entry}\" ist keine gültige IP-Adresse oder kein gültiges Netz.");
+                throw new InvalidOperationException(L.F($"Ylm:TrustedProxies: \"{entry}\" ist keine gültige IP-Adresse oder kein gültiges Netz."));
             yield return network;
             // IPv4-Absender kommen bei Dual-Stack-Sockets als ::ffff:a.b.c.d an.
             if (network.BaseAddress.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork)

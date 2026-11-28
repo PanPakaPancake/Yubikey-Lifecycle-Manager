@@ -10,6 +10,7 @@ using Ylm.Core;
 using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Security;
 
@@ -62,7 +63,7 @@ public sealed class LocalAuthService(
     private Ceremony Take(string requestId, string kind)
     {
         if (!cache.TryGetValue("webauthn:" + requestId, out Ceremony? c) || c is null || c.Kind != kind)
-            throw ApiException.BadRequest("expired", "Die Anfrage ist abgelaufen. Bitte noch einmal versuchen.");
+            throw ApiException.BadRequest("expired", L.T("Die Anfrage ist abgelaufen. Bitte noch einmal versuchen."));
         cache.Remove("webauthn:" + requestId);
         return c;
     }
@@ -99,7 +100,7 @@ public sealed class LocalAuthService(
     public async Task<UserPasskey> CompleteRegistrationAsync(PlatformUser user, string requestId, AuthenticatorAttestationRawResponse response, string? name, CancellationToken ct = default)
     {
         var ceremony = Take(requestId, "register");
-        if (ceremony.UserId != user.Id) throw ApiException.BadRequest("expired", "Die Anfrage gehört zu einem anderen Konto.");
+        if (ceremony.UserId != user.Id) throw ApiException.BadRequest("expired", L.T("Die Anfrage gehört zu einem anderen Konto."));
         var fido = await CreateFido2Async();
         RegisteredPublicKeyCredential cred;
         try
@@ -113,7 +114,7 @@ public sealed class LocalAuthService(
         }
         catch (Fido2VerificationException e)
         {
-            throw ApiException.BadRequest("passkey_invalid", "Der Passkey konnte nicht geprüft werden: " + e.Message);
+            throw ApiException.BadRequest("passkey_invalid", L.F($"Der Passkey konnte nicht geprüft werden: {e.Message}"));
         }
         var passkey = new UserPasskey
         {
@@ -122,7 +123,7 @@ public sealed class LocalAuthService(
             PublicKey = cred.PublicKey,
             SignCount = cred.SignCount,
             Aaguid = cred.AaGuid,
-            Name = string.IsNullOrWhiteSpace(name) ? "Passkey " + DateTimeOffset.UtcNow.ToString("dd.MM.yyyy") : name.Trim(),
+            Name = string.IsNullOrWhiteSpace(name) ? L.F($"Passkey {DateTimeOffset.UtcNow.ToString("dd.MM.yyyy")}") : name.Trim(),
         };
         db.UserPasskeys.Add(passkey);
         audit.Add(AuditService.User(user), AuditActions.UserPasskeyAdded, target: user.Upn, details: new { passkey.Name, aaguid = passkey.Aaguid });
@@ -149,9 +150,9 @@ public sealed class LocalAuthService(
         var credentialId = response.RawId;
         var passkey = await db.UserPasskeys.Include(p => p.PlatformUser).FirstOrDefaultAsync(p => p.CredentialId == credentialId, ct);
         if (passkey?.PlatformUser is not { } user)
-            return await DenyAsync("passkey_unknown", null, "Dieser Passkey ist auf der Plattform nicht bekannt.");
+            return await DenyAsync("passkey_unknown", null, L.T("Dieser Passkey ist auf der Plattform nicht bekannt."));
         if (!user.IsActive || user.LoginKind != UserLoginKind.Local)
-            return await DenyAsync("not_registered", user.Upn, "Ihr Konto ist für die Plattform nicht freigeschaltet.");
+            return await DenyAsync("not_registered", user.Upn, L.T("Ihr Konto ist für die Plattform nicht freigeschaltet."));
         var fido = await CreateFido2Async();
         VerifyAssertionResult result;
         try
@@ -168,7 +169,7 @@ public sealed class LocalAuthService(
         }
         catch (Fido2VerificationException e)
         {
-            return await DenyAsync("passkey_invalid", user.Upn, "Der Passkey konnte nicht geprüft werden: " + e.Message);
+            return await DenyAsync("passkey_invalid", user.Upn, L.F($"Der Passkey konnte nicht geprüft werden: {e.Message}"));
         }
         passkey.SignCount = result.SignCount;
         passkey.LastUsedAt = DateTimeOffset.UtcNow;
@@ -185,10 +186,10 @@ public sealed class LocalAuthService(
         if (user is null)
         {
             PasswordHashing.Verify(password, "pbkdf2-sha256$600000$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="); // gleiche Laufzeit
-            return await DenyAsync("invalid_credentials", upn, "Anmeldename, Passwort oder Code falsch.");
+            return await DenyAsync("invalid_credentials", upn, L.T("Anmeldename, Passwort oder Code falsch."));
         }
         if (user.LockedUntil is { } locked && locked > now)
-            return await DenyAsync("locked", user.Upn, $"Zu viele Fehlversuche. Das Konto ist bis {locked.ToLocalTime():HH:mm} Uhr gesperrt.");
+            return await DenyAsync("locked", user.Upn, L.F($"Zu viele Fehlversuche. Das Konto ist bis {locked.ToLocalTime():HH:mm} Uhr gesperrt."));
         var secret = user.TotpSecretProtected is { } p && user.PasswordHash is not null ? TotpProtector.Unprotect(Convert.FromBase64String(p)) : null;
         var passwordOk = PasswordHashing.Verify(password, user.PasswordHash);
         var step = secret is null ? null : Totp.Verify(secret, code, now, user.TotpLastStep);
@@ -201,7 +202,7 @@ public sealed class LocalAuthService(
                 user.FailedLoginCount = 0;
             }
             await db.SaveChangesAsync();
-            return await DenyAsync(user.IsActive ? "invalid_credentials" : "not_registered", user.Upn, "Anmeldename, Passwort oder Code falsch.");
+            return await DenyAsync(user.IsActive ? "invalid_credentials" : "not_registered", user.Upn, L.T("Anmeldename, Passwort oder Code falsch."));
         }
         user.TotpLastStep = step;
         user.FailedLoginCount = 0;
@@ -215,7 +216,7 @@ public sealed class LocalAuthService(
     /// <summary>Creates a new one-time setup link. For emergency accounts the old password and TOTP stop working.</summary>
     public async Task<(string Url, DateTimeOffset ExpiresAt)> CreateSetupLinkAsync(PlatformUser user, PlatformUser actor)
     {
-        if (user.LoginKind == UserLoginKind.Entra) throw ApiException.Conflict("entra_user", "Entra-Konten melden sich per SSO an und brauchen keinen Einrichtungslink.");
+        if (user.LoginKind == UserLoginKind.Entra) throw ApiException.Conflict("entra_user", L.T("Entra-Konten melden sich per SSO an und brauchen keinen Einrichtungslink."));
         var token = TokenHashing.NewSecret();
         user.SetupTokenHash = TokenHashing.Hash(token);
         user.SetupTokenExpiresAt = DateTimeOffset.UtcNow + SetupLinkLifetime;
@@ -234,17 +235,17 @@ public sealed class LocalAuthService(
 
     public async Task<PlatformUser> UserForSetupTokenAsync(string? token)
     {
-        if (string.IsNullOrWhiteSpace(token)) throw ApiException.NotFound("Einrichtungslink");
+        if (string.IsNullOrWhiteSpace(token)) throw ApiException.NotFound(L.T("Einrichtungslink"));
         var hash = TokenHashing.Hash(token);
         var user = await db.PlatformUsers.FirstOrDefaultAsync(u => u.SetupTokenHash == hash);
         if (user is null || user.SetupTokenExpiresAt < DateTimeOffset.UtcNow || !user.IsActive)
-            throw new ApiException(410, "link_invalid", "Der Einrichtungslink ist ungültig oder abgelaufen. Bitte einen Owner um einen neuen Link.");
+            throw new ApiException(410, "link_invalid", L.T("Der Einrichtungslink ist ungültig oder abgelaufen. Bitte einen Owner um einen neuen Link."));
         return user;
     }
 
     public async Task<(string Secret, string Uri)> StartTotpAsync(PlatformUser user)
     {
-        if (user.LoginKind != UserLoginKind.Emergency) throw ApiException.Conflict("wrong_kind", "Nur Notfallkonten nutzen Passwort und TOTP.");
+        if (user.LoginKind != UserLoginKind.Emergency) throw ApiException.Conflict("wrong_kind", L.T("Nur Notfallkonten nutzen Passwort und TOTP."));
         var secret = Totp.NewSecret();
         user.TotpSecretProtected = Convert.ToBase64String(TotpProtector.Protect(secret));
         user.PasswordHash = null;
@@ -257,11 +258,11 @@ public sealed class LocalAuthService(
     public async Task CompleteEmergencySetupAsync(PlatformUser user, string password, string code)
     {
         if (user.LoginKind != UserLoginKind.Emergency || user.TotpSecretProtected is null)
-            throw ApiException.Conflict("wrong_state", "Bitte zuerst den QR-Code für die Authenticator-App abrufen.");
+            throw ApiException.Conflict("wrong_state", L.T("Bitte zuerst den QR-Code für die Authenticator-App abrufen."));
         if (PasswordHashing.Validate(password, user.Upn) is { } error) throw ApiException.BadRequest("weak_password", error);
         var secret = TotpProtector.Unprotect(Convert.FromBase64String(user.TotpSecretProtected));
         var step = Totp.Verify(secret, code, DateTimeOffset.UtcNow, null)
-                   ?? throw ApiException.BadRequest("invalid_code", "Der Code aus der Authenticator-App stimmt nicht. Bitte Uhrzeit des Geräts prüfen und erneut versuchen.");
+                   ?? throw ApiException.BadRequest("invalid_code", L.T("Der Code aus der Authenticator-App stimmt nicht. Bitte Uhrzeit des Geräts prüfen und erneut versuchen."));
         user.PasswordHash = PasswordHashing.Hash(password);
         user.TotpLastStep = step;
         FinishSetup(user);
@@ -289,7 +290,7 @@ public sealed class LocalAuthService(
 
     private async Task<PlatformUser> DenyAsync(string code, string? upn, string message)
     {
-        await audit.WriteAsync(new AuditActor(ActorType.User, null, upn ?? "unbekannt"), AuditActions.LoginDenied, details: new { code, message });
+        await audit.WriteAsync(new AuditActor(ActorType.User, null, upn ?? L.T("unbekannt")), AuditActions.LoginDenied, details: new { code, message });
         throw new ApiException(401, code, message);
     }
 

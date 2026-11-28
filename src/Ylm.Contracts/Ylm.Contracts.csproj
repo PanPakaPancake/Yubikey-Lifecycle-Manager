@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="Localization\en.json" LogicalName="Ylm.Contracts.Localization.en.json" />
+  </ItemGroup>
+
 </Project>

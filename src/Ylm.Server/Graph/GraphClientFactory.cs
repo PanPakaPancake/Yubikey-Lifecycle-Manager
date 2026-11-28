@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Secrets;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Graph;
 
@@ -32,8 +33,8 @@ public sealed class GraphClientFactory(
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<YlmDbContext>();
         var settings = await db.Installation.AsNoTracking().FirstOrDefaultAsync(ct);
-        if (settings?.ClientId is null) throw new ApiException(409, "setup_incomplete", "Die App-Registrierung der Installation ist noch nicht eingerichtet.");
-        var cert = await certificates.GetAsync(ct) ?? throw new ApiException(409, "setup_incomplete", "Das App-Zertifikat fehlt.");
+        if (settings?.ClientId is null) throw new ApiException(409, "setup_incomplete", L.T("Die App-Registrierung der Installation ist noch nicht eingerichtet."));
+        var cert = await certificates.GetAsync(ct) ?? throw new ApiException(409, "setup_incomplete", L.T("Das App-Zertifikat fehlt."));
         var credential = new ClientCertificateCredential(tenantId.ToString(), settings.ClientId.Value.ToString(), cert,
             new ClientCertificateCredentialOptions { AuthorityHost = new Uri(options.Value.LoginAuthority), SendCertificateChain = false });
         return _credentials.GetOrAdd(tenantId, credential);
@@ -44,7 +45,7 @@ public sealed class GraphClientFactory(
         using var scope = scopes.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<YlmDbContext>();
         var settings = await db.Installation.AsNoTracking().FirstOrDefaultAsync(ct);
-        if (settings?.ClientId is null) throw new ApiException(409, "setup_incomplete", "Die App-Registrierung der Installation ist noch nicht eingerichtet.");
+        if (settings?.ClientId is null) throw new ApiException(409, "setup_incomplete", L.T("Die App-Registrierung der Installation ist noch nicht eingerichtet."));
         var credential = new ClientCertificateCredential(entraTenantId.ToString(), settings.ClientId.Value.ToString(), certificate,
             new ClientCertificateCredentialOptions { AuthorityHost = new Uri(options.Value.LoginAuthority), SendCertificateChain = false });
         await credential.GetTokenAsync(new TokenRequestContext([options.Value.GraphBaseUrl.TrimEnd('/') + "/.default"]), ct);

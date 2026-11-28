@@ -5,6 +5,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Updates;
 
@@ -60,7 +61,7 @@ public static class UpdateEndpoints
         g.MapPut("/agent-policy", async (AgentPolicyRequest body, CurrentUser cu, Setup.SetupService setup, YlmDbContext db, AuditService audit) =>
         {
             var user = await cu.RequireAsync(Permission.ManageSettings);
-            if (!Enum.IsDefined(body.Policy)) throw ApiException.BadRequest("invalid_policy", "Unbekannte Vorgabe.");
+            if (!Enum.IsDefined(body.Policy)) throw ApiException.BadRequest("invalid_policy", L.T("Unbekannte Vorgabe."));
             var s = await setup.GetSettingsAsync();
             audit.Add(AuditService.User(user), AuditActions.AgentUpdatePolicyChanged, details: new { before = s.AgentUpdatePolicy.ToString(), after = body.Policy.ToString() });
             s.AgentUpdatePolicy = body.Policy;

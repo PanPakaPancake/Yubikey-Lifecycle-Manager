@@ -3,6 +3,7 @@ using System.Text.Json;
 using Ylm.Core;
 using Ylm.Server.Graph;
 using Ylm.Server.Setup;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Demo;
 
@@ -94,7 +95,7 @@ public sealed class DemoGraph(Guid tenantId, string displayName, string domain) 
 
     public Task<CreationOptions> GetCreationOptionsAsync(string userId, int challengeTimeoutMinutes = 5, CancellationToken ct = default)
     {
-        var user = Users.FirstOrDefault(u => u.Id == userId) ?? throw new GraphException("Benutzer nicht gefunden", 404);
+        var user = Users.FirstOrDefault(u => u.Id == userId) ?? throw new GraphException(L.T("Benutzer nicht gefunden"), 404);
         var json = JsonSerializer.Serialize(new
         {
             challenge = B64(Guid.NewGuid().ToByteArray()),
@@ -169,7 +170,7 @@ public sealed class DemoGraph(Guid tenantId, string displayName, string domain) 
         {
             if (Other.GetValueOrDefault(userId)?.Any(m => m.Kind == "temporaryAccessPass") == true)
                 throw new GraphException("Microsoft Graph meldet 400: User already has a Temporary Access Pass", 400, "badRequest");
-            Other.GetOrAdd(userId, _ => []).Add(new GraphAuthMethod(id, "temporaryAccessPass", "temporaryAccessPass", null, "gültig", DateTimeOffset.UtcNow));
+            Other.GetOrAdd(userId, _ => []).Add(new GraphAuthMethod(id, "temporaryAccessPass", "temporaryAccessPass", null, L.T("gültig"), DateTimeOffset.UtcNow));
         }
         return Task.FromResult(new GraphTemporaryAccessPass(id, pass, startDateTime ?? DateTimeOffset.UtcNow, lifetimeInMinutes ?? TapPolicy.DefaultLifetimeInMinutes, isUsableOnce ?? false));
     }
@@ -179,7 +180,7 @@ public sealed class DemoGraph(Guid tenantId, string displayName, string domain) 
     public Task<string?> GetApplicationObjectIdAsync(Guid appId, CancellationToken ct = default) => Task.FromResult<string?>(null);
 
     public Task AddApplicationCertificateAsync(string applicationObjectId, byte[] certificateDer, string displayName, string proof, CancellationToken ct = default) =>
-        throw new GraphException("Im Demo-Modus nicht verfügbar.", 400);
+        throw new GraphException(L.T("Im Demo-Modus nicht verfügbar."), 400);
 }
 
 /// <summary>Liefert für jeden Tenant der Demo dessen <see cref="DemoGraph"/>. Unbekannte Tenants bekommen einen kleinen erfundenen Tenant.</summary>

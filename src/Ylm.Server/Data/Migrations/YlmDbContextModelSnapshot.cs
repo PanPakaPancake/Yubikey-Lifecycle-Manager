@@ -197,6 +197,9 @@ namespace Ylm.Server.Data.Migrations
                     b.Property<string>("Footer")
                         .HasColumnType("text");
 
+                    b.Property<string>("Language")
+                        .HasColumnType("text");
+
                     b.Property<string>("LetterLayout")
                         .HasColumnType("text");
 

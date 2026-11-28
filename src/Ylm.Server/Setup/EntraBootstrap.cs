@@ -6,6 +6,7 @@ using System.Text.Json.Nodes;
 using Microsoft.Extensions.Options;
 using Ylm.Server.Graph;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Setup;
 
@@ -176,7 +177,7 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
         }), ct);
         var doc = await ReadJsonAsync(res, ct);
         if (!res.IsSuccessStatusCode)
-            throw ApiException.BadRequest("signin_failed", "Microsoft-Anmeldung konnte nicht gestartet werden: " + ErrorText(doc));
+            throw ApiException.BadRequest("signin_failed", L.F($"Microsoft-Anmeldung konnte nicht gestartet werden: {ErrorText(doc)}"));
         var r = doc!.RootElement;
         return new DeviceCodeStart(
             r.GetProperty("device_code").GetString()!,
@@ -207,8 +208,8 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
         {
             "authorization_pending" => new DeviceCodePoll(DeviceCodeStatus.Pending),
             "slow_down" => new DeviceCodePoll(DeviceCodeStatus.SlowDown),
-            "authorization_declined" => new DeviceCodePoll(DeviceCodeStatus.Declined, Error: "Die Anmeldung wurde abgelehnt."),
-            "expired_token" or "code_expired" => new DeviceCodePoll(DeviceCodeStatus.Expired, Error: "Der Code ist abgelaufen. Bitte neu starten."),
+            "authorization_declined" => new DeviceCodePoll(DeviceCodeStatus.Declined, Error: L.T("Die Anmeldung wurde abgelehnt.")),
+            "expired_token" or "code_expired" => new DeviceCodePoll(DeviceCodeStatus.Expired, Error: L.T("Der Code ist abgelaufen. Bitte neu starten.")),
             _ => new DeviceCodePoll(DeviceCodeStatus.Failed, Error: ErrorText(doc)),
         };
     }
@@ -272,7 +273,7 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
                 objectId = found.RootElement.GetProperty("id").GetString();
                 await GraphAsync(token, HttpMethod.Patch, $"{GraphV1}/applications/{objectId}", ct, AppBody());
                 appId = existing.ToString();
-                steps.Add("Vorhandene App-Registrierung aktualisiert");
+                steps.Add(L.T("Vorhandene App-Registrierung aktualisiert"));
             }
         }
         if (appId is null)
@@ -283,15 +284,15 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
             using var created = await GraphAsync(token, HttpMethod.Post, $"{GraphV1}/applications", ct, body);
             appId = created!.RootElement.GetProperty("appId").GetString()!;
             objectId = created.RootElement.GetProperty("id").GetString();
-            steps.Add("App-Registrierung angelegt");
+            steps.Add(L.T("App-Registrierung angelegt"));
         }
-        steps.Add("Zertifikat hochgeladen");
+        steps.Add(L.T("Zertifikat hochgeladen"));
 
         // 2. Service principal in the home tenant. Right after creating the app, Entra may need a few seconds.
         using var spDoc = await GraphAsync(token, HttpMethod.Get, $"{GraphV1}/servicePrincipals(appId='{appId}')?$select=id", ct, allowNotFound: true)
                           ?? await WithReplicationRetryAsync(() => GraphAsync(token, HttpMethod.Post, $"{GraphV1}/servicePrincipals", ct, new JsonObject { ["appId"] = appId }), ct);
         var spId = spDoc!.RootElement.GetProperty("id").GetString()!;
-        steps.Add("Dienstprinzipal angelegt");
+        steps.Add(L.T("Dienstprinzipal angelegt"));
 
         // 3. Admin consent for the application permissions (app role assignments).
         using var assignedDoc = await GraphAsync(token, HttpMethod.Get, $"{GraphV1}/servicePrincipals/{spId}/appRoleAssignments?$select=appRoleId,resourceId", ct);
@@ -304,7 +305,7 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
             using var _ = await WithReplicationRetryAsync(() => GraphAsync(token, HttpMethod.Post, $"{GraphV1}/servicePrincipals/{spId}/appRoleAssignments", ct,
                 new JsonObject { ["principalId"] = spId, ["resourceId"] = graphSpId, ["appRoleId"] = roleId }), ct);
         }
-        steps.Add($"Admin-Consent für {roleIds.Count} Anwendungsberechtigungen erteilt");
+        steps.Add(L.F($"Admin-Consent für {roleIds.Count} Anwendungsberechtigungen erteilt"));
 
         // 4. Admin consent for the delegated sign-in scopes, for all users.
         var scope = string.Join(' ', request.DelegatedScopes);
@@ -320,7 +321,7 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
             using var _ = await WithReplicationRetryAsync(() => GraphAsync(token, HttpMethod.Post, $"{GraphV1}/oauth2PermissionGrants", ct,
                 new JsonObject { ["clientId"] = spId, ["consentType"] = "AllPrincipals", ["resourceId"] = graphSpId, ["scope"] = scope }), ct);
         }
-        steps.Add("Admin-Consent für die Anmeldung erteilt");
+        steps.Add(L.T("Admin-Consent für die Anmeldung erteilt"));
 
         logger.LogInformation("App-Registrierung {AppId} per Setup-Assistent eingerichtet", appId);
         return new AppProvisioningResult(Guid.Parse(appId), steps, objectId);
@@ -332,7 +333,7 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
         {
             if (p.GetProperty("value").GetString() == value) return p.GetProperty("id").GetString()!;
         }
-        throw ApiException.BadRequest("permission_unknown", $"Berechtigung {value} wurde bei Microsoft Graph nicht gefunden.");
+        throw ApiException.BadRequest("permission_unknown", L.F($"Berechtigung {value} wurde bei Microsoft Graph nicht gefunden."));
     }
 
     /// <summary>Entra replicates new objects with a delay; references to them fail with 400/404 for a few seconds.</summary>
@@ -351,7 +352,7 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
     public async Task<IReadOnlyList<string>> AddRedirectUrisAsync(string token, Guid clientId, IReadOnlyList<string> redirectUris, CancellationToken ct = default)
     {
         using var found = await GraphAsync(token, HttpMethod.Get, $"{GraphV1}/applications(appId='{clientId}')?$select=id,web", ct, allowNotFound: true)
-                          ?? throw ApiException.Conflict("app_not_found", "Die App-Registrierung der Plattform wurde in diesem Tenant nicht gefunden. Bitte mit einem Admin des Tenants anmelden, in dem die Plattform registriert ist.");
+                          ?? throw ApiException.Conflict("app_not_found", L.T("Die App-Registrierung der Plattform wurde in diesem Tenant nicht gefunden. Bitte mit einem Admin des Tenants anmelden, in dem die Plattform registriert ist."));
         var objectId = found.RootElement.GetProperty("id").GetString()!;
         // web komplett zurückschreiben, damit Abmelde-URL und andere Einstellungen erhalten bleiben.
         var web = found.RootElement.TryGetProperty("web", out var w) && w.ValueKind == JsonValueKind.Object
@@ -394,9 +395,9 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
                 }
                 catch (Exception) { /* not a Graph error body */ }
                 var hint = res.StatusCode == HttpStatusCode.Forbidden
-                    ? " Das angemeldete Konto braucht die Rolle Globaler Administrator oder Privileged Role Administrator."
+                    ? L.T(" Das angemeldete Konto braucht die Rolle Globaler Administrator oder Privileged Role Administrator.")
                     : "";
-                throw new GraphException($"Microsoft Graph meldet {(int)res.StatusCode}: {message ?? res.ReasonPhrase}.{hint}", (int)res.StatusCode, code);
+                throw new GraphException(L.F($"Microsoft Graph meldet {(int)res.StatusCode}: {message ?? res.ReasonPhrase}.{hint}"), (int)res.StatusCode, code);
             }
             return string.IsNullOrWhiteSpace(text) ? null : JsonDocument.Parse(text);
         }
@@ -411,11 +412,11 @@ public sealed class EntraBootstrap(IHttpClientFactory httpFactory, IOptions<YlmO
 
     private static string ErrorText(JsonDocument? doc)
     {
-        if (doc is null) return "unbekannter Fehler";
+        if (doc is null) return L.T("unbekannter Fehler");
         var r = doc.RootElement;
         var description = r.TryGetProperty("error_description", out var d) ? d.GetString() : null;
         var error = r.TryGetProperty("error", out var e) ? e.GetString() : null;
         // The first line of error_description carries the AADSTS code and the message; the rest is trace data.
-        return description?.Split('\n', 2)[0].Trim() ?? error ?? "unbekannter Fehler";
+        return description?.Split('\n', 2)[0].Trim() ?? error ?? L.T("unbekannter Fehler");
     }
 }

@@ -4,6 +4,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Users;
 
@@ -12,13 +13,13 @@ public static class RoleEndpoints
 {
     public sealed record RoleRequest(string Name, string? Description, List<string> Permissions);
 
-    private static readonly (PlatformRole Role, string Description)[] BuiltIn =
-    [
-        (PlatformRole.Owner, "Alles, inkl. Tenants, Benutzer, Rollen, Profile und API-Schlüssel"),
-        (PlatformRole.Operator, "Keys registrieren, zurücksetzen, sperren, ausmustern, Lager und Partnerlager pflegen, synchronisieren"),
-        (PlatformRole.Helpdesk, "Inventar ansehen und Keys sperren"),
-        (PlatformRole.Auditor, "Nur lesen: Inventar, Berichte und Audit-Log"),
-    ];
+    private static (PlatformRole Role, string Description)[] BuiltIn => _builtIn.Value;
+    private static readonly L.PerLanguage<(PlatformRole Role, string Description)[]> _builtIn = new(() => [
+        (PlatformRole.Owner, L.T("Alles, inkl. Tenants, Benutzer, Rollen, Profile und API-Schlüssel")),
+        (PlatformRole.Operator, L.T("Keys registrieren, zurücksetzen, sperren, ausmustern, Lager und Partnerlager pflegen, synchronisieren")),
+        (PlatformRole.Helpdesk, L.T("Inventar ansehen und Keys sperren")),
+        (PlatformRole.Auditor, L.T("Nur lesen: Inventar, Berichte und Audit-Log")),
+    ]);
 
     private static object ToDto(CustomRole r, int users) => new
     {
@@ -63,7 +64,7 @@ public static class RoleEndpoints
         g.MapPut("/{id:guid}", async (Guid id, RoleRequest body, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
             var actor = await cu.RequireAsync(Permission.ManageUsers);
-            var role = await db.CustomRoles.FirstOrDefaultAsync(r => r.Id == id) ?? throw ApiException.NotFound("Rolle");
+            var role = await db.CustomRoles.FirstOrDefaultAsync(r => r.Id == id) ?? throw ApiException.NotFound(L.T("Rolle"));
             var before = new { role.Name, permissions = RolePermissions.Split((Permission)role.Permissions).Select(p => p.ToString()) };
             await ApplyAsync(role, body, db);
             role.UpdatedAt = DateTimeOffset.UtcNow;
@@ -75,9 +76,9 @@ public static class RoleEndpoints
         g.MapDelete("/{id:guid}", async (Guid id, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
             var actor = await cu.RequireAsync(Permission.ManageUsers);
-            var role = await db.CustomRoles.FirstOrDefaultAsync(r => r.Id == id) ?? throw ApiException.NotFound("Rolle");
+            var role = await db.CustomRoles.FirstOrDefaultAsync(r => r.Id == id) ?? throw ApiException.NotFound(L.T("Rolle"));
             var users = await db.PlatformUsers.CountAsync(u => u.CustomRoleId == id);
-            if (users > 0) throw ApiException.Conflict("role_in_use", $"Die Rolle ist noch {users} Benutzer(n) zugewiesen. Bitte zuerst deren Rolle ändern.");
+            if (users > 0) throw ApiException.Conflict("role_in_use", L.F($"Die Rolle ist noch {users} Benutzer(n) zugewiesen. Bitte zuerst deren Rolle ändern."));
             db.CustomRoles.Remove(role);
             audit.Add(AuditService.User(actor), AuditActions.RoleDeleted, target: role.Name);
             await db.SaveChangesAsync();
@@ -88,21 +89,21 @@ public static class RoleEndpoints
     private static async Task ApplyAsync(CustomRole role, RoleRequest body, YlmDbContext db)
     {
         var name = body.Name?.Trim() ?? "";
-        if (name.Length is < 2 or > 60) throw ApiException.BadRequest("invalid", "Bitte einen Namen mit 2 bis 60 Zeichen angeben.");
+        if (name.Length is < 2 or > 60) throw ApiException.BadRequest("invalid", L.T("Bitte einen Namen mit 2 bis 60 Zeichen angeben."));
         if (Enum.GetNames<PlatformRole>().Any(n => n.Equals(name, StringComparison.OrdinalIgnoreCase)))
-            throw ApiException.BadRequest("invalid", "Der Name ist für eine feste Rolle reserviert.");
+            throw ApiException.BadRequest("invalid", L.T("Der Name ist für eine feste Rolle reserviert."));
         if (await db.CustomRoles.AnyAsync(r => r.Id != role.Id && r.Name.ToLower() == name.ToLower()))
-            throw ApiException.Conflict("exists", "Eine Rolle mit diesem Namen gibt es schon.");
+            throw ApiException.Conflict("exists", L.T("Eine Rolle mit diesem Namen gibt es schon."));
         var permissions = Permission.None;
         foreach (var p in body.Permissions ?? [])
         {
             if (!Enum.TryParse<Permission>(p, out var parsed) || RolePermissions.Catalog.All(c => c.Permission != parsed))
-                throw ApiException.BadRequest("invalid", $"Unbekannte Berechtigung „{p}“.");
+                throw ApiException.BadRequest("invalid", L.F($"Unbekannte Berechtigung „{p}“."));
             if ((RolePermissions.OwnerOnly & parsed) != 0)
-                throw ApiException.BadRequest("owner_only", "Benutzer und Rollen, API-Schlüssel und Plattform-Einstellungen sind dem Owner vorbehalten.");
+                throw ApiException.BadRequest("owner_only", L.T("Benutzer und Rollen, API-Schlüssel und Plattform-Einstellungen sind dem Owner vorbehalten."));
             permissions |= parsed;
         }
-        if (permissions == Permission.None) throw ApiException.BadRequest("invalid", "Bitte mindestens eine Berechtigung wählen.");
+        if (permissions == Permission.None) throw ApiException.BadRequest("invalid", L.T("Bitte mindestens eine Berechtigung wählen."));
         role.Name = name;
         role.Description = string.IsNullOrWhiteSpace(body.Description) ? null : body.Description.Trim();
         role.Permissions = (long)permissions;

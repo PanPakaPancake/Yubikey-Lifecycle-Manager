@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Security;
 
@@ -30,9 +31,9 @@ public static class PasswordHashing
     /// <summary>Returns an error text or null when the password is acceptable.</summary>
     public static string? Validate(string? password, string upn)
     {
-        if (string.IsNullOrEmpty(password) || password.Length < MinLength) return $"Das Passwort muss mindestens {MinLength} Zeichen lang sein.";
-        if (password.Contains(upn.Split('@')[0], StringComparison.OrdinalIgnoreCase)) return "Das Passwort darf den Anmeldenamen nicht enthalten.";
-        if (password.Distinct().Count() < 6) return "Das Passwort ist zu einfach.";
+        if (string.IsNullOrEmpty(password) || password.Length < MinLength) return L.F($"Das Passwort muss mindestens {MinLength} Zeichen lang sein.");
+        if (password.Contains(upn.Split('@')[0], StringComparison.OrdinalIgnoreCase)) return L.T("Das Passwort darf den Anmeldenamen nicht enthalten.");
+        if (password.Distinct().Count() < 6) return L.T("Das Passwort ist zu einfach.");
         return null;
     }
 }

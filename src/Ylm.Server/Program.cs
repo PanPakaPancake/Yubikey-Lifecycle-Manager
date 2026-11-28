@@ -26,6 +26,7 @@ using Ylm.Server.Security;
 using Ylm.Server.Setup;
 using Ylm.Server.Tenants;
 using Ylm.Server.Users;
+using Ylm.Contracts.Localization;
 
 // Container health check without curl: `dotnet Ylm.Server.dll --healthcheck`.
 if (args.Contains("--healthcheck"))
@@ -164,18 +165,14 @@ builder.Services.AddOpenApi(PublicApiEndpoints.GroupName, o =>
         {
             Title = "Yubikey Lifecycle Manager – API",
             Version = "v1",
-            Description = "Zugriff auf das YubiKey-Inventar für externe Tools. Authentifizierung mit API-Schlüssel im Header X-Api-Key. " +
-                          "Jeder Schlüssel gilt für alle oder ausgewählte Tenants und hat eigene Rechte; bei jedem Endpunkt steht, welches Recht er braucht. " +
-                          "Ohne das Recht antwortet die API mit 403. Rechte: " +
-                          string.Join("; ", ApiScopes.Catalog.Select(c => $"{c.Id} ({c.Label}{(c.Write ? ", schreibend" : "")})")) + ". " +
-                          "GET /api/v1/me zeigt Tenants und Rechte des verwendeten Schlüssels.",
+            Description = L.F($"Zugriff auf das YubiKey-Inventar für externe Tools. Authentifizierung mit API-Schlüssel im Header X-Api-Key. Jeder Schlüssel gilt für alle oder ausgewählte Tenants und hat eigene Rechte; bei jedem Endpunkt steht, welches Recht er braucht. Ohne das Recht antwortet die API mit 403. Rechte: {(string.Join("; ", ApiScopes.Catalog.Select(c => $"{c.Id} ({c.Label}{(c.Write ? ", schreibend" : "")})")))}. GET /api/v1/me zeigt Tenants und Rechte des verwendeten Schlüssels."),
         };
         doc.Components ??= new OpenApiComponents();
         doc.Components.SecuritySchemes ??= new Dictionary<string, IOpenApiSecurityScheme>();
         doc.Components.SecuritySchemes["ApiKey"] = new OpenApiSecurityScheme
         {
             Type = SecuritySchemeType.ApiKey, In = ParameterLocation.Header, Name = ApiKeyAuthenticationHandler.HeaderName,
-            Description = "API-Schlüssel aus „Globale Einstellungen → API-Schlüssel“. Format ylm_<präfix>_<geheimnis>.",
+            Description = L.T("API-Schlüssel aus „Globale Einstellungen → API-Schlüssel“. Format ylm_<präfix>_<geheimnis>."),
         };
         doc.Security = [new OpenApiSecurityRequirement { [new OpenApiSecuritySchemeReference("ApiKey", doc)] = [] }];
         return Task.CompletedTask;
@@ -185,7 +182,7 @@ builder.Services.AddOpenApi(PublicApiEndpoints.GroupName, o =>
     {
         var scope = ctx.Description.ActionDescriptor.EndpointMetadata.OfType<RequiresApiScope>().FirstOrDefault()?.Scope;
         var info = ApiScopes.Catalog.FirstOrDefault(c => c.Id == scope);
-        var note = info is null ? "Braucht kein besonderes Recht." : $"Benötigtes Recht: `{info.Id}` ({info.Label}).";
+        var note = info is null ? L.T("Braucht kein besonderes Recht.") : L.F($"Benötigtes Recht: `{info.Id}` ({info.Label}).");
         op.Description = string.IsNullOrWhiteSpace(op.Description) ? note : op.Description + "\n\n" + note;
         return Task.CompletedTask;
     });
@@ -205,6 +202,7 @@ var app = builder.Build();
 
 app.UseForwardedHeaders();
 app.UseMiddleware<SecurityHeaders>();
+app.UseMiddleware<RequestLanguageMiddleware>();
 app.UseMiddleware<ApiExceptionMiddleware>();
 app.UseDefaultFiles();
 app.UseStaticFiles();
@@ -246,7 +244,7 @@ app.MapApiKeyManagement();
 app.MapHub<AgentHub>(AgentProtocol.HubPath);
 app.MapOpenApi("/openapi/{documentName}.json").AllowAnonymous();
 app.MapScalarApiReference("/api/docs", o => o.WithTitle("YLM API").WithOpenApiRoutePattern("/openapi/{documentName}.json")).AllowAnonymous();
-app.MapFallback("/api/{**rest}", () => Results.Json(new ApiError("not_found", "Unbekannter Endpunkt."), statusCode: 404));
+app.MapFallback("/api/{**rest}", () => Results.Json(new ApiError("not_found", L.T("Unbekannter Endpunkt.")), statusCode: 404));
 app.MapFallbackToFile("index.html");
 
 using (var scope = app.Services.CreateScope())

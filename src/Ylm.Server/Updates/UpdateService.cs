@@ -7,6 +7,7 @@ using System.Text.Json.Serialization;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Updates;
 
@@ -53,7 +54,7 @@ public sealed class UpdateService(IHttpClientFactory httpFactory, IMemoryCache c
 
     public async Task<ReleaseCheck> CheckAsync(bool force = false, CancellationToken ct = default)
     {
-        if (!options.Value.UpdateCheckEnabled) return new ReleaseCheck(null, "Die Updateprüfung ist abgeschaltet (Ylm__UpdateCheckEnabled).", DateTimeOffset.UtcNow);
+        if (!options.Value.UpdateCheckEnabled) return new ReleaseCheck(null, L.T("Die Updateprüfung ist abgeschaltet (Ylm__UpdateCheckEnabled)."), DateTimeOffset.UtcNow);
         if (!force && cache.TryGetValue("release-check", out ReleaseCheck? cached) && cached is not null) return cached;
         ReleaseCheck result;
         try
@@ -64,7 +65,7 @@ public sealed class UpdateService(IHttpClientFactory httpFactory, IMemoryCache c
             req.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
             using var res = await http.SendAsync(req, ct);
             if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
-                result = new ReleaseCheck(null, "Noch keine veröffentlichte Version gefunden.", DateTimeOffset.UtcNow);
+                result = new ReleaseCheck(null, L.T("Noch keine veröffentlichte Version gefunden."), DateTimeOffset.UtcNow);
             else
             {
                 res.EnsureSuccessStatusCode();
@@ -76,7 +77,7 @@ public sealed class UpdateService(IHttpClientFactory httpFactory, IMemoryCache c
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException or JsonException)
         {
             logger.LogWarning("Updateprüfung fehlgeschlagen: {Message}", e.Message);
-            result = new ReleaseCheck(null, "GitHub ist nicht erreichbar: " + e.Message, DateTimeOffset.UtcNow);
+            result = new ReleaseCheck(null, L.F($"GitHub ist nicht erreichbar: {e.Message}"), DateTimeOffset.UtcNow);
         }
         cache.Set("release-check", result, result.Error is null ? TimeSpan.FromHours(6) : TimeSpan.FromMinutes(15));
         return result;
@@ -110,12 +111,12 @@ public sealed class UpdateService(IHttpClientFactory httpFactory, IMemoryCache c
         try
         {
             using var res = await httpFactory.CreateClient("updates").SendAsync(UpdaterRequest(HttpMethod.Get, "/status"), ct);
-            if (!res.IsSuccessStatusCode) return JsonSerializer.SerializeToElement(new { state = "error", message = $"Updater antwortet mit {(int)res.StatusCode}." });
+            if (!res.IsSuccessStatusCode) return JsonSerializer.SerializeToElement(new { state = "error", message = L.F($"Updater antwortet mit {(int)res.StatusCode}.") });
             return await res.Content.ReadFromJsonAsync<JsonElement>(ct);
         }
         catch (Exception e) when (e is HttpRequestException or TaskCanceledException)
         {
-            return JsonSerializer.SerializeToElement(new { state = "unreachable", message = "Der Updater-Container ist nicht erreichbar." });
+            return JsonSerializer.SerializeToElement(new { state = "unreachable", message = L.T("Der Updater-Container ist nicht erreichbar.") });
         }
     }
 
@@ -142,23 +143,23 @@ public sealed class UpdateService(IHttpClientFactory httpFactory, IMemoryCache c
 
     public async Task PostUpdaterAsync(string path, object body, CancellationToken ct)
     {
-        if (!UpdaterConfigured) throw ApiException.Conflict("updater_missing", "Der Updater-Container ist nicht eingerichtet. Siehe docs/BETRIEB.md, Abschnitt Updates.");
+        if (!UpdaterConfigured) throw ApiException.Conflict("updater_missing", L.T("Der Updater-Container ist nicht eingerichtet. Siehe docs/BETRIEB.md, Abschnitt Updates."));
         using var req = UpdaterRequest(HttpMethod.Post, path);
         req.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
         try
         {
             using var res = await httpFactory.CreateClient("updates").SendAsync(req, ct);
-            if (res.StatusCode == System.Net.HttpStatusCode.Conflict) throw ApiException.Conflict("update_running", "Es läuft bereits ein Update.");
-            if (res.StatusCode == System.Net.HttpStatusCode.NotFound) throw ApiException.Conflict("updater_outdated", "Der Updater kennt diese Funktion noch nicht. Bitte das Installationsskript einmal erneut ausführen (lädt den neuen Updater).");
+            if (res.StatusCode == System.Net.HttpStatusCode.Conflict) throw ApiException.Conflict("update_running", L.T("Es läuft bereits ein Update."));
+            if (res.StatusCode == System.Net.HttpStatusCode.NotFound) throw ApiException.Conflict("updater_outdated", L.T("Der Updater kennt diese Funktion noch nicht. Bitte das Installationsskript einmal erneut ausführen (lädt den neuen Updater)."));
             if (!res.IsSuccessStatusCode)
             {
                 var detail = await res.Content.ReadAsStringAsync(ct);
-                throw ApiException.Conflict("updater_failed", $"Der Updater hat den Auftrag abgelehnt ({(int)res.StatusCode}): {detail}");
+                throw ApiException.Conflict("updater_failed", L.F($"Der Updater hat den Auftrag abgelehnt ({(int)res.StatusCode}): {detail}"));
             }
         }
         catch (HttpRequestException e)
         {
-            throw ApiException.Conflict("updater_unreachable", "Der Updater-Container ist nicht erreichbar: " + e.Message);
+            throw ApiException.Conflict("updater_unreachable", L.F($"Der Updater-Container ist nicht erreichbar: {e.Message}"));
         }
     }
 }

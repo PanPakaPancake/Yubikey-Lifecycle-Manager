@@ -10,6 +10,7 @@ using Ylm.Server.Infrastructure;
 using Ylm.Server.Secrets;
 using Ylm.Server.Security;
 using Ylm.Server.Tenants;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Setup;
 
@@ -80,11 +81,11 @@ public sealed class SetupService(
 
     public async Task<InstallationSettings> SaveBasicsAsync(string organizationName, string publicBaseUrl, string? bootstrapOwnerUpn)
     {
-        if (string.IsNullOrWhiteSpace(organizationName)) throw ApiException.BadRequest("invalid", "Bitte einen Organisationsnamen angeben.");
+        if (string.IsNullOrWhiteSpace(organizationName)) throw ApiException.BadRequest("invalid", L.T("Bitte einen Organisationsnamen angeben."));
         if (!Uri.TryCreate(publicBaseUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "https" && uri.Host != "localhost"))
-            throw ApiException.BadRequest("invalid", "Die öffentliche URL muss mit https:// beginnen.");
+            throw ApiException.BadRequest("invalid", L.T("Die öffentliche URL muss mit https:// beginnen."));
         if (!string.IsNullOrWhiteSpace(bootstrapOwnerUpn) && !bootstrapOwnerUpn.Contains('@'))
-            throw ApiException.BadRequest("invalid", "Bitte den Anmeldenamen (UPN) des ersten Owners angeben.");
+            throw ApiException.BadRequest("invalid", L.T("Bitte den Anmeldenamen (UPN) des ersten Owners angeben."));
         var s = await GetSettingsAsync();
         s.OrganizationName = organizationName.Trim();
         s.PublicBaseUrl = publicBaseUrl.TrimEnd('/');
@@ -194,7 +195,7 @@ public sealed class SetupService(
     public async Task<(bool Ok, string Message, IReadOnlyList<string> Granted)> TestAppRegistrationAsync()
     {
         var s = await GetSettingsAsync();
-        if (s.ClientId is null || s.HomeTenantId is null) return (false, "Client-ID und Tenant-ID fehlen.", []);
+        if (s.ClientId is null || s.HomeTenantId is null) return (false, L.T("Client-ID und Tenant-ID fehlen."), []);
         try
         {
             // Always a fresh token: the roles claim is fixed when the token is issued. A token fetched right after
@@ -202,11 +203,11 @@ public sealed class SetupService(
             graphFactory.Invalidate(s.HomeTenantId.Value);
             var graph = await graphFactory.ForTenantAsync(s.HomeTenantId.Value);
             var granted = await graph.GetGrantedApplicationPermissionsAsync();
-            return (true, "Anmeldung mit dem App-Zertifikat erfolgreich.", granted);
+            return (true, L.T("Anmeldung mit dem App-Zertifikat erfolgreich."), granted);
         }
         catch (Exception ex)
         {
-            return (false, "Anmeldung fehlgeschlagen: " + ex.Message, []);
+            return (false, L.F($"Anmeldung fehlgeschlagen: {ex.Message}"), []);
         }
     }
 
@@ -255,15 +256,15 @@ public sealed class SetupService(
             errorDescription = parsed.TryGetValue("error_description", out var ed) ? ed.ToString() : null;
         }
         if (!string.IsNullOrEmpty(error))
-            return new SignInPollResult("failed", $"Microsoft hat die Anmeldung abgelehnt: {errorDescription ?? error}");
+            return new SignInPollResult("failed", L.F($"Microsoft hat die Anmeldung abgelehnt: {errorDescription ?? error}"));
         if (string.IsNullOrEmpty(code) || string.IsNullOrEmpty(state))
-            return new SignInPollResult("failed", "In der Adresse fehlen code und state. Bitte die komplette Adresse aus der Adresszeile kopieren (beginnt mit http://localhost/?code=).");
+            return new SignInPollResult("failed", L.T("In der Adresse fehlen code und state. Bitte die komplette Adresse aus der Adresszeile kopieren (beginnt mit http://localhost/?code=)."));
         var pending = signIns.TakeInteractive(state);
         if (pending is null)
-            return new SignInPollResult("expired", "Dieser Anmeldevorgang ist abgelaufen oder gehört zu einem anderen Versuch. Bitte neu starten.");
+            return new SignInPollResult("expired", L.T("Dieser Anmeldevorgang ist abgelaufen oder gehört zu einem anderen Versuch. Bitte neu starten."));
         var redeemed = await bootstrap.RedeemCodeAsync(code, pending.RedirectUri, pending.CodeVerifier, ct);
         if (redeemed.Status != DeviceCodeStatus.SignedIn)
-            return new SignInPollResult("failed", "Die Anmeldung ist fehlgeschlagen: " + redeemed.Error);
+            return new SignInPollResult("failed", L.F($"Die Anmeldung ist fehlgeschlagen: {redeemed.Error}"));
         return await SignedInAsync(redeemed, ct);
     }
 
@@ -289,7 +290,7 @@ public sealed class SetupService(
         if (signIns.Current is { } current) return new SignInPollResult("signed_in", Admin: current.Admin);
         var pending = signIns.Pending;
         if (pending is null && signIns.Interactive is not null) return new SignInPollResult("pending");
-        if (pending is null) return new SignInPollResult("expired", "Kein Anmeldevorgang aktiv oder der Code ist abgelaufen. Bitte neu starten.");
+        if (pending is null) return new SignInPollResult("expired", L.T("Kein Anmeldevorgang aktiv oder der Code ist abgelaufen. Bitte neu starten."));
         if (DateTimeOffset.UtcNow < pending.NextPollAt) return new SignInPollResult("pending");
 
         var poll = await bootstrap.PollDeviceCodeAsync(pending.DeviceCode, ct);
@@ -307,7 +308,7 @@ public sealed class SetupService(
             default:
                 signIns.Pending = null;
                 return new SignInPollResult(poll.Status == DeviceCodeStatus.Declined ? "declined" : poll.Status == DeviceCodeStatus.Expired ? "expired" : "failed",
-                    poll.Error ?? "Die Anmeldung ist fehlgeschlagen.");
+                    poll.Error ?? L.T("Die Anmeldung ist fehlgeschlagen."));
         }
     }
 
@@ -315,10 +316,10 @@ public sealed class SetupService(
     public async Task<AppProvisioningResult> ProvisionAppAsync(CancellationToken ct = default)
     {
         var signIn = signIns.Current
-                     ?? throw ApiException.Conflict("signin_required", "Bitte zuerst bei Microsoft anmelden (die Anmeldung ist abgelaufen oder fehlt).");
+                     ?? throw ApiException.Conflict("signin_required", L.T("Bitte zuerst bei Microsoft anmelden (die Anmeldung ist abgelaufen oder fehlt)."));
         var s = await GetSettingsAsync();
         if (string.IsNullOrWhiteSpace(s.OrganizationName) || (string.IsNullOrWhiteSpace(s.PublicBaseUrl) && string.IsNullOrWhiteSpace(options.Value.PublicBaseUrl)))
-            throw ApiException.BadRequest("setup_incomplete", "Bitte zuerst die Grunddaten speichern.");
+            throw ApiException.BadRequest("setup_incomplete", L.T("Bitte zuerst die Grunddaten speichern."));
         var cert = await EnsureCertificateAsync();
         // Reuse the app of an earlier attempt only if it belongs to the same tenant.
         var existing = s.HomeTenantId == signIn.Admin.TenantId ? s.ClientId : null;
@@ -354,13 +355,13 @@ public sealed class SetupService(
         var s = await GetSettingsAsync();
         if (!string.IsNullOrWhiteSpace(request.BootstrapOwnerUpn))
         {
-            if (!request.BootstrapOwnerUpn.Contains('@')) throw ApiException.BadRequest("invalid", "Bitte den Anmeldenamen (UPN) des ersten Owners angeben.");
+            if (!request.BootstrapOwnerUpn.Contains('@')) throw ApiException.BadRequest("invalid", L.T("Bitte den Anmeldenamen (UPN) des ersten Owners angeben."));
             s.BootstrapOwnerUpn = request.BootstrapOwnerUpn.Trim();
         }
         if (string.IsNullOrEmpty(s.BootstrapOwnerUpn))
-            throw ApiException.BadRequest("invalid", "Bitte den Anmeldenamen (UPN) des ersten Owners angeben.");
+            throw ApiException.BadRequest("invalid", L.T("Bitte den Anmeldenamen (UPN) des ersten Owners angeben."));
         if (s.ClientId is null || s.HomeTenantId is null || await certificates.GetAsync(ct) is null)
-            throw ApiException.BadRequest("setup_incomplete", "Bitte zuerst alle Schritte der Einrichtung abschließen.");
+            throw ApiException.BadRequest("setup_incomplete", L.T("Bitte zuerst alle Schritte der Einrichtung abschließen."));
 
         Tenant? homeTenant = null;
         if (request.AddHomeTenant) homeTenant = await AddHomeTenantAsync(s, ct);

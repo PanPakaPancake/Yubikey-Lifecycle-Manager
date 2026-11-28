@@ -4,6 +4,7 @@ using Ylm.Server.Audit;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
 using Ylm.Server.Security;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Inventory;
 
@@ -27,7 +28,7 @@ public static class KeyBulkEndpoints
     public static async Task DeleteAsync(YubiKey key, PlatformUser user, YlmDbContext db, AuditService audit)
     {
         if (!CanDelete(key))
-            throw ApiException.Conflict("not_deletable", "Nur Keys im Lager oder ausgemusterte Keys ohne aktive Registrierung können gelöscht werden. Aktive Keys bitte zuerst sperren oder zurücksetzen.");
+            throw ApiException.Conflict("not_deletable", L.T("Nur Keys im Lager oder ausgemusterte Keys ohne aktive Registrierung können gelöscht werden. Aktive Keys bitte zuerst sperren oder zurücksetzen."));
         audit.Add(AuditService.User(user), AuditActions.KeyDeleted, key.TenantId, key.Id, key.SerialNumber?.ToString(),
             new { key.SerialNumber, key.Model, key.FirmwareVersion, status = key.Status.ToString(), key.Tags, key.CustomFields, key.Notes, partnerStock = key.TenantId is null });
         db.Keys.Remove(key);
@@ -40,7 +41,7 @@ public static class KeyBulkEndpoints
 
         g.MapDelete("/keys/{id:guid}", async (Guid id, CurrentUser cu, YlmDbContext db, AuditService audit) =>
         {
-            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound("Key");
+            var key = await db.Keys.Include(k => k.Registrations).FirstOrDefaultAsync(k => k.Id == id) ?? throw ApiException.NotFound(L.T("Key"));
             var user = await cu.RequireKeyAccessAsync(key.TenantId, Permission.ManageInventory);
             await DeleteAsync(key, user, db, audit);
             return Results.NoContent();
@@ -49,10 +50,10 @@ public static class KeyBulkEndpoints
         g.MapPost("/keys/bulk", async (BulkRequest body, CurrentUser cu, YlmDbContext db, KeyService keys, AuditService audit) =>
         {
             var ids = (body.Ids ?? []).Distinct().ToList();
-            if (ids.Count == 0) throw ApiException.BadRequest("invalid", "Keine Keys ausgewählt.");
-            if (ids.Count > MaxKeys) throw ApiException.BadRequest("invalid", $"Höchstens {MaxKeys} Keys auf einmal.");
-            if (!Enum.IsDefined(body.Action)) throw ApiException.BadRequest("invalid", "Unbekannte Aktion.");
-            if (body.Action == BulkAction.Assign && body.TenantId is null) throw ApiException.BadRequest("invalid", "Bitte einen Tenant wählen.");
+            if (ids.Count == 0) throw ApiException.BadRequest("invalid", L.T("Keine Keys ausgewählt."));
+            if (ids.Count > MaxKeys) throw ApiException.BadRequest("invalid", L.F($"Höchstens {MaxKeys} Keys auf einmal."));
+            if (!Enum.IsDefined(body.Action)) throw ApiException.BadRequest("invalid", L.T("Unbekannte Aktion."));
+            if (body.Action == BulkAction.Assign && body.TenantId is null) throw ApiException.BadRequest("invalid", L.T("Bitte einen Tenant wählen."));
             await cu.GetAsync();
 
             var done = new List<Guid>();
@@ -60,7 +61,7 @@ public static class KeyBulkEndpoints
             foreach (var id in ids)
             {
                 var key = await db.Keys.Include(k => k.Registrations).Include(k => k.Tenant).FirstOrDefaultAsync(k => k.Id == id);
-                if (key is null) { failed.Add(new { id, serialNumber = (int?)null, error = "Key nicht gefunden." }); continue; }
+                if (key is null) { failed.Add(new { id, serialNumber = (int?)null, error = L.T("Key nicht gefunden.") }); continue; }
                 try
                 {
                     await ApplyAsync(key, body, cu, db, keys, audit);
@@ -116,7 +117,7 @@ public static class KeyBulkEndpoints
             }
             case BulkAction.ToPartnerStock:
             {
-                if (key.TenantId is null) throw ApiException.Conflict("already_partner_stock", "Liegt bereits im Partnerlager.");
+                if (key.TenantId is null) throw ApiException.Conflict("already_partner_stock", L.T("Liegt bereits im Partnerlager."));
                 await cu.RequireTenantAsync(key.TenantId.Value, Permission.ManageInventory);
                 var user = await cu.RequireAsync(Permission.ManagePartnerStock);
                 await keys.MoveToPartnerStockAsync(key, AuditService.User(user));

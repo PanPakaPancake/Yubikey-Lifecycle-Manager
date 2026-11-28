@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Ylm.Core;
 using Ylm.Server.Data;
 using Ylm.Server.Infrastructure;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Security;
 
@@ -37,7 +38,7 @@ public sealed class CurrentUser(IHttpContextAccessor http, YlmDbContext db)
     }
 
     public async Task<PlatformUser> GetAsync() =>
-        await TryGetAsync() ?? throw new ApiException(401, "unauthenticated", "Bitte melden Sie sich an.");
+        await TryGetAsync() ?? throw new ApiException(401, "unauthenticated", L.T("Bitte melden Sie sich an."));
 
     /// <summary>Wirksame Rechte: feste Rolle oder eigene Rolle (CustomRole muss geladen sein).</summary>
     public static Permission Effective(PlatformUser user) =>
@@ -69,7 +70,7 @@ public sealed class CurrentUser(IHttpContextAccessor http, YlmDbContext db)
     public async Task<PlatformUser> RequireTenantAsync(Guid tenantId, Permission permission)
     {
         var user = await RequireAsync(permission);
-        if (!CanAccessTenant(user, tenantId)) throw ApiException.Forbidden("Sie sind für diesen Tenant nicht zuständig.");
+        if (!CanAccessTenant(user, tenantId)) throw ApiException.Forbidden(L.T("Sie sind für diesen Tenant nicht zuständig."));
         return user;
     }
 

@@ -2307,6 +2307,13 @@ const en: Record<string, string> = {
   "mit erfundenen Beispieldaten. Keine Verbindung zu Microsoft Entra, es werden keine Mails verschickt.": "with made-up sample data. No connection to Microsoft Entra, no mails are sent.",
   "Demo-Modus:": "Demo mode:",
   "Diese Installation läuft mit erfundenen Beispieldaten. Wählen Sie eine Rolle, um sich ohne Passwort anzumelden.": "This installation runs with made-up sample data. Choose a role to sign in without a password.",
+  // pages/Branding.tsx (Sprache)
+  "Sprache der PIN-Briefe": "Language of PIN letters",
+  "Sprache der PIN-Briefe, Mails und Webhooks": "Language of PIN letters, mails and webhooks",
+  "Leer übernimmt die Vorgabe des Partners ({language}).": "Empty uses the partner default ({language}).",
+  "Gilt für alle Tenants, die nichts anderes einstellen. Mail-Berichte, Mail-Alarme und Webhooks erscheinen immer in dieser Sprache, unabhängig von der Sprache der Oberfläche.": "Applies to all tenants that do not set anything else. Mail reports, mail alerts and webhooks always use this language, regardless of the interface language.",
+  "Wie beim Partner": "Same as partner",
+  "Deutsch (Vorgabe)": "German (default)",
 };
 
 export default en;

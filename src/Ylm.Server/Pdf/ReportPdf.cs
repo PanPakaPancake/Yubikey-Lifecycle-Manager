@@ -3,6 +3,7 @@ using PdfSharp.Pdf;
 using Ylm.Core;
 using Ylm.Server.Reporting;
 using static Ylm.Server.Pdf.Theme;
+using Ylm.Contracts.Localization;
 
 namespace Ylm.Server.Pdf;
 
@@ -13,7 +14,7 @@ public static class ReportPdf
     {
         YlmFontResolver.Install();
         using var doc = new PdfDocument();
-        doc.Info.Title = "YubiKey-Bericht";
+        doc.Info.Title = L.T("YubiKey-Bericht");
         var page = doc.AddPage();
         page.Width = XUnit.FromMillimeter(210);
         page.Height = XUnit.FromMillimeter(297);
@@ -38,17 +39,17 @@ public static class ReportPdf
         DrawLogo(g, m + w, 20, 140, 40);
         DrawBrandFooter(g, m, page.Height.Point - 20, w);
         Text(g, organizationName, F(9.5, true), Muted, m, 26, w - 150, 14);
-        Text(g, "YubiKey-Bericht", F(20, true), Ink, m, 40, w, 26);
-        Text(g, $"{scope} · Stand {d.GeneratedAt.ToLocalTime():dd.MM.yyyy HH:mm}", F(9.5), Muted, m, 68, w, 14);
+        Text(g, L.T("YubiKey-Bericht"), F(20, true), Ink, m, 40, w, 26);
+        Text(g, L.F($"{scope} · Stand {d.GeneratedAt.ToLocalTime():dd.MM.yyyy HH:mm}"), F(9.5), Muted, m, 68, w, 14);
         y = 96;
 
         // KPI tiles
         (string Label, string Value)[] kpis =
         [
-            ("Aktiv", d.ByStatus["Active"].ToString()),
-            ("Im Lager", d.InStock.ToString()),
-            ("Gesperrt", d.ByStatus["Locked"].ToString()),
-            ("Abdeckung", d.CoveragePercent is { } c ? $"{c:0.#} %" : "–"),
+            (L.T("Aktiv"), d.ByStatus["Active"].ToString()),
+            (L.T("Im Lager"), d.InStock.ToString()),
+            (L.T("Gesperrt"), d.ByStatus["Locked"].ToString()),
+            (L.T("Abdeckung"), d.CoveragePercent is { } c ? $"{c:0.#} %" : "–"),
         ];
         var tw = (w - 3 * 10) / 4;
         for (var i = 0; i < kpis.Length; i++)
@@ -59,12 +60,11 @@ public static class ReportPdf
             Text(g, kpis[i].Value, F(19, true), Ink, x + 10, y + 22, tw - 20, 26);
         }
         y += 72;
-        Text(g, $"Personen mit Key: {d.UsersWithKey}{(d.TargetUsers is { } t ? $" von {t} in der Zielgruppe" : "")}. " +
-                $"Ausgemustert: {d.ByStatus["Retired"]}. Selbst registrierte Keys ohne Seriennummer: {d.NeedsDetails}.", F(9), Ink, m, y, w, 28);
+        Text(g, L.F($"Personen mit Key: {d.UsersWithKey}{(d.TargetUsers is { } t ? L.F($" von {t} in der Zielgruppe") : "")}. Ausgemustert: {d.ByStatus["Retired"]}. Selbst registrierte Keys ohne Seriennummer: {d.NeedsDetails}."), F(9), Ink, m, y, w, 28);
         y += 30;
 
         // Issued per month (bar chart)
-        Text(g, "Ausgaben pro Monat (über die Plattform registriert)", F(11, true), Ink, m, y, w, 16);
+        Text(g, L.T("Ausgaben pro Monat (über die Plattform registriert)"), F(11, true), Ink, m, y, w, 16);
         y += 36;
         var chartH = 90.0;
         var max = Math.Max(1, d.IssuedPerMonth.Count == 0 ? 1 : d.IssuedPerMonth.Max(b => b.Count));
@@ -86,24 +86,24 @@ public static class ReportPdf
 
         // Firmware table
         NewPageIfNeeded(60);
-        Text(g, "Firmware-Verteilung (aktive Keys und Lager)", F(11, true), Ink, m, y, w, 16);
+        Text(g, L.T("Firmware-Verteilung (aktive Keys und Lager)"), F(11, true), Ink, m, y, w, 16);
         y += 20;
-        Row(g, ["Firmware", "Anzahl", "Hinweise"], m, ref y, w, true);
+        Row(g, [L.T("Firmware"), L.T("Anzahl"), L.T("Hinweise")], m, ref y, w, true);
         foreach (var f in d.Firmware)
         {
             NewPageIfNeeded(18);
             Row(g, [f.Firmware, f.Count.ToString(), f.Advisories.Count == 0 ? "–" : string.Join(", ", f.Advisories.Select(a =>
                 FirmwareAdvisories.Known.FirstOrDefault(k => k.Id == a)?.Title is { } title ? $"{a}: {title}" : a))], m, ref y, w, false, f.Vulnerable);
         }
-        if (d.Firmware.Count == 0) { Text(g, "Keine Keys mit bekannter Firmware.", F(9), Muted, m, y, w, 14); y += 16; }
+        if (d.Firmware.Count == 0) { Text(g, L.T("Keine Keys mit bekannter Firmware."), F(9), Muted, m, y, w, 14); y += 16; }
         y += 14;
 
         if (d.Tenants.Count > 1)
         {
             NewPageIfNeeded(60);
-            Text(g, "Tenants", F(11, true), Ink, m, y, w, 16);
+            Text(g, L.T("Tenants"), F(11, true), Ink, m, y, w, 16);
             y += 20;
-            Row(g, ["Tenant", "Aktiv", "Lager", "Personen mit Key", "Letzter Sync"], m, ref y, w, true);
+            Row(g, [L.T("Tenant"), L.T("Aktiv"), L.T("Lager"), L.T("Personen mit Key"), L.T("Letzter Sync")], m, ref y, w, true);
             foreach (dynamic tn in d.Tenants)
             {
                 NewPageIfNeeded(18);
